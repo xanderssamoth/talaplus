@@ -1,0 +1,56 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
+
+class File extends SqlModel
+{
+    use SoftDeletes;
+
+    protected function tableName(): string
+    {
+        return 'files';
+    }
+
+    protected function fillableAttributes(): array
+    {
+        return [
+            'file_name',
+            'file_url',
+            'file_description',
+            'file_type',
+            'user_id',
+            'media_id',
+            'comment_id',
+            'product_id',
+            'message_id',
+        ];
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function media(): BelongsTo
+    {
+        return $this->belongsTo(Media::class);
+    }
+
+    public function comment(): BelongsTo
+    {
+        return $this->belongsTo(Comment::class);
+    }
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class);
+    }
+
+    public function message(): BelongsTo
+    {
+        return $this->belongsTo(Message::class);
+    }
+}

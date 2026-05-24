@@ -2,23 +2,74 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Spatie\Translatable\HasTranslations;
 
-class Media extends Model
+class Media extends SqlModel
 {
-    protected $table = 'medias';
-    protected $fillable = [
-        'media_title',
-        'media_description',
-        'media_url',
-        'author_names',
-        'is_free',
-        'price',
-        'for_youth',
-        'belongs_to',
-        'type',
-        'shared_at',
-        'shared_by',
-        'user_id',
-    ];
+    use HasTranslations;
+    use SoftDeletes;
+
+    public array $translatable = ['media_title', 'media_description'];
+
+    protected function tableName(): string
+    {
+        return 'medias';
+    }
+
+    protected function fillableAttributes(): array
+    {
+        return [
+            'media_title',
+            'media_description',
+            'media_url',
+            'cover_url',
+            'author_names',
+            'is_free',
+            'price',
+            'for_youth',
+            'belongs_to',
+            'type',
+            'is_shared',
+            'user_id',
+        ];
+    }
+
+    protected function castsAttributes(): array
+    {
+        return [
+            'is_free' => 'boolean',
+            'price' => 'decimal:2',
+            'for_youth' => 'boolean',
+            'is_shared' => 'boolean',
+        ];
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function categories(): BelongsToMany
+    {
+        return $this->belongsToMany(Category::class, 'category_media')->withTimestamps();
+    }
+
+    public function hashtags(): BelongsToMany
+    {
+        return $this->belongsToMany(Hashtag::class, 'hashtag_media')->withTimestamps();
+    }
+
+    public function files(): HasMany
+    {
+        return $this->hasMany(File::class);
+    }
+
+    public function comments(): HasMany
+    {
+        return $this->hasMany(Comment::class);
+    }
 }

@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS `users` (
   `email` VARCHAR(255) NULL,
   `phone` VARCHAR(45) NULL,
   `email_verified_at` DATETIME NULL,
-  `phone_verfied_at` DATETIME NULL,
+  `phone_verified_at` DATETIME NULL,
   `username` VARCHAR(255) NULL,
   `password` TEXT NULL,
   `remember_token` VARCHAR(100) NULL,
@@ -197,6 +197,7 @@ CREATE TABLE IF NOT EXISTS `medias` (
   `media_title` TEXT NULL,
   `media_description` LONGTEXT NULL,
   `media_url` TEXT NULL,
+  `cover_url` TEXT NULL,
   `author_names` VARCHAR(255) NULL,
   `is_free` TINYINT NOT NULL DEFAULT 1,
   `price` DECIMAL(12,2) NOT NULL,
@@ -363,18 +364,25 @@ CREATE TABLE IF NOT EXISTS `files` (
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `deleted_at` TIMESTAMP NULL,
   `user_id` BIGINT NULL,
+  `media_id` BIGINT NULL,
   `comment_id` BIGINT NULL,
   `product_id` BIGINT NULL,
   `message_id` BIGINT NULL,
   PRIMARY KEY (`id`),
   UNIQUE INDEX `id_files_UNIQUE` (`id` ASC),
   INDEX `fk_files_users_idx` (`user_id` ASC),
+  INDEX `fk_files_medias_idx` (`media_id` ASC),
   INDEX `fk_files_comments_idx` (`comment_id` ASC),
   INDEX `fk_files_products_idx` (`product_id` ASC),
   INDEX `fk_files_messages_idx` (`message_id` ASC),
   CONSTRAINT `fk_files_users`
     FOREIGN KEY (`user_id`)
     REFERENCES `users` (`id`)
+    ON DELETE SET NULL
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_files_medias`
+    FOREIGN KEY (`media_id`)
+    REFERENCES `medias` (`id`)
     ON DELETE SET NULL
     ON UPDATE CASCADE,
   CONSTRAINT `fk_files_comments`
@@ -581,6 +589,7 @@ CREATE TABLE IF NOT EXISTS `pricings` (
   `pricing_type` ENUM('money', 'percentage') NOT NULL DEFAULT 'money' COMMENT 'The user must pay directly or pay a commission (percentage) on the payment they receive',
   `reason` ENUM('media_boost', 'ad', 'gift_sent', 'user_certfied') NULL,
   `pricing_cost` DECIMAL(12,2) NULL,
+  `currency` VARCHAR(45) NULL,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `deleted_at` TIMESTAMP NULL,

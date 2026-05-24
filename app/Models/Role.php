@@ -2,14 +2,29 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Translatable\HasTranslations;
 
-class Role extends Model
+class Role extends SqlModel
 {
     use HasTranslations;
-
-    protected $fillable = ['role_name', 'role_description', 'created_by', 'updated_by'];
+    use SoftDeletes;
 
     public array $translatable = ['role_name', 'role_description'];
+
+    protected function tableName(): string
+    {
+        return 'roles';
+    }
+
+    protected function fillableAttributes(): array
+    {
+        return ['role_name', 'role_description'];
+    }
+
+    public function users(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class)->withPivot('is_selected')->withTimestamps();
+    }
 }

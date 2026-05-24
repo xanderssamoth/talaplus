@@ -1,6 +1,6 @@
 {
     "agents": [
-        "codex"
+        "claude_code"
     ],
     "cloud": false,
     "mcp": true,

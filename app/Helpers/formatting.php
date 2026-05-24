@@ -1,12 +1,14 @@
 <?php
+
 /**
  * @author Xanders
+ *
  * @see https://team.xsamtech.com/xanderssamoth
  */
 
 use Illuminate\Support\Facades\Session;
 
-if (!function_exists("getRandomNumber")) {
+if (! function_exists('getRandomNumber')) {
     function getRandomNumber($n)
     {
         $characters = '0123456789';
@@ -21,7 +23,7 @@ if (!function_exists("getRandomNumber")) {
     }
 }
 
-if (!function_exists("formatIntegerNumber")) {
+if (! function_exists('formatIntegerNumber')) {
     function formatIntegerNumber($number)
     {
         if (Session::has('locale')) {
@@ -46,7 +48,7 @@ if (!function_exists("formatIntegerNumber")) {
     }
 }
 
-if (!function_exists("formatDecimalNumber")) {
+if (! function_exists('formatDecimalNumber')) {
     function formatDecimalNumber($number)
     {
         if (Session::has('locale')) {
@@ -71,7 +73,28 @@ if (!function_exists("formatDecimalNumber")) {
     }
 }
 
-if (!function_exists("timeAgo")) {
+if (! function_exists('thousandsCurrencyFormat')) {
+    function thousandsCurrencyFormat($number)
+    {
+        if ($number > 1000) {
+
+            $x = round($number);
+            $x_number_format = number_format($x);
+            $x_array = explode(',', $x_number_format);
+            $x_parts = ['k', 'm', 'b', 't'];
+            $x_count_parts = count($x_array) - 1;
+            $x_display = $x;
+            $x_display = $x_array[0].((int) $x_array[1][0] !== 0 ? '.'.$x_array[1][0] : '');
+            $x_display .= $x_parts[$x_count_parts - 1];
+
+            return $x_display;
+        }
+
+        return $number;
+    }
+}
+
+if (! function_exists('timeAgo')) {
     function timeAgo($datetime, $full = false)
     {
         $now = new DateTime;
@@ -86,7 +109,7 @@ if (!function_exists("timeAgo")) {
 
             switch ($sessionLocale) {
                 case 'en':
-                    $string = array(
+                    $string = [
                         'y' => 'year',
                         'm' => 'month',
                         'w' => 'week',
@@ -94,24 +117,26 @@ if (!function_exists("timeAgo")) {
                         'h' => 'hour',
                         'i' => 'minute',
                         's' => 'second',
-                    );
+                    ];
 
                     foreach ($string as $k => &$v) {
                         if ($diff->$k) {
-                            $v = $diff->$k . ' ' . $v . ($diff->$k > 1 ? 's' : '');
+                            $v = $diff->$k.' '.$v.($diff->$k > 1 ? 's' : '');
 
                         } else {
                             unset($string[$k]);
                         }
                     }
 
-                    if (!$full) $string = array_slice($string, 0, 1);
+                    if (! $full) {
+                        $string = array_slice($string, 0, 1);
+                    }
 
-                    return $string ? implode(', ', $string) . ' ago' : 'just now';
+                    return $string ? implode(', ', $string).' ago' : 'just now';
                     break;
 
                 default:
-                    $string = array(
+                    $string = [
                         'y' => 'an',
                         'm' => 'mois',
                         'w' => 'semaine',
@@ -119,20 +144,22 @@ if (!function_exists("timeAgo")) {
                         'h' => 'heure',
                         'i' => 'minute',
                         's' => 'seconde',
-                    );
+                    ];
 
                     foreach ($string as $k => &$v) {
                         if ($diff->$k) {
-                            $v = $diff->$k . ' ' . $v . ($diff->$k > 1 && $v !== 'mois' ? 's' : '');
+                            $v = $diff->$k.' '.$v.($diff->$k > 1 && $v !== 'mois' ? 's' : '');
 
                         } else {
                             unset($string[$k]);
                         }
                     }
 
-                    if (!$full) $string = array_slice($string, 0, 1);
+                    if (! $full) {
+                        $string = array_slice($string, 0, 1);
+                    }
 
-                    return $string ? 'Il y a ' . implode(', ', $string) : 'en ce moment';
+                    return $string ? 'Il y a '.implode(', ', $string) : 'en ce moment';
                     break;
             }
 
@@ -141,7 +168,7 @@ if (!function_exists("timeAgo")) {
 
             switch ($appLocale) {
                 case 'en':
-                    $string = array(
+                    $string = [
                         'y' => 'year',
                         'm' => 'month',
                         'w' => 'week',
@@ -149,24 +176,26 @@ if (!function_exists("timeAgo")) {
                         'h' => 'hour',
                         'i' => 'minute',
                         's' => 'second',
-                    );
-    
+                    ];
+
                     foreach ($string as $k => &$v) {
                         if ($diff->$k) {
-                            $v = $diff->$k . ' ' . $v . ($diff->$k > 1 ? 's' : '');
-    
+                            $v = $diff->$k.' '.$v.($diff->$k > 1 ? 's' : '');
+
                         } else {
                             unset($string[$k]);
                         }
                     }
-    
-                    if (!$full) $string = array_slice($string, 0, 1);
-    
-                    return $string ? implode(', ', $string) . ' ago' : 'just now';
+
+                    if (! $full) {
+                        $string = array_slice($string, 0, 1);
+                    }
+
+                    return $string ? implode(', ', $string).' ago' : 'just now';
                     break;
-                
+
                 default:
-                    $string = array(
+                    $string = [
                         'y' => 'an',
                         'm' => 'mois',
                         'w' => 'semaine',
@@ -174,20 +203,22 @@ if (!function_exists("timeAgo")) {
                         'h' => 'heure',
                         'i' => 'minute',
                         's' => 'seconde',
-                    );
+                    ];
 
                     foreach ($string as $k => &$v) {
                         if ($diff->$k) {
-                            $v = $diff->$k . ' ' . $v . ($diff->$k > 1 && $v !== 'mois' ? 's' : '');
+                            $v = $diff->$k.' '.$v.($diff->$k > 1 && $v !== 'mois' ? 's' : '');
 
                         } else {
                             unset($string[$k]);
                         }
                     }
 
-                    if (!$full) $string = array_slice($string, 0, 1);
+                    if (! $full) {
+                        $string = array_slice($string, 0, 1);
+                    }
 
-                    return $string ? 'Il y a ' . implode(', ', $string) : 'en ce moment';
+                    return $string ? 'Il y a '.implode(', ', $string) : 'en ce moment';
                     break;
             }
         }

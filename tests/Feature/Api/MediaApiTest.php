@@ -1,0 +1,277 @@
+<?php
+
+namespace Tests\Feature\Api;
+
+use App\Models\AdminNotification;
+use App\Models\Hashtag;
+use App\Models\History;
+use App\Models\Media;
+use App\Models\Reaction;
+use App\Models\Report;
+use App\Models\Role;
+use App\Models\Subscription;
+use App\Models\User;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+use Tests\TestCase;
+
+class MediaApiTest extends TestCase
+{
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        foreach ([
+            'notifications',
+            'reactions',
+            'reports',
+            'histories',
+            'subscriptions',
+            'hashtag_media',
+            'category_media',
+            'role_user',
+            'files',
+            'hashtags',
+            'categories',
+            'roles',
+            'medias',
+            'pricings',
+            'users',
+        ] as $table) {
+            Schema::dropIfExists($table);
+        }
+
+        Schema::create('users', function (Blueprint $table): void {
+            $table->id();
+            $table->string('firstname')->nullable();
+            $table->string('email')->nullable();
+            $table->text('password')->nullable();
+            $table->boolean('christian_preference')->default(false);
+            $table->string('status')->default('created');
+            $table->string('type')->default('uncertified');
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('roles', function (Blueprint $table): void {
+            $table->id();
+            $table->json('role_name');
+            $table->json('role_description')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('role_user', function (Blueprint $table): void {
+            $table->id();
+            $table->foreignId('role_id');
+            $table->foreignId('user_id');
+            $table->boolean('is_selected')->default(false);
+            $table->timestamps();
+        });
+
+        Schema::create('medias', function (Blueprint $table): void {
+            $table->id();
+            $table->text('media_title')->nullable();
+            $table->longText('media_description')->nullable();
+            $table->text('media_url')->nullable();
+            $table->text('cover_url')->nullable();
+            $table->string('author_names')->nullable();
+            $table->boolean('is_free')->default(true);
+            $table->decimal('price', 12, 2)->default(0);
+            $table->boolean('for_youth')->default(false);
+            $table->unsignedBigInteger('belongs_to')->nullable();
+            $table->string('type')->default('music');
+            $table->boolean('is_shared')->default(false);
+            $table->foreignId('user_id')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('categories', function (Blueprint $table): void {
+            $table->id();
+            $table->json('category_name');
+            $table->json('category_description')->nullable();
+            $table->string('for_type');
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('category_media', function (Blueprint $table): void {
+            $table->id();
+            $table->foreignId('category_id');
+            $table->foreignId('media_id');
+            $table->timestamps();
+        });
+
+        Schema::create('hashtags', function (Blueprint $table): void {
+            $table->id();
+            $table->string('keyword');
+            $table->timestamps();
+        });
+
+        Schema::create('hashtag_media', function (Blueprint $table): void {
+            $table->id();
+            $table->foreignId('hashtag_id');
+            $table->foreignId('media_id');
+            $table->timestamps();
+        });
+
+        Schema::create('files', function (Blueprint $table): void {
+            $table->id();
+            $table->string('file_name')->nullable();
+            $table->text('file_url');
+            $table->longText('file_description')->nullable();
+            $table->string('file_type')->default('photo');
+            $table->foreignId('user_id')->nullable();
+            $table->foreignId('media_id')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('notifications', function (Blueprint $table): void {
+            $table->id();
+            $table->string('type')->nullable();
+            $table->boolean('is_read')->default(false);
+            $table->foreignId('from_user_id')->nullable();
+            $table->foreignId('to_user_id')->nullable();
+            $table->foreignId('media_id')->nullable();
+            $table->foreignId('product_id')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('subscriptions', function (Blueprint $table): void {
+            $table->id();
+            $table->foreignId('user_id');
+            $table->foreignId('follower_id');
+            $table->boolean('granted')->default(false);
+            $table->timestamps();
+        });
+
+        Schema::create('histories', function (Blueprint $table): void {
+            $table->id();
+            $table->text('word')->nullable();
+            $table->string('entity')->nullable();
+            $table->unsignedBigInteger('entity_id')->nullable();
+            $table->string('action')->nullable();
+            $table->foreignId('user_id');
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('pricings', function (Blueprint $table): void {
+            $table->id();
+            $table->json('pricing_name')->nullable();
+            $table->string('pricing_type')->nullable();
+            $table->string('reason')->nullable();
+            $table->decimal('pricing_cost', 12, 2)->default(0);
+            $table->string('currency')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('reactions', function (Blueprint $table): void {
+            $table->id();
+            $table->string('type');
+            $table->foreignId('pricing_id')->nullable();
+            $table->foreignId('media_id')->nullable();
+            $table->foreignId('user_id')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('reports', function (Blueprint $table): void {
+            $table->id();
+            $table->string('entity')->nullable();
+            $table->unsignedBigInteger('entity_id')->nullable();
+            $table->text('report_content')->nullable();
+            $table->boolean('muted')->default(false);
+            $table->foreignId('for_user_id')->nullable();
+            $table->foreignId('reason_id')->nullable();
+            $table->foreignId('user_id');
+            $table->timestamps();
+        });
+    }
+
+    public function test_store_extracts_hashtags_and_notifies_admins(): void
+    {
+        $owner = User::create(['email' => 'owner@example.com', 'password' => 'password']);
+        $admin = User::create(['email' => 'admin@example.com', 'password' => 'password']);
+        $role = Role::create(['role_name' => ['fr' => 'Administrateur', 'en' => 'Administrator']]);
+        $role->users()->attach($admin->id);
+
+        $response = $this->postJson('/api/v1/medias', [
+            'media_title' => 'Song',
+            'media_description' => 'A new #gospel song',
+            'media_url' => 'https://example.com/song.mp3',
+            'cover_url' => 'https://example.com/cover.jpg',
+            'type' => 'music',
+            'price' => 0,
+            'user_id' => $owner->id,
+            'files' => [
+                ['file_name' => 'Cover', 'file_url' => 'https://example.com/file.jpg', 'file_type' => 'photo'],
+            ],
+        ]);
+
+        $response->assertOk()->assertJsonPath('success', true);
+        $this->assertTrue(Hashtag::query()->where('keyword', 'gospel')->exists());
+        $this->assertTrue(AdminNotification::query()
+            ->where('type', 'media_created')
+            ->where('from_user_id', $owner->id)
+            ->where('to_user_id', $admin->id)
+            ->exists());
+    }
+
+    public function test_publish_media_notifies_followers(): void
+    {
+        $owner = User::create(['email' => 'owner@example.com', 'password' => 'password']);
+        $follower = User::create(['email' => 'follower@example.com', 'password' => 'password']);
+        $media = Media::create(['media_title' => 'Song', 'type' => 'music', 'price' => 0, 'user_id' => $owner->id]);
+        Subscription::create(['user_id' => $owner->id, 'follower_id' => $follower->id]);
+
+        $response = $this->patchJson("/api/v1/medias/{$media->id}/publish");
+
+        $response->assertOk()->assertJsonPath('success', true);
+        $this->assertTrue($media->refresh()->is_shared);
+        $this->assertTrue(AdminNotification::query()->where('type', 'media_published')->where('to_user_id', $follower->id)->exists());
+    }
+
+    public function test_show_records_media_view_history(): void
+    {
+        $owner = User::create(['email' => 'owner@example.com', 'password' => 'password']);
+        $viewer = User::create(['email' => 'viewer@example.com', 'password' => 'password']);
+        $media = Media::create(['media_title' => 'Song', 'type' => 'music', 'price' => 0, 'user_id' => $owner->id]);
+
+        $response = $this->getJson("/api/v1/medias/{$media->id}?user_id={$viewer->id}");
+
+        $response->assertOk()->assertJsonPath('success', true);
+        $this->assertTrue(History::query()->where('entity', 'media')->where('action', 'view')->where('entity_id', $media->id)->where('user_id', $viewer->id)->exists());
+    }
+
+    public function test_like_gift_and_report_create_records_and_notifications(): void
+    {
+        $owner = User::create(['email' => 'owner@example.com', 'password' => 'password']);
+        $actor = User::create(['email' => 'actor@example.com', 'password' => 'password']);
+        $media = Media::create(['media_title' => 'Song', 'type' => 'music', 'price' => 0, 'user_id' => $owner->id]);
+
+        $this->postJson("/api/v1/medias/{$media->id}/like", ['user_id' => $actor->id])->assertOk();
+
+        $pricingId = \DB::table('pricings')->insertGetId([
+            'pricing_name' => json_encode(['fr' => 'Cadeau']),
+            'pricing_type' => 'gift',
+            'reason' => 'gift',
+            'pricing_cost' => 2,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->postJson("/api/v1/medias/{$media->id}/gift", ['user_id' => $actor->id, 'pricing_id' => $pricingId])->assertOk();
+        $this->postJson("/api/v1/medias/{$media->id}/report", ['user_id' => $actor->id, 'report_content' => 'Bad'])->assertOk();
+
+        $this->assertSame(2, Reaction::query()->count());
+        $this->assertSame(1, Report::query()->count());
+        $this->assertTrue(AdminNotification::query()->where('type', 'like_sent')->exists());
+        $this->assertTrue(AdminNotification::query()->where('type', 'gift_sent')->exists());
+        $this->assertTrue(AdminNotification::query()->where('type', 'report_sent')->exists());
+    }
+}
