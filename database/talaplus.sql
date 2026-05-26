@@ -221,41 +221,14 @@ ENGINE = InnoDB;
 
 
 -- -----------------------------------------------------
--- Table `comments`
--- -----------------------------------------------------
-CREATE TABLE IF NOT EXISTS `comments` (
-  `id` BIGINT NOT NULL AUTO_INCREMENT,
-  `comment_content` LONGTEXT NULL,
-  `answered_for` BIGINT NULL,
-  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `deleted_at` TIMESTAMP NULL,
-  `media_id` BIGINT NOT NULL,
-  `user_id` BIGINT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE INDEX `id_comments_UNIQUE` (`id` ASC),
-  INDEX `fk_comments_medias_idx` (`media_id` ASC),
-  INDEX `fk_comments_users_idx` (`user_id` ASC),
-  CONSTRAINT `fk_comments_medias`
-    FOREIGN KEY (`media_id`)
-    REFERENCES `medias` (`id`)
-    ON DELETE CASCADE
-    ON UPDATE CASCADE,
-  CONSTRAINT `fk_comments_users`
-    FOREIGN KEY (`user_id`)
-    REFERENCES `users` (`id`)
-    ON DELETE SET NULL
-    ON UPDATE CASCADE)
-ENGINE = InnoDB;
-
-
--- -----------------------------------------------------
 -- Table `categories`
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS `categories` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
   `category_name` JSON NOT NULL,
   `category_description` JSON NULL,
+  `icon` VARCHAR(45) NULL,
+  `color` VARCHAR(45) NULL,
   `for_type` ENUM('film_series', 'comedy', 'music', 'education', 'business', 'crafts_diy', 'sports', 'documentary', 'product', 'service') NOT NULL,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -278,6 +251,9 @@ CREATE TABLE IF NOT EXISTS `products` (
   `currency` VARCHAR(45) NULL,
   `action` ENUM('sale', 'rental') NOT NULL DEFAULT 'sale',
   `is_shared` TINYINT NOT NULL DEFAULT 0,
+  `price_reduction_start` DATETIME NULL,
+  `price_reduction_end` DATETIME NULL,
+  `reduction_rate` DECIMAL(3,2) NULL,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `deleted_at` TIMESTAMP NULL,
@@ -289,6 +265,42 @@ CREATE TABLE IF NOT EXISTS `products` (
     FOREIGN KEY (`category_id`)
     REFERENCES `categories` (`id`)
     ON DELETE SET NULL
+    ON UPDATE CASCADE)
+ENGINE = InnoDB;
+
+
+-- -----------------------------------------------------
+-- Table `comments`
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `comments` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `comment_content` LONGTEXT NULL,
+  `answered_for` BIGINT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `deleted_at` TIMESTAMP NULL,
+  `media_id` BIGINT NULL,
+  `product_id` BIGINT NULL,
+  `user_id` BIGINT NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `id_comments_UNIQUE` (`id` ASC),
+  INDEX `fk_comments_medias_idx` (`media_id` ASC),
+  INDEX `fk_comments_products_idx` (`product_id` ASC),
+  INDEX `fk_comments_users_idx` (`user_id` ASC),
+  CONSTRAINT `fk_comments_medias`
+    FOREIGN KEY (`media_id`)
+    REFERENCES `medias` (`id`)
+    ON DELETE SET NULL
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_comments_products`
+    FOREIGN KEY (`product_id`)
+    REFERENCES `products` (`id`)
+    ON DELETE SET NULL
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_comments_users`
+    FOREIGN KEY (`user_id`)
+    REFERENCES `users` (`id`)
+    ON DELETE CASCADE
     ON UPDATE CASCADE)
 ENGINE = InnoDB;
 
@@ -364,25 +376,18 @@ CREATE TABLE IF NOT EXISTS `files` (
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `deleted_at` TIMESTAMP NULL,
   `user_id` BIGINT NULL,
-  `media_id` BIGINT NULL,
   `comment_id` BIGINT NULL,
   `product_id` BIGINT NULL,
   `message_id` BIGINT NULL,
   PRIMARY KEY (`id`),
   UNIQUE INDEX `id_files_UNIQUE` (`id` ASC),
   INDEX `fk_files_users_idx` (`user_id` ASC),
-  INDEX `fk_files_medias_idx` (`media_id` ASC),
   INDEX `fk_files_comments_idx` (`comment_id` ASC),
   INDEX `fk_files_products_idx` (`product_id` ASC),
   INDEX `fk_files_messages_idx` (`message_id` ASC),
   CONSTRAINT `fk_files_users`
     FOREIGN KEY (`user_id`)
     REFERENCES `users` (`id`)
-    ON DELETE SET NULL
-    ON UPDATE CASCADE,
-  CONSTRAINT `fk_files_medias`
-    FOREIGN KEY (`media_id`)
-    REFERENCES `medias` (`id`)
     ON DELETE SET NULL
     ON UPDATE CASCADE,
   CONSTRAINT `fk_files_comments`
@@ -411,7 +416,7 @@ CREATE TABLE IF NOT EXISTS `notifications` (
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `deleted_at` TIMESTAMP NULL,
-  `type` ENUM('welcome_new_user', 'media_created', 'media_accepted', 'media_rejected', 'media_published', 'like_sent', 'gift_sent', 'report_sent', 'new_follower', 'product_added', 'product_accepted', 'product_rejected', 'product_ordered', 'stock_empty', 'payment_pending', 'payment_successful', 'payment_failed') NULL,
+  `type` ENUM('welcome_new_user', 'media_created', 'media_accepted', 'media_rejected', 'media_published', 'comment_sent', 'like_sent', 'gift_sent', 'report_sent', 'new_follower', 'product_added', 'product_accepted', 'product_rejected', 'product_ordered', 'stock_empty', 'payment_pending', 'payment_successful', 'payment_failed') NULL,
   `is_read` TINYINT NOT NULL DEFAULT 0,
   `from_user_id` BIGINT NULL,
   `to_user_id` BIGINT NULL,
@@ -628,7 +633,7 @@ CREATE TABLE IF NOT EXISTS `histories` (
   `word` TEXT NULL COMMENT 'This refers to a search history of a user',
   `entity` ENUM('media', 'product', 'user') NULL,
   `entity_id` BIGINT NULL,
-  `action` ENUM('search', 'view', 'like', 'gift', 'comment', 'order', 'report') NULL,
+  `action` ENUM('search', 'view', 'like', 'gift', 'star', 'comment', 'order', 'report') NULL,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `deleted_at` TIMESTAMP NULL,
@@ -677,7 +682,7 @@ ENGINE = InnoDB;
 CREATE TABLE IF NOT EXISTS `reasons` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
   `reason_content` JSON NOT NULL,
-  `entity` ENUM('media', 'user') NOT NULL,
+  `entity` ENUM('media', 'product', 'user') NOT NULL,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `deleted_at` TIMESTAMP NULL,
@@ -691,7 +696,7 @@ ENGINE = InnoDB;
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS `reports` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
-  `entity` ENUM('media', 'user') NULL,
+  `entity` ENUM('media', 'product', 'user') NULL,
   `entity_id` BIGINT NULL,
   `report_content` TEXT NULL,
   `muted` TINYINT NOT NULL DEFAULT 0 COMMENT 'This is not a report, just a mute',
@@ -814,18 +819,21 @@ ENGINE = InnoDB;
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS `reactions` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
-  `type` ENUM('like', 'gift') NOT NULL,
+  `type` ENUM('like', 'gift', 'star') NOT NULL,
+  `number_of_stars` SMALLINT NULL,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `deleted_at` TIMESTAMP NULL,
   `pricing_id` BIGINT NULL,
   `media_id` BIGINT NULL,
+  `product_id` BIGINT NULL,
   `user_id` BIGINT NULL,
   PRIMARY KEY (`id`),
   UNIQUE INDEX `id_reactions_UNIQUE` (`id` ASC),
   INDEX `fk_reactions_pricings_idx` (`pricing_id` ASC),
   INDEX `fk_reactions_medias_idx` (`media_id` ASC),
-  INDEX `fk_reactions_users_idx` (`user_id` ASC),
+  INDEX `fk_reactions_products_idx` (`product_id` ASC),
+  INDEX `fk_reactions_users1_idx` (`user_id` ASC),
   CONSTRAINT `fk_reactions_pricings`
     FOREIGN KEY (`pricing_id`)
     REFERENCES `pricings` (`id`)
@@ -836,11 +844,16 @@ CREATE TABLE IF NOT EXISTS `reactions` (
     REFERENCES `medias` (`id`)
     ON DELETE SET NULL
     ON UPDATE CASCADE,
-  CONSTRAINT `fk_reactions_users`
+  CONSTRAINT `fk_reactions_products`
+    FOREIGN KEY (`product_id`)
+    REFERENCES `products` (`id`)
+    ON DELETE SET NULL
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_reactions_users1`
     FOREIGN KEY (`user_id`)
     REFERENCES `users` (`id`)
-    ON DELETE SET NULL
-    ON UPDATE CASCADE)
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION)
 ENGINE = InnoDB;
 
 
@@ -938,6 +951,102 @@ CREATE TABLE IF NOT EXISTS `customer_orders` (
   CONSTRAINT `fk_customerorders_carts`
     FOREIGN KEY (`cart_id`)
     REFERENCES `carts` (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE)
+ENGINE = InnoDB;
+
+
+-- -----------------------------------------------------
+-- Table `cache`
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `cache` (
+  `key` VARCHAR(255) NOT NULL,
+  `value` MEDIUMTEXT NOT NULL,
+  `expiration` INT NOT NULL,
+  PRIMARY KEY (`key`),
+  INDEX `cache_expiration_index` (`expiration` ASC))
+ENGINE = InnoDB;
+
+
+-- -----------------------------------------------------
+-- Table `cache_locks`
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `cache_locks` (
+  `key` VARCHAR(255) NOT NULL,
+  `owner` VARCHAR(255) NOT NULL,
+  `expiration` INT NOT NULL,
+  PRIMARY KEY (`key`),
+  INDEX `cache_locks_expiration_index` (`expiration` ASC))
+ENGINE = InnoDB;
+
+
+-- -----------------------------------------------------
+-- Table `failed_jobs`
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `failed_jobs` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `uuid` VARCHAR(255) NOT NULL,
+  `connection` TEXT NOT NULL,
+  `queue` TEXT NOT NULL,
+  `payload` LONGTEXT NOT NULL,
+  `exception` LONGTEXT NOT NULL,
+  `failed_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `failed_jobs_uuid_unique` (`uuid` ASC))
+ENGINE = InnoDB;
+
+
+-- -----------------------------------------------------
+-- Table `jobs`
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `jobs` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `queue` VARCHAR(255) NOT NULL,
+  `payload` LONGTEXT NOT NULL,
+  `exception` LONGTEXT NOT NULL,
+  `attempts` TINYINT UNSIGNED NOT NULL,
+  `reserved_at` INT UNSIGNED NULL,
+  `available_at` INT UNSIGNED NOT NULL,
+  `created_at` INT UNSIGNED NOT NULL,
+  PRIMARY KEY (`id`),
+  INDEX `jobs_queue_index` (`queue` ASC))
+ENGINE = InnoDB;
+
+
+-- -----------------------------------------------------
+-- Table `job_batches`
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `job_batches` (
+  `id` VARCHAR(255) NOT NULL,
+  `name` VARCHAR(255) NOT NULL,
+  `total_jobs` INT NOT NULL,
+  `pending_jobs` INT NOT NULL,
+  `failed_jobs` INT NOT NULL,
+  `failed_job_ids` LONGTEXT NOT NULL,
+  `options` MEDIUMTEXT NULL,
+  `cancelled_at` INT NULL,
+  `created_at` INT NOT NULL,
+  `finished_at` INT NULL,
+  PRIMARY KEY (`id`))
+ENGINE = InnoDB;
+
+
+-- -----------------------------------------------------
+-- Table `specifications`
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `specifications` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `spec_content` TEXT NOT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `deleted_at` TIMESTAMP NULL,
+  `product_id` BIGINT NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `id_specifications_UNIQUE` (`id` ASC),
+  INDEX `fk_specifications_products_idx` (`product_id` ASC),
+  CONSTRAINT `fk_specifications_products`
+    FOREIGN KEY (`product_id`)
+    REFERENCES `products` (`id`)
     ON DELETE CASCADE
     ON UPDATE CASCADE)
 ENGINE = InnoDB;

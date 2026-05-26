@@ -15,7 +15,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\Rule;
 
 class AdminResourceController extends Controller
 {
@@ -179,7 +178,7 @@ class AdminResourceController extends Controller
         $config = $this->config($resource);
         abort_if($config['readonly'] ?? false, 403);
 
-        $item = new $config['model']();
+        $item = new $config['model'];
         $item->fill($this->payload($request, $config, $item));
         $item->save();
 
@@ -207,9 +206,11 @@ class AdminResourceController extends Controller
         return response()->json(['message' => __('admin.deleted')]);
     }
 
-    public function account()
+    public function account(Request $request)
     {
-        return view('admin.account');
+        return view('admin.account', [
+            'user' => $request->user(),
+        ]);
     }
 
     private function config(string $resource): array
@@ -233,11 +234,13 @@ class AdminResourceController extends Controller
                     'en' => $request->input($name.'.en'),
                     'ln' => $request->input($name.'.ln'),
                 ];
+
                 continue;
             }
 
             if ($type === 'checkbox') {
                 $payload[$name] = $request->boolean($name);
+
                 continue;
             }
 
@@ -245,6 +248,7 @@ class AdminResourceController extends Controller
                 if ($request->filled($name)) {
                     $payload[$name] = Hash::make($request->input($name));
                 }
+
                 continue;
             }
 

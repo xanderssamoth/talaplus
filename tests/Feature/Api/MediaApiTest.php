@@ -200,7 +200,7 @@ class MediaApiTest extends TestCase
         $role = Role::create(['role_name' => ['fr' => 'Administrateur', 'en' => 'Administrator']]);
         $role->users()->attach($admin->id);
 
-        $response = $this->postJson('/api/v1/medias', [
+        $response = $this->postJson('/api/v1/media', [
             'media_title' => 'Song',
             'media_description' => 'A new #gospel song',
             'media_url' => 'https://example.com/song.mp3',
@@ -229,11 +229,24 @@ class MediaApiTest extends TestCase
         $media = Media::create(['media_title' => 'Song', 'type' => 'music', 'price' => 0, 'user_id' => $owner->id]);
         Subscription::create(['user_id' => $owner->id, 'follower_id' => $follower->id]);
 
-        $response = $this->patchJson("/api/v1/medias/{$media->id}/publish");
+        $response = $this->patchJson("/api/v1/media/{$media->id}/publish");
 
         $response->assertOk()->assertJsonPath('success', true);
         $this->assertTrue($media->refresh()->is_shared);
         $this->assertTrue(AdminNotification::query()->where('type', 'media_published')->where('to_user_id', $follower->id)->exists());
+    }
+
+    public function test_filter_medias_can_search_by_word(): void
+    {
+        $owner = User::create(['email' => 'owner@example.com', 'password' => 'password']);
+        Media::create(['media_title' => 'Morning Worship', 'media_description' => 'Calm song', 'type' => 'music', 'price' => 0, 'user_id' => $owner->id]);
+        Media::create(['media_title' => 'Business Talk', 'media_description' => 'Market update', 'type' => 'business', 'price' => 0, 'user_id' => $owner->id]);
+
+        $response = $this->getJson('/api/v1/media/filter/list?word=Worship');
+
+        $response->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.media_title.en', 'Morning Worship');
     }
 
     public function test_show_records_media_view_history(): void
@@ -242,7 +255,7 @@ class MediaApiTest extends TestCase
         $viewer = User::create(['email' => 'viewer@example.com', 'password' => 'password']);
         $media = Media::create(['media_title' => 'Song', 'type' => 'music', 'price' => 0, 'user_id' => $owner->id]);
 
-        $response = $this->getJson("/api/v1/medias/{$media->id}?user_id={$viewer->id}");
+        $response = $this->getJson("/api/v1/media/{$media->id}?user_id={$viewer->id}");
 
         $response->assertOk()->assertJsonPath('success', true);
         $this->assertTrue(History::query()->where('entity', 'media')->where('action', 'view')->where('entity_id', $media->id)->where('user_id', $viewer->id)->exists());
@@ -254,7 +267,7 @@ class MediaApiTest extends TestCase
         $actor = User::create(['email' => 'actor@example.com', 'password' => 'password']);
         $media = Media::create(['media_title' => 'Song', 'type' => 'music', 'price' => 0, 'user_id' => $owner->id]);
 
-        $this->postJson("/api/v1/medias/{$media->id}/like", ['user_id' => $actor->id])->assertOk();
+        $this->postJson("/api/v1/media/{$media->id}/like", ['user_id' => $actor->id])->assertOk();
 
         $pricingId = \DB::table('pricings')->insertGetId([
             'pricing_name' => json_encode(['fr' => 'Cadeau']),
@@ -265,8 +278,8 @@ class MediaApiTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $this->postJson("/api/v1/medias/{$media->id}/gift", ['user_id' => $actor->id, 'pricing_id' => $pricingId])->assertOk();
-        $this->postJson("/api/v1/medias/{$media->id}/report", ['user_id' => $actor->id, 'report_content' => 'Bad'])->assertOk();
+        $this->postJson("/api/v1/media/{$media->id}/gift", ['user_id' => $actor->id, 'pricing_id' => $pricingId])->assertOk();
+        $this->postJson("/api/v1/media/{$media->id}/report/{$actor->id}", ['report_content' => 'Bad'])->assertOk();
 
         $this->assertSame(2, Reaction::query()->count());
         $this->assertSame(1, Report::query()->count());

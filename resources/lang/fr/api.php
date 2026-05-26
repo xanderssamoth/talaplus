@@ -1,0 +1,68 @@
+<?php
+
+$entityMessages = fn (string $entity): array => [
+    'created' => "{$entity} créé avec succès.",
+    'deleted' => "{$entity} supprimé avec succès.",
+    'updated' => "{$entity} modifié avec succès.",
+    'not_found' => "{$entity} introuvable.",
+    'find_success' => "{$entity} récupéré avec succès.",
+    'find_all_success' => "Liste des {$entity}s récupérée avec succès.",
+];
+
+return [
+    'auth' => [
+        'email_not_verified' => 'L’adresse email n’est pas vérifiée.',
+        'former_password_invalid' => 'L’ancien mot de passe est invalide.',
+        'invalid_credentials' => 'Les identifiants sont invalides.',
+        'login_success' => 'Utilisateur connecté avec succès.',
+        'password_updated' => 'Mot de passe modifié avec succès.',
+        'phone_not_verified' => 'Le numéro de téléphone n’est pas vérifié.',
+        'user_blocked' => 'Le compte utilisateur est bloqué.',
+    ],
+    'cart' => [
+        'already_contains_product' => 'Le produit est déjà dans le panier.',
+        'insufficient_quantity' => 'La quantité du produit est insuffisante.',
+        'product_added' => 'Produit ajouté au panier avec succès.',
+        'product_removed' => 'Produit retiré du panier avec succès.',
+    ],
+    'file' => [
+        'created_many' => 'Fichiers enregistrés avec succès.',
+    ],
+    'password_reset' => [
+        'invalid_token' => 'Le code est invalide.',
+        'token_valid' => 'Le code est valide.',
+        'user_not_found' => 'Utilisateur introuvable.',
+    ],
+    'entities' => [
+        'about_content' => $entityMessages('Contenu à propos'),
+        'about_dash' => $entityMessages('Tableau à propos'),
+        'about_subject' => $entityMessages('Sujet à propos'),
+        'about_title' => $entityMessages('Titre à propos'),
+        'bank_card' => $entityMessages('Carte bancaire'),
+        'blocked_user' => $entityMessages('Utilisateur bloqué'),
+        'cart' => $entityMessages('Panier'),
+        'category' => $entityMessages('Catégorie'),
+        'comment' => $entityMessages('Commentaire'),
+        'customer_order' => $entityMessages('Commande client'),
+        'file' => $entityMessages('Fichier'),
+        'group' => $entityMessages('Groupe'),
+        'hashtag' => $entityMessages('Hashtag'),
+        'history' => $entityMessages('Historique'),
+        'media' => [...$entityMessages('Média'), 'published' => 'Média publié avec succès.'],
+        'message' => $entityMessages('Message'),
+        'money_transfer' => $entityMessages('Transfert d’argent'),
+        'notification' => $entityMessages('Notification'),
+        'password_reset' => $entityMessages('Réinitialisation du mot de passe'),
+        'payment' => $entityMessages('Paiement'),
+        'pricing' => $entityMessages('Tarification'),
+        'pricing_description' => $entityMessages('Description de tarification'),
+        'product' => [...$entityMessages('Produit'), 'published' => 'Produit publié avec succès.'],
+        'promo_code' => $entityMessages('Code promo'),
+        'reaction' => $entityMessages('Réaction'),
+        'reason' => $entityMessages('Raison'),
+        'report' => $entityMessages('Signalement'),
+        'role' => $entityMessages('Rôle'),
+        'subscription' => $entityMessages('Abonnement'),
+        'user' => $entityMessages('Utilisateur'),
+    ],
+];

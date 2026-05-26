@@ -24,6 +24,6 @@ final class SubscriptionController extends ApiResourceController
             'to_user_id' => $subscription->user_id,
         ]);
 
-        return $this->handleResponse(SubscriptionResource::make($subscription->refresh()), __('api.created'));
+        return $this->handleResponse(SubscriptionResource::make($subscription->refresh()), $this->apiMessage('created'));
     }
 }

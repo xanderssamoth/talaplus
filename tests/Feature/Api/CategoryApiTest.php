@@ -41,7 +41,7 @@ class CategoryApiTest extends TestCase
 
         $deletedCategory->delete();
 
-        $response = $this->getJson('/api/v1/categories');
+        $response = $this->getJson('/api/v1/category');
 
         $response->assertOk();
         $response->assertJsonCount(1, 'data');

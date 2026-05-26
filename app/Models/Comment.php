@@ -17,12 +17,17 @@ class Comment extends SqlModel
 
     protected function fillableAttributes(): array
     {
-        return ['comment_content', 'answered_for', 'media_id', 'user_id'];
+        return ['comment_content', 'answered_for', 'media_id', 'product_id', 'user_id'];
     }
 
     public function media(): BelongsTo
     {
         return $this->belongsTo(Media::class);
+    }
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class);
     }
 
     public function user(): BelongsTo

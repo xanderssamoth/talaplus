@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Str;
 
 abstract class ApiResourceController extends BaseController
 {
@@ -21,13 +22,15 @@ abstract class ApiResourceController extends BaseController
      */
     protected string $resourceClass;
 
+    protected ?string $translationKey = null;
+
     public function index(Request $request): JsonResponse
     {
         $records = ($this->modelClass)::query()->latest('id')->paginate(20)->withQueryString();
 
         return $this->handleResponse(
             ($this->resourceClass)::collection($records),
-            __('api.retrieved'),
+            $this->apiMessage('find_all_success'),
             $records->lastPage(),
             $records->total()
         );
@@ -37,7 +40,7 @@ abstract class ApiResourceController extends BaseController
     {
         return $this->handleResponse(
             ($this->resourceClass)::make(($this->modelClass)::query()->findOrFail($id)),
-            __('api.retrieved')
+            $this->apiMessage('find_success')
         );
     }
 
@@ -49,7 +52,7 @@ abstract class ApiResourceController extends BaseController
 
         return $this->handleResponse(
             ($this->resourceClass)::make($record->refresh()),
-            __('api.created')
+            $this->apiMessage('created')
         );
     }
 
@@ -61,7 +64,7 @@ abstract class ApiResourceController extends BaseController
 
         return $this->handleResponse(
             ($this->resourceClass)::make($record->refresh()),
-            __('api.updated')
+            $this->apiMessage('updated')
         );
     }
 
@@ -69,7 +72,7 @@ abstract class ApiResourceController extends BaseController
     {
         ($this->modelClass)::query()->findOrFail($id)->delete();
 
-        return $this->handleResponse(null, __('api.deleted'));
+        return $this->handleResponse(null, $this->apiMessage('deleted'));
     }
 
     /**
@@ -80,5 +83,12 @@ abstract class ApiResourceController extends BaseController
         $model = new ($this->modelClass)();
 
         return Arr::only($request->all(), $model->getFillable());
+    }
+
+    protected function apiMessage(string $action, ?string $entity = null): string
+    {
+        $entity ??= $this->translationKey ?? Str::snake(class_basename($this->modelClass));
+
+        return __("api.entities.{$entity}.{$action}");
     }
 }

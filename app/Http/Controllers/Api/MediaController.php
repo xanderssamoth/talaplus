@@ -17,6 +17,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 
 final class MediaController extends ApiResourceController
 {
@@ -26,7 +27,13 @@ final class MediaController extends ApiResourceController
 
     public function store(Request $request): JsonResponse
     {
-        $media = Media::create($this->payload($request));
+        $payload = $this->payload($request);
+
+        if ($request->hasFile('cover')) {
+            $payload['cover_url'] = Storage::disk('public')->url($request->file('cover')->store('medias/covers', 'public'));
+        }
+
+        $media = Media::create($payload);
 
         $categoryIds = collect($request->input('category_ids', []))->filter()->values();
         if ($categoryIds->isNotEmpty()) {
@@ -39,9 +46,11 @@ final class MediaController extends ApiResourceController
         });
         $media->hashtags()->sync($hashtagIds);
 
-        collect($request->input('files', []))->each(function (array $file) use ($media): void {
+        collect($request->file('files', []))->each(function ($uploadedFile) use ($media): void {
             $payload = [
-                ...$file,
+                'file_name' => $uploadedFile->getClientOriginalName(),
+                'file_url' => Storage::disk('public')->url($uploadedFile->store('medias/files', 'public')),
+                'file_type' => str_starts_with((string) $uploadedFile->getMimeType(), 'video/') ? 'video' : 'document',
                 'user_id' => $media->user_id,
             ];
 
@@ -67,7 +76,7 @@ final class MediaController extends ApiResourceController
             'media_id' => $media->id,
         ]));
 
-        return $this->handleResponse(MediaResource::make($media->refresh()), __('api.created'));
+        return $this->handleResponse(MediaResource::make($media->refresh()), $this->apiMessage('created'));
     }
 
     public function show(int $id): JsonResponse
@@ -83,7 +92,7 @@ final class MediaController extends ApiResourceController
             ]);
         }
 
-        return $this->handleResponse(MediaResource::make($media), __('api.retrieved'));
+        return $this->handleResponse(MediaResource::make($media), $this->apiMessage('find_success'));
     }
 
     public function publishMedia(int $id): JsonResponse
@@ -102,7 +111,7 @@ final class MediaController extends ApiResourceController
                 'media_id' => $media->id,
             ]));
 
-        return $this->handleResponse(MediaResource::make($media->refresh()), __('api.media_published'));
+        return $this->handleResponse(MediaResource::make($media->refresh()), $this->apiMessage('published'));
     }
 
     public function popularMedias(Request $request): JsonResponse
@@ -157,7 +166,43 @@ final class MediaController extends ApiResourceController
             ->paginate(20)
             ->withQueryString();
 
-        return $this->handleResponse(MediaResource::collection($medias), __('api.retrieved'), $medias->lastPage(), $medias->total());
+        return $this->handleResponse(MediaResource::collection($medias), $this->apiMessage('find_all_success'), $medias->lastPage(), $medias->total());
+    }
+
+    public function filterMedias(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'type' => ['nullable', 'string'],
+            'category_ids' => ['nullable', 'array'],
+            'category_ids.*' => ['integer', 'exists:categories,id'],
+            'hashtag_ids' => ['nullable', 'array'],
+            'hashtag_ids.*' => ['integer', 'exists:hashtags,id'],
+            'word' => ['nullable', 'string'],
+        ]);
+
+        $medias = Media::query()
+            ->with(['categories', 'hashtags', 'user'])
+            ->when($validated['type'] ?? null, fn ($query, string $type) => $query->where('type', $type))
+            ->when($validated['category_ids'] ?? null, fn ($query, array $categoryIds) => $query->whereHas(
+                'categories',
+                fn ($query) => $query->whereIn('categories.id', $categoryIds)
+            ))
+            ->when($validated['hashtag_ids'] ?? null, fn ($query, array $hashtagIds) => $query->whereHas(
+                'hashtags',
+                fn ($query) => $query->whereIn('hashtags.id', $hashtagIds)
+            ))
+            ->when($validated['word'] ?? null, function ($query, string $word): void {
+                $query->where(function ($query) use ($word): void {
+                    $query->where('media_title', 'like', "%{$word}%")
+                        ->orWhere('media_description', 'like', "%{$word}%")
+                        ->orWhere('author_names', 'like', "%{$word}%");
+                });
+            })
+            ->latest('id')
+            ->paginate(20)
+            ->withQueryString();
+
+        return $this->handleResponse(MediaResource::collection($medias), $this->apiMessage('find_all_success'), $medias->lastPage(), $medias->total());
     }
 
     public function mediaViews(int $id): JsonResponse
@@ -170,7 +215,7 @@ final class MediaController extends ApiResourceController
             ->paginate(20)
             ->withQueryString();
 
-        return $this->handleResponse(ApiResource::collection($views), __('api.retrieved'), $views->lastPage(), $views->total());
+        return $this->handleResponse(ApiResource::collection($views), $this->apiMessage('find_all_success'), $views->lastPage(), $views->total());
     }
 
     public function mediaLikes(int $id): JsonResponse
@@ -200,10 +245,9 @@ final class MediaController extends ApiResourceController
         return $this->storeReaction($id, $validated['user_id'], 'gift', $validated['pricing_id']);
     }
 
-    public function report(Request $request, int $id): JsonResponse
+    public function report(Request $request, int $id, int $userId): JsonResponse
     {
         $validated = $request->validate([
-            'user_id' => ['required', 'integer', 'exists:users,id'],
             'reason_id' => ['nullable', 'integer', 'exists:reasons,id'],
             'report_content' => ['nullable', 'string'],
             'muted' => ['nullable', 'boolean'],
@@ -215,16 +259,17 @@ final class MediaController extends ApiResourceController
             'entity' => 'media',
             'entity_id' => $media->id,
             'for_user_id' => $media->user_id,
+            'user_id' => $userId,
         ]);
 
         AdminNotification::create([
             'type' => 'report_sent',
-            'from_user_id' => $validated['user_id'],
+            'from_user_id' => $userId,
             'to_user_id' => $media->user_id,
             'media_id' => $media->id,
         ]);
 
-        return $this->handleResponse(ApiResource::make($report), __('api.created'));
+        return $this->handleResponse(ApiResource::make($report), $this->apiMessage('created', 'report'));
     }
 
     private function mediaReactions(int $mediaId, string $type): JsonResponse
@@ -236,7 +281,7 @@ final class MediaController extends ApiResourceController
             ->paginate(20)
             ->withQueryString();
 
-        return $this->handleResponse(ApiResource::collection($reactions), __('api.retrieved'), $reactions->lastPage(), $reactions->total());
+        return $this->handleResponse(ApiResource::collection($reactions), $this->apiMessage('find_all_success', 'reaction'), $reactions->lastPage(), $reactions->total());
     }
 
     private function storeReaction(int $mediaId, int $userId, string $type, ?int $pricingId = null): JsonResponse
@@ -263,6 +308,6 @@ final class MediaController extends ApiResourceController
             'media_id' => $media->id,
         ]);
 
-        return $this->handleResponse(ApiResource::make($reaction->load(['user', 'pricing'])), __('api.created'));
+        return $this->handleResponse(ApiResource::make($reaction->load(['user', 'pricing'])), $this->apiMessage('created', 'reaction'));
     }
 }

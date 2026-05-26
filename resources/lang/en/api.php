@@ -1,0 +1,68 @@
+<?php
+
+$entityMessages = fn (string $entity): array => [
+    'created' => "{$entity} created successfully.",
+    'deleted' => "{$entity} deleted successfully.",
+    'updated' => "{$entity} updated successfully.",
+    'not_found' => "{$entity} not found.",
+    'find_success' => "{$entity} retrieved successfully.",
+    'find_all_success' => "{$entity} list retrieved successfully.",
+];
+
+return [
+    'auth' => [
+        'email_not_verified' => 'The email address is not verified.',
+        'former_password_invalid' => 'The former password is invalid.',
+        'invalid_credentials' => 'The credentials are invalid.',
+        'login_success' => 'User logged in successfully.',
+        'password_updated' => 'Password updated successfully.',
+        'phone_not_verified' => 'The phone number is not verified.',
+        'user_blocked' => 'The user account is blocked.',
+    ],
+    'cart' => [
+        'already_contains_product' => 'Product is already in the cart.',
+        'insufficient_quantity' => 'Insufficient product quantity.',
+        'product_added' => 'Product added to cart successfully.',
+        'product_removed' => 'Product removed from cart successfully.',
+    ],
+    'file' => [
+        'created_many' => 'Files uploaded successfully.',
+    ],
+    'password_reset' => [
+        'invalid_token' => 'The token is invalid.',
+        'token_valid' => 'The token is valid.',
+        'user_not_found' => 'User not found.',
+    ],
+    'entities' => [
+        'about_content' => $entityMessages('About content'),
+        'about_dash' => $entityMessages('About dash'),
+        'about_subject' => $entityMessages('About subject'),
+        'about_title' => $entityMessages('About title'),
+        'bank_card' => $entityMessages('Bank card'),
+        'blocked_user' => $entityMessages('Blocked user'),
+        'cart' => $entityMessages('Cart'),
+        'category' => $entityMessages('Category'),
+        'comment' => $entityMessages('Comment'),
+        'customer_order' => $entityMessages('Customer order'),
+        'file' => $entityMessages('File'),
+        'group' => $entityMessages('Group'),
+        'hashtag' => $entityMessages('Hashtag'),
+        'history' => $entityMessages('History'),
+        'media' => [...$entityMessages('Media'), 'published' => 'Media published successfully.'],
+        'message' => $entityMessages('Message'),
+        'money_transfer' => $entityMessages('Money transfer'),
+        'notification' => $entityMessages('Notification'),
+        'password_reset' => $entityMessages('Password reset'),
+        'payment' => $entityMessages('Payment'),
+        'pricing' => $entityMessages('Pricing'),
+        'pricing_description' => $entityMessages('Pricing description'),
+        'product' => [...$entityMessages('Product'), 'published' => 'Product published successfully.'],
+        'promo_code' => $entityMessages('Promo code'),
+        'reaction' => $entityMessages('Reaction'),
+        'reason' => $entityMessages('Reason'),
+        'report' => $entityMessages('Report'),
+        'role' => $entityMessages('Role'),
+        'subscription' => $entityMessages('Subscription'),
+        'user' => $entityMessages('User'),
+    ],
+];

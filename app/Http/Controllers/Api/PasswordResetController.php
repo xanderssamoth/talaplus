@@ -27,7 +27,7 @@ class PasswordResetController extends BaseController
             ->first();
 
         if (! $user) {
-            return $this->handleError(null, __('api.user_not_found'), 404);
+            return $this->handleError(null, __('api.password_reset.user_not_found'), 404);
         }
 
         $passwordReset = PasswordReset::create([
@@ -39,7 +39,7 @@ class PasswordResetController extends BaseController
         return $this->handleResponse([
             'user' => UserResource::make($user),
             'password_reset' => ApiResource::make($passwordReset),
-        ], __('api.retrieved'));
+        ], __('api.entities.password_reset.find_success'));
     }
 
     public function checkToken(Request $request): JsonResponse
@@ -61,9 +61,9 @@ class PasswordResetController extends BaseController
             ->first();
 
         if (! $passwordReset) {
-            return $this->handleError(null, __('api.invalid_token'), 422);
+            return $this->handleError(null, __('api.password_reset.invalid_token'), 422);
         }
 
-        return $this->handleResponse(ApiResource::make($passwordReset), __('api.token_valid'));
+        return $this->handleResponse(ApiResource::make($passwordReset), __('api.password_reset.token_valid'));
     }
 }

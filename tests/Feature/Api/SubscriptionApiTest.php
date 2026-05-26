@@ -52,7 +52,7 @@ class SubscriptionApiTest extends TestCase
         $followed = User::create(['email' => 'followed@example.com', 'password' => 'password']);
         $follower = User::create(['email' => 'follower@example.com', 'password' => 'password']);
 
-        $response = $this->postJson('/api/v1/subscriptions', [
+        $response = $this->postJson('/api/v1/subscription', [
             'user_id' => $followed->id,
             'follower_id' => $follower->id,
             'granted' => true,
