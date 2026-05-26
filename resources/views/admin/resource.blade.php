@@ -3,6 +3,19 @@
 @section('title', __('admin.'.$resource))
 
 @section('content')
+@php
+    $fieldLabels = collect($config['fields'] ?? [])->pluck('label', 'name')->all();
+    $columnLabels = array_merge([
+        'message' => 'Notification',
+        'created_at' => 'Date de creation',
+        'updated_at' => 'Date de mise a jour',
+        'is_shared' => 'Publier',
+        'is_free' => 'Gratuit',
+        'for_youth' => 'Pour les jeunes',
+    ], $fieldLabels);
+    $groupField = collect($config['fields'] ?? [])->firstWhere('name', $config['group_by'] ?? null);
+    $groupLabels = array_merge(['money' => __('admin.money'), 'percentage' => __('admin.percentage')], $groupField['options'] ?? []);
+@endphp
 <section class="section">
     <div class="row">
         <div class="{{ ($config['readonly'] ?? false) ? 'col-lg-12' : 'col-lg-8' }}">
@@ -20,11 +33,9 @@
                             <thead>
                             <tr>
                                 @foreach ($config['columns'] as $column)
-                                    <th>{{ str($column)->replace('_', ' ')->title() }}</th>
+                                    <th>{{ $columnLabels[$column] ?? str($column)->replace('_', ' ')->title() }}</th>
                                 @endforeach
-                                @unless ($config['readonly'] ?? false)
-                                    <th class="text-end">{{ __('admin.actions') }}</th>
-                                @endunless
+                                <th class="text-end">{{ __('admin.actions') }}</th>
                             </tr>
                             </thead>
                             <tbody id="resource-rows">
@@ -108,6 +119,30 @@
                                 @endif
                             @endforeach
 
+                            @if (($config['children'] ?? null) === 'pricing_descriptions')
+                                <div class="border rounded p-3 mb-3">
+                                    <div class="d-flex align-items-center justify-content-between mb-2">
+                                        <h6 class="mb-0">{{ __('admin.descriptions') }}</h6>
+                                        <button class="btn btn-sm btn-outline-primary" id="add-description" type="button">
+                                            <i class="bi bi-plus-lg"></i> {{ __('admin.add') }}
+                                        </button>
+                                    </div>
+                                    <div class="vstack gap-3" id="descriptions-fields"></div>
+                                </div>
+                            @endif
+
+                            @if (($config['children'] ?? null) === 'about_titles')
+                                <div class="border rounded p-3 mb-3">
+                                    <div class="d-flex align-items-center justify-content-between mb-2">
+                                        <h6 class="mb-0">{{ __('admin.titles') }}</h6>
+                                        <button class="btn btn-sm btn-outline-primary" id="add-title" type="button">
+                                            <i class="bi bi-plus-lg"></i> {{ __('admin.add') }}
+                                        </button>
+                                    </div>
+                                    <div class="vstack gap-3" id="titles-fields"></div>
+                                </div>
+                            @endif
+
                             <div class="d-flex gap-2">
                                 <button class="btn btn-primary" type="submit"><i class="bi bi-save"></i> {{ __('admin.save') }}</button>
                                 <button class="btn btn-outline-secondary" id="reset-form" type="button">{{ __('admin.reset') }}</button>
@@ -119,6 +154,110 @@
         @endunless
     </div>
 </section>
+
+<div class="modal fade" id="details-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">{{ __('admin.details') }}</h5>
+                <button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="Fermer"></button>
+            </div>
+            <div class="modal-body" id="details-content"></div>
+        </div>
+    </div>
+</div>
+
+<template id="description-template">
+    <div class="border rounded p-3 child-block" data-description-index="__INDEX__">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <strong>Description</strong>
+            <button class="btn btn-sm btn-outline-danger remove-child" type="button"><i class="bi bi-trash"></i></button>
+        </div>
+        @foreach (['description_title' => 'Titre de la description', 'description_content' => 'Contenu de la description'] as $fieldName => $fieldLabel)
+            <div class="mb-2">
+                <label class="form-label">{{ $fieldLabel }}</label>
+                <div class="row g-2">
+                    @foreach (['fr' => 'FR', 'en' => 'EN', 'ln' => 'LN'] as $locale => $localeLabel)
+                        <div class="col-md-4">
+                            <input class="form-control" name="descriptions[__INDEX__][{{ $fieldName }}][{{ $locale }}]" placeholder="{{ $localeLabel }}">
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        @endforeach
+    </div>
+</template>
+
+<template id="title-template">
+    <div class="border rounded p-3 child-block" data-title-index="__TITLE__">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <strong>Titre legal</strong>
+            <button class="btn btn-sm btn-outline-danger remove-child" type="button"><i class="bi bi-trash"></i></button>
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Titre</label>
+            <div class="row g-2">
+                @foreach (['fr' => 'FR', 'en' => 'EN', 'ln' => 'LN'] as $locale => $localeLabel)
+                    <div class="col-md-4">
+                        <input class="form-control" name="titles[__TITLE__][title][{{ $locale }}]" placeholder="{{ $localeLabel }}">
+                    </div>
+                @endforeach
+            </div>
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Alias</label>
+            <input class="form-control" name="titles[__TITLE__][alias]">
+        </div>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="small fw-semibold">{{ __('admin.contents') }}</span>
+            <button class="btn btn-sm btn-outline-secondary add-content" type="button"><i class="bi bi-plus-lg"></i> {{ __('admin.add') }}</button>
+        </div>
+        <div class="vstack gap-2 contents-fields"></div>
+    </div>
+</template>
+
+<template id="content-template">
+    <div class="border rounded p-2 content-block" data-content-index="__CONTENT__">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <strong>Contenu</strong>
+            <button class="btn btn-sm btn-outline-danger remove-child" type="button"><i class="bi bi-trash"></i></button>
+        </div>
+        @foreach (['subtitle' => 'Sous-titre', 'content' => 'Contenu'] as $fieldName => $fieldLabel)
+            <div class="mb-2">
+                <label class="form-label">{{ $fieldLabel }}</label>
+                <div class="row g-2">
+                    @foreach (['fr' => 'FR', 'en' => 'EN', 'ln' => 'LN'] as $locale => $localeLabel)
+                        <div class="col-md-4">
+                            <textarea class="form-control" name="titles[__TITLE__][contents][__CONTENT__][{{ $fieldName }}][{{ $locale }}]" rows="2" placeholder="{{ $localeLabel }}"></textarea>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        @endforeach
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="small fw-semibold">{{ __('admin.dashes') }}</span>
+            <button class="btn btn-sm btn-outline-secondary add-dash" type="button"><i class="bi bi-plus-lg"></i> {{ __('admin.add') }}</button>
+        </div>
+        <div class="vstack gap-2 dashes-fields"></div>
+    </div>
+</template>
+
+<template id="dash-template">
+    <div class="border rounded p-2 dash-block" data-dash-index="__DASH__">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <strong>Tiret</strong>
+            <button class="btn btn-sm btn-outline-danger remove-child" type="button"><i class="bi bi-trash"></i></button>
+        </div>
+        <div class="row g-2">
+            @foreach (['fr' => 'FR', 'en' => 'EN', 'ln' => 'LN'] as $locale => $localeLabel)
+                <div class="col-md-4">
+                    <input class="form-control" name="titles[__TITLE__][contents][__CONTENT__][dashes][__DASH__][dash_content][{{ $locale }}]" placeholder="{{ $localeLabel }}">
+                </div>
+            @endforeach
+        </div>
+        <input class="form-control mt-2" name="titles[__TITLE__][contents][__CONTENT__][dashes][__DASH__][belongs_to]" type="number" placeholder="Depend du tiret ID">
+    </div>
+</template>
 @endsection
 
 @push('scripts')
@@ -134,6 +273,10 @@
         const columns = @json($config['columns']);
         const groupBy = @json($config['group_by'] ?? null);
         const readonly = @json($config['readonly'] ?? false);
+        const shareable = @json($config['shareable'] ?? false);
+        const columnLabels = @json($columnLabels);
+        let descriptionIndex = 0;
+        let titleIndex = 0;
 
         $.ajaxSetup({
             headers: {'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')}
@@ -153,10 +296,23 @@
         }
 
         function rowHtml(item) {
-            const cells = columns.map(column => `<td>${display(item[column + '_display'] ?? item[column], column)}</td>`).join('');
-            const actions = readonly ? '' : `<td class="text-end">
+            const cells = columns.map(column => {
+                if (column === 'is_shared' && shareable) {
+                    const shared = item[column] === 1 || item[column] === true || item[column] === '1';
+                    return `<td><button class="btn btn-sm ${shared ? 'btn-success' : 'btn-danger'} toggle-shared" data-id="${item.id}" type="button">${shared ? @json(__('admin.yes')) : @json(__('admin.no'))}</button></td>`;
+                }
+                if (column === 'message' && item.url) {
+                    return `<td><a href="${item.url}" class="fw-semibold">${display(item[column + '_display'] ?? item[column], column)}</a></td>`;
+                }
+
+                return `<td>${display(item[column + '_display'] ?? item[column], column)}</td>`;
+            }).join('');
+            const writeActions = readonly ? '' : `
                 <button class="btn btn-sm btn-outline-primary edit-item" data-id="${item.id}" type="button"><i class="bi bi-pencil"></i></button>
-                <button class="btn btn-sm btn-outline-danger delete-item" data-id="${item.id}" type="button"><i class="bi bi-trash"></i></button>
+                <button class="btn btn-sm btn-outline-danger delete-item" data-id="${item.id}" type="button"><i class="bi bi-trash"></i></button>`;
+            const actions = `<td class="text-end">
+                <button class="btn btn-sm btn-outline-secondary detail-item" data-id="${item.id}" type="button"><i class="bi bi-eye"></i></button>
+                ${writeActions}
             </td>`;
             return `<tr>${cells}${actions}</tr>`;
         }
@@ -170,8 +326,9 @@
                 groups[key].push(item);
             });
             return Object.keys(groups).map(key => {
-                const title = key === 'money' ? @json(__('admin.money')) : (key === 'percentage' ? @json(__('admin.percentage')) : key);
-                return `<tr class="table-light"><th colspan="${columns.length + (readonly ? 0 : 1)}">${title}</th></tr>` + groups[key].map(rowHtml).join('');
+                const groupNames = @json($groupLabels);
+                const title = groupNames[key] || key;
+                return `<tr class="table-light"><th colspan="${columns.length + 1}">${title}</th></tr>` + groups[key].map(rowHtml).join('');
             }).join('');
         }
 
@@ -186,6 +343,9 @@
             $('#resource-form')[0]?.reset();
             $('#item-id').val('');
             $('#resource-form input[type=checkbox]').prop('checked', false);
+            $('#descriptions-fields, #titles-fields').empty();
+            descriptionIndex = 0;
+            titleIndex = 0;
         }
 
         function parseTranslated(value) {
@@ -194,6 +354,71 @@
                 try { return JSON.parse(value); } catch (e) { return {fr: value}; }
             }
             return value;
+        }
+
+        function addDescription(values = {}) {
+            const html = $('#description-template').html().replaceAll('__INDEX__', descriptionIndex++);
+            const $block = $(html);
+            $('#descriptions-fields').append($block);
+            fillTranslated($block, 'description_title', values.description_title);
+            fillTranslated($block, 'description_content', values.description_content);
+        }
+
+        function addTitle(values = {}) {
+            const currentTitleIndex = titleIndex++;
+            const html = $('#title-template').html().replaceAll('__TITLE__', currentTitleIndex);
+            const $block = $(html);
+            $('#titles-fields').append($block);
+            fillTranslated($block, 'title', values.title);
+            $block.find(`[name="titles[${currentTitleIndex}][alias]"]`).val(values.alias || '');
+            (values.contents || []).forEach(content => addContent($block, content));
+        }
+
+        function addContent($titleBlock, values = {}) {
+            const titleIdx = $titleBlock.data('title-index');
+            const contentIdx = $titleBlock.find('.content-block').length;
+            const html = $('#content-template').html().replaceAll('__TITLE__', titleIdx).replaceAll('__CONTENT__', contentIdx);
+            const $block = $(html);
+            $titleBlock.find('.contents-fields').append($block);
+            fillTranslated($block, 'subtitle', values.subtitle);
+            fillTranslated($block, 'content', values.content);
+            (values.dashes || []).forEach(dash => addDash($block, dash));
+        }
+
+        function addDash($contentBlock, values = {}) {
+            const titleIdx = $contentBlock.closest('.child-block').data('title-index');
+            const contentIdx = $contentBlock.data('content-index');
+            const dashIdx = $contentBlock.find('.dash-block').length;
+            const html = $('#dash-template').html().replaceAll('__TITLE__', titleIdx).replaceAll('__CONTENT__', contentIdx).replaceAll('__DASH__', dashIdx);
+            const $block = $(html);
+            $contentBlock.find('.dashes-fields').append($block);
+            fillTranslated($block, 'dash_content', values.dash_content);
+            $block.find(`[name$="[belongs_to]"]`).val(values.belongs_to || '');
+        }
+
+        function fillTranslated($scope, key, value) {
+            const translated = parseTranslated(value);
+            ['fr', 'en', 'ln'].forEach(locale => {
+                $scope.find(`[name$="[${key}][${locale}]"]`).val(translated?.[locale] || '');
+            });
+        }
+
+        function detailHtml(item) {
+            const rows = Object.keys(item)
+                .filter(key => !String(key).endsWith('_display'))
+                .map(key => {
+                    const label = columnLabels[key] || key.replaceAll('_', ' ');
+                    let value = item[key + '_display'] ?? item[key];
+                    if (typeof value === 'object' && value !== null) {
+                        value = `<pre class="mb-0 small">${$('<div>').text(JSON.stringify(value, null, 2)).html()}</pre>`;
+                    } else {
+                        value = display(value, key);
+                    }
+
+                    return `<tr><th class="text-nowrap">${label}</th><td>${value}</td></tr>`;
+                }).join('');
+
+            return `<div class="table-responsive"><table class="table table-sm">${rows}</table></div>`;
         }
 
         $('#resource-form').on('submit', function (event) {
@@ -228,7 +453,27 @@
                         $(`[name="${key}"]`).val(value);
                     }
                 });
+                (item.descriptions || []).forEach(addDescription);
+                (item.titles || []).forEach(addTitle);
             });
+        });
+
+        $(document).on('click', '.detail-item', function () {
+            $.getJSON(endpoints.show($(this).data('id')), function (item) {
+                $('#details-content').html(detailHtml(item));
+                new bootstrap.Modal('#details-modal').show();
+            });
+        });
+
+        $(document).on('click', '.toggle-shared', function () {
+            $.ajax({url: endpoints.show($(this).data('id')) + '/shared', method: 'PATCH'})
+                .done(function (response) {
+                    alertBox(response.message || @json(__('admin.saved')));
+                    loadRows();
+                })
+                .fail(function (xhr) {
+                    alertBox(xhr.responseJSON?.message || xhr.statusText, 'danger');
+                });
         });
 
         $(document).on('click', '.delete-item', function () {
@@ -245,6 +490,11 @@
 
         $('#refresh-table').on('click', loadRows);
         $('#new-item, #reset-form').on('click', resetForm);
+        $('#add-description').on('click', () => addDescription());
+        $('#add-title').on('click', () => addTitle());
+        $(document).on('click', '.add-content', function () { addContent($(this).closest('.child-block')); });
+        $(document).on('click', '.add-dash', function () { addDash($(this).closest('.content-block')); });
+        $(document).on('click', '.remove-child', function () { $(this).closest('.child-block, .content-block, .dash-block').remove(); });
         loadRows();
     });
 </script>

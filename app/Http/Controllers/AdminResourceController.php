@@ -3,17 +3,20 @@
 namespace App\Http\Controllers;
 
 use App\Models\AboutSubject;
+use App\Models\AboutTitle;
 use App\Models\AdminNotification;
 use App\Models\Category;
 use App\Models\Media;
 use App\Models\Message;
 use App\Models\Pricing;
+use App\Models\Product;
 use App\Models\Reason;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 class AdminResourceController extends Controller
@@ -24,11 +27,15 @@ class AdminResourceController extends Controller
             'title' => 'Categories',
             'icon' => 'bi-tags',
             'primary' => 'category_name',
+            'group_by' => 'for_type',
             'fields' => [
-                ['name' => 'category_name', 'label' => 'Category name', 'type' => 'translatable', 'required' => true],
-                ['name' => 'category_description', 'label' => 'Category description', 'type' => 'translatable-textarea'],
+                ['name' => 'category_name', 'label' => 'Nom de la categorie', 'type' => 'translatable', 'required' => true],
+                ['name' => 'category_description', 'label' => 'Description de la categorie', 'type' => 'translatable-textarea'],
+                ['name' => 'icon', 'label' => 'Icone', 'type' => 'text'],
+                ['name' => 'color', 'label' => 'Couleur', 'type' => 'text'],
+                ['name' => 'for_type', 'label' => 'Type concerne', 'type' => 'select', 'options' => self::CONTENT_TYPE_OPTIONS, 'required' => true],
             ],
-            'columns' => ['category_name', 'category_description', 'created_at'],
+            'columns' => ['category_name', 'category_description', 'icon', 'color', 'for_type', 'created_at'],
         ],
         'roles' => [
             'model' => Role::class,
@@ -36,8 +43,8 @@ class AdminResourceController extends Controller
             'icon' => 'bi-person-badge',
             'primary' => 'role_name',
             'fields' => [
-                ['name' => 'role_name', 'label' => 'Role name', 'type' => 'translatable', 'required' => true],
-                ['name' => 'role_description', 'label' => 'Role description', 'type' => 'translatable-textarea'],
+                ['name' => 'role_name', 'label' => 'Nom du role', 'type' => 'translatable', 'required' => true],
+                ['name' => 'role_description', 'label' => 'Description du role', 'type' => 'translatable-textarea'],
             ],
             'columns' => ['role_name', 'role_description', 'created_at'],
         ],
@@ -47,8 +54,8 @@ class AdminResourceController extends Controller
             'icon' => 'bi-flag',
             'primary' => 'reason_content',
             'fields' => [
-                ['name' => 'reason_content', 'label' => 'Reason content', 'type' => 'translatable-textarea', 'required' => true],
-                ['name' => 'entity', 'label' => 'Entity', 'type' => 'select', 'options' => ['media' => 'Media', 'user' => 'User'], 'required' => true],
+                ['name' => 'reason_content', 'label' => 'Contenu du motif', 'type' => 'translatable-textarea', 'required' => true],
+                ['name' => 'entity', 'label' => 'Element concerne', 'type' => 'select', 'options' => ['media' => 'Video', 'product' => 'Produit', 'user' => 'Utilisateur'], 'required' => true],
             ],
             'columns' => ['reason_content', 'entity', 'created_at'],
         ],
@@ -58,23 +65,31 @@ class AdminResourceController extends Controller
             'icon' => 'bi-cash-coin',
             'primary' => 'pricing_name',
             'group_by' => 'pricing_type',
+            'with' => ['descriptions'],
+            'children' => 'pricing_descriptions',
             'fields' => [
-                ['name' => 'pricing_name', 'label' => 'Pricing name', 'type' => 'translatable', 'required' => true],
-                ['name' => 'pricing_type', 'label' => 'Pricing type', 'type' => 'select', 'options' => ['money' => 'Money', 'percentage' => 'Percentage'], 'required' => true],
-                ['name' => 'reason', 'label' => 'Reason', 'type' => 'select', 'options' => ['' => '-', 'media_boost' => 'Media boost', 'ad' => 'Ad', 'gift_sent' => 'Gift sent', 'user_certfied' => 'User certified']],
-                ['name' => 'pricing_cost', 'label' => 'Cost', 'type' => 'number', 'step' => '0.01'],
+                ['name' => 'pricing_name', 'label' => 'Nom de la tarification', 'type' => 'translatable', 'required' => true],
+                ['name' => 'pricing_type', 'label' => 'Type de tarification', 'type' => 'select', 'options' => ['money' => 'Montant fixe', 'percentage' => 'Pourcentage'], 'required' => true],
+                ['name' => 'reason', 'label' => 'Motif', 'type' => 'select', 'options' => ['' => '-', 'media_boost' => 'Boost de video', 'ad' => 'Publicite', 'gift_sent' => 'Cadeau envoye', 'user_certfied' => 'Certification utilisateur']],
+                ['name' => 'pricing_cost', 'label' => 'Cout', 'type' => 'number', 'step' => '0.01'],
+                ['name' => 'currency', 'label' => 'Devise', 'type' => 'text'],
+                ['name' => 'image_url', 'label' => 'URL de l image', 'type' => 'text'],
+                ['name' => 'icon', 'label' => 'Icone', 'type' => 'text'],
+                ['name' => 'color', 'label' => 'Couleur', 'type' => 'text'],
             ],
-            'columns' => ['pricing_name', 'pricing_type', 'reason', 'pricing_cost'],
+            'columns' => ['pricing_name', 'pricing_type', 'reason', 'pricing_cost', 'currency'],
         ],
         'abouts' => [
             'model' => AboutSubject::class,
             'title' => 'Legal infos',
             'icon' => 'bi-info-circle',
             'primary' => 'subject',
+            'with' => ['titles.contents.dashes'],
+            'children' => 'about_titles',
             'fields' => [
-                ['name' => 'subject', 'label' => 'Subject', 'type' => 'translatable'],
-                ['name' => 'subject_description', 'label' => 'Subject description', 'type' => 'translatable-textarea', 'required' => true],
-                ['name' => 'status', 'label' => 'Status', 'type' => 'select', 'options' => ['selected' => 'Selected', 'rejected' => 'Rejected']],
+                ['name' => 'subject', 'label' => 'Sujet', 'type' => 'translatable'],
+                ['name' => 'subject_description', 'label' => 'Description du sujet', 'type' => 'translatable-textarea', 'required' => true],
+                ['name' => 'status', 'label' => 'Statut', 'type' => 'select', 'options' => ['selected' => 'Selectionne', 'rejected' => 'Rejete']],
             ],
             'columns' => ['subject', 'subject_description', 'status'],
         ],
@@ -84,17 +99,52 @@ class AdminResourceController extends Controller
             'icon' => 'bi-play-btn',
             'primary' => 'media_title',
             'fields' => [
-                ['name' => 'media_title', 'label' => 'Video title', 'type' => 'text'],
-                ['name' => 'media_description', 'label' => 'Description', 'type' => 'textarea'],
-                ['name' => 'media_url', 'label' => 'Video URL', 'type' => 'text'],
-                ['name' => 'author_names', 'label' => 'Author names', 'type' => 'text'],
-                ['name' => 'type', 'label' => 'Type', 'type' => 'select', 'options' => ['film_series' => 'Film/series', 'comedy' => 'Comedy', 'music' => 'Music', 'education' => 'Education', 'business' => 'Business', 'crafts_diy' => 'Crafts/DIY', 'sports' => 'Sports', 'documentary' => 'Documentary'], 'required' => true],
-                ['name' => 'price', 'label' => 'Price', 'type' => 'number', 'step' => '0.01'],
-                ['name' => 'is_free', 'label' => 'Free', 'type' => 'checkbox'],
-                ['name' => 'for_youth', 'label' => 'For youth', 'type' => 'checkbox'],
-                ['name' => 'user_id', 'label' => 'User ID', 'type' => 'number'],
+                ['name' => 'media_title', 'label' => 'Titre de la video', 'type' => 'translatable'],
+                ['name' => 'media_description', 'label' => 'Description', 'type' => 'translatable-textarea'],
+                ['name' => 'media_url', 'label' => 'URL de la video', 'type' => 'text'],
+                ['name' => 'cover_url', 'label' => 'URL de la couverture', 'type' => 'text'],
+                ['name' => 'author_names', 'label' => 'Noms des auteurs', 'type' => 'text'],
+                ['name' => 'is_free', 'label' => 'Gratuit', 'type' => 'checkbox'],
+                ['name' => 'price', 'label' => 'Prix', 'type' => 'number', 'step' => '0.01'],
+                ['name' => 'for_youth', 'label' => 'Pour les jeunes', 'type' => 'checkbox'],
+                ['name' => 'belongs_to', 'label' => 'Depend de la video ID', 'type' => 'number'],
+                ['name' => 'type', 'label' => 'Type', 'type' => 'select', 'options' => [
+                    'film_series' => 'Films et series',
+                    'comedy' => 'Comedie',
+                    'music' => 'Musique',
+                    'education' => 'Education',
+                    'business' => 'Business',
+                    'crafts_diy' => 'Bricolage et DIY',
+                    'sports' => 'Sports',
+                    'documentary' => 'Documentaire',
+                ], 'required' => true],
+                ['name' => 'is_shared', 'label' => 'Publier', 'type' => 'checkbox'],
+                ['name' => 'user_id', 'label' => 'Utilisateur ID', 'type' => 'number'],
             ],
-            'columns' => ['media_title', 'type', 'price', 'is_free', 'created_at'],
+            'columns' => ['media_title', 'type', 'price', 'is_free', 'is_shared', 'created_at'],
+            'shareable' => true,
+        ],
+        'products' => [
+            'model' => Product::class,
+            'title' => 'Produits',
+            'icon' => 'bi-bag',
+            'primary' => 'product_name',
+            'fields' => [
+                ['name' => 'product_name', 'label' => 'Nom du produit', 'type' => 'text', 'required' => true],
+                ['name' => 'product_description', 'label' => 'Description du produit', 'type' => 'textarea'],
+                ['name' => 'type', 'label' => 'Type', 'type' => 'select', 'options' => ['product' => 'Produit', 'service' => 'Service'], 'required' => true],
+                ['name' => 'quantity', 'label' => 'Quantite', 'type' => 'number'],
+                ['name' => 'price', 'label' => 'Prix', 'type' => 'number', 'step' => '0.01'],
+                ['name' => 'currency', 'label' => 'Devise', 'type' => 'text'],
+                ['name' => 'action', 'label' => 'Action', 'type' => 'select', 'options' => ['sale' => 'Vente', 'rental' => 'Location'], 'required' => true],
+                ['name' => 'is_shared', 'label' => 'Publier', 'type' => 'checkbox'],
+                ['name' => 'price_reduction_start', 'label' => 'Debut reduction', 'type' => 'datetime-local'],
+                ['name' => 'price_reduction_end', 'label' => 'Fin reduction', 'type' => 'datetime-local'],
+                ['name' => 'reduction_rate', 'label' => 'Taux de reduction', 'type' => 'number', 'step' => '0.01'],
+                ['name' => 'category_id', 'label' => 'Categorie ID', 'type' => 'number'],
+            ],
+            'columns' => ['product_name', 'type', 'quantity', 'price', 'currency', 'action', 'is_shared', 'created_at'],
+            'shareable' => true,
         ],
         'users' => [
             'model' => User::class,
@@ -102,15 +152,30 @@ class AdminResourceController extends Controller
             'icon' => 'bi-people',
             'primary' => 'email',
             'fields' => [
-                ['name' => 'firstname', 'label' => 'First name', 'type' => 'text'],
-                ['name' => 'lastname', 'label' => 'Last name', 'type' => 'text'],
-                ['name' => 'surname', 'label' => 'Surname', 'type' => 'text'],
+                ['name' => 'firstname', 'label' => 'Prenom', 'type' => 'text'],
+                ['name' => 'lastname', 'label' => 'Nom', 'type' => 'text'],
+                ['name' => 'surname', 'label' => 'Postnom', 'type' => 'text'],
+                ['name' => 'partner_name', 'label' => 'Nom du partenaire', 'type' => 'text'],
+                ['name' => 'gender', 'label' => 'Genre', 'type' => 'select', 'options' => ['' => '-', 'male' => 'Masculin', 'female' => 'Feminin']],
+                ['name' => 'birthdate', 'label' => 'Date de naissance', 'type' => 'date'],
+                ['name' => 'country', 'label' => 'Pays', 'type' => 'text'],
+                ['name' => 'city', 'label' => 'Ville', 'type' => 'text'],
+                ['name' => 'address_1', 'label' => 'Adresse 1', 'type' => 'textarea'],
+                ['name' => 'address_2', 'label' => 'Adresse 2', 'type' => 'textarea'],
+                ['name' => 'p_o_box', 'label' => 'Boite postale', 'type' => 'text'],
+                ['name' => 'currency', 'label' => 'Devise', 'type' => 'text'],
                 ['name' => 'email', 'label' => 'Email', 'type' => 'email'],
-                ['name' => 'phone', 'label' => 'Phone', 'type' => 'text'],
-                ['name' => 'username', 'label' => 'Username', 'type' => 'text'],
-                ['name' => 'password', 'label' => 'Password', 'type' => 'password'],
-                ['name' => 'status', 'label' => 'Status', 'type' => 'select', 'options' => ['created' => 'Created', 'activated' => 'Activated', 'disabled' => 'Disabled', 'blocked' => 'Blocked', 'deleted' => 'Deleted']],
-                ['name' => 'type', 'label' => 'Type', 'type' => 'select', 'options' => ['uncertified' => 'Uncertified', 'certified' => 'Certified']],
+                ['name' => 'phone', 'label' => 'Telephone', 'type' => 'text'],
+                ['name' => 'username', 'label' => 'Nom d utilisateur', 'type' => 'text'],
+                ['name' => 'password', 'label' => 'Mot de passe', 'type' => 'password'],
+                ['name' => 'avatar_url', 'label' => 'URL avatar', 'type' => 'text'],
+                ['name' => 'cover_url', 'label' => 'URL couverture', 'type' => 'text'],
+                ['name' => 'promo_code', 'label' => 'Code promotionnel', 'type' => 'text'],
+                ['name' => 'tips_at_every_login', 'label' => 'Conseils a chaque connexion', 'type' => 'checkbox'],
+                ['name' => 'is_online', 'label' => 'En ligne', 'type' => 'checkbox'],
+                ['name' => 'christian_preference', 'label' => 'Preference chretienne', 'type' => 'checkbox'],
+                ['name' => 'status', 'label' => 'Statut', 'type' => 'select', 'options' => ['created' => 'Cree', 'activated' => 'Active', 'disabled' => 'Desactive', 'blocked' => 'Bloque', 'deleted' => 'Supprime']],
+                ['name' => 'type', 'label' => 'Type', 'type' => 'select', 'options' => ['uncertified' => 'Non certifie', 'certified' => 'Certifie']],
             ],
             'columns' => ['firstname', 'lastname', 'email', 'phone', 'status'],
         ],
@@ -120,11 +185,12 @@ class AdminResourceController extends Controller
             'icon' => 'bi-envelope',
             'primary' => 'message_content',
             'fields' => [
-                ['name' => 'message_content', 'label' => 'Message content', 'type' => 'textarea'],
-                ['name' => 'status', 'label' => 'Status', 'type' => 'select', 'options' => ['read' => 'Read', 'unread' => 'Unread']],
-                ['name' => 'user_id', 'label' => 'Sender ID', 'type' => 'number'],
-                ['name' => 'addressee_user_id', 'label' => 'Addressee user ID', 'type' => 'number'],
-                ['name' => 'addressee_group_id', 'label' => 'Addressee group ID', 'type' => 'number'],
+                ['name' => 'message_content', 'label' => 'Contenu du message', 'type' => 'textarea'],
+                ['name' => 'answered_for', 'label' => 'Reponse au message ID', 'type' => 'number'],
+                ['name' => 'status', 'label' => 'Statut', 'type' => 'select', 'options' => ['read' => 'Lu', 'unread' => 'Non lu']],
+                ['name' => 'user_id', 'label' => 'Expediteur ID', 'type' => 'number'],
+                ['name' => 'addressee_user_id', 'label' => 'Destinataire utilisateur ID', 'type' => 'number'],
+                ['name' => 'addressee_group_id', 'label' => 'Destinataire groupe ID', 'type' => 'number'],
             ],
             'columns' => ['message_content', 'status', 'user_id', 'created_at'],
         ],
@@ -134,8 +200,22 @@ class AdminResourceController extends Controller
             'icon' => 'bi-bell',
             'primary' => 'type',
             'readonly' => true,
-            'columns' => ['type', 'is_read', 'from_user_id', 'to_user_id', 'media_id', 'created_at'],
+            'with' => ['fromUser', 'toUser', 'media', 'product'],
+            'columns' => ['message', 'type', 'is_read', 'created_at'],
         ],
+    ];
+
+    private const CONTENT_TYPE_OPTIONS = [
+        'film_series' => 'Films et series',
+        'comedy' => 'Comedie',
+        'music' => 'Musique',
+        'education' => 'Education',
+        'business' => 'Business',
+        'crafts_diy' => 'Bricolage et DIY',
+        'sports' => 'Sports',
+        'documentary' => 'Documentaire',
+        'product' => 'Produit',
+        'service' => 'Service',
     ];
 
     public function dashboard()
@@ -158,7 +238,9 @@ class AdminResourceController extends Controller
     public function list(string $resource)
     {
         $config = $this->config($resource);
-        $query = $config['model']::query()->latest('id');
+        $query = $config['model']::query()
+            ->when(! empty($config['with']), fn ($query) => $query->with($config['with']))
+            ->latest('id');
 
         return response()->json([
             'items' => $query->limit(200)->get()->map(fn (Model $item) => $this->present($item, $config))->values(),
@@ -166,11 +248,16 @@ class AdminResourceController extends Controller
         ]);
     }
 
-    public function show(string $resource, int $id)
+    public function show(string|int $resource, string|int|null $id = null)
     {
+        [$resource, $id] = $this->routeArguments($resource, $id);
         $config = $this->config($resource);
 
-        return response()->json($config['model']::findOrFail($id));
+        return response()->json(
+            $config['model']::query()
+                ->when(! empty($config['with']), fn ($query) => $query->with($config['with']))
+                ->findOrFail($id)
+        );
     }
 
     public function store(Request $request, string $resource)
@@ -178,27 +265,61 @@ class AdminResourceController extends Controller
         $config = $this->config($resource);
         abort_if($config['readonly'] ?? false, 403);
 
-        $item = new $config['model'];
-        $item->fill($this->payload($request, $config, $item));
-        $item->save();
+        $item = DB::transaction(function () use ($request, $config): Model {
+            $item = new $config['model'];
+            $item->fill($this->payload($request, $config, $item));
+            $item->save();
+            $this->saveChildren($request, $config, $item);
+
+            return $item;
+        });
 
         return response()->json(['message' => __('admin.saved'), 'item' => $this->present($item, $config)]);
     }
 
-    public function update(Request $request, string $resource, int $id)
+    public function update(Request $request, string|int $resource, string|int|null $id = null)
     {
+        [$resource, $id] = $this->routeArguments($resource, $id);
         $config = $this->config($resource);
         abort_if($config['readonly'] ?? false, 403);
 
-        $item = $config['model']::findOrFail($id);
-        $item->fill($this->payload($request, $config, $item));
-        $item->save();
+        $item = DB::transaction(function () use ($request, $config, $id): Model {
+            $item = $config['model']::findOrFail($id);
+            $item->fill($this->payload($request, $config, $item));
+            $item->save();
+            $this->saveChildren($request, $config, $item);
+
+            return $item;
+        });
 
         return response()->json(['message' => __('admin.saved'), 'item' => $this->present($item, $config)]);
     }
 
-    public function destroy(string $resource, int $id)
+    public function toggleShared(string|int $resource, string|int|null $id = null)
     {
+        [$resource, $id] = $this->routeArguments($resource, $id);
+        $config = $this->config($resource);
+        abort_unless($config['shareable'] ?? false, 404);
+
+        $item = $config['model']::findOrFail($id);
+        $item->is_shared = ! $item->is_shared;
+        $item->save();
+
+        if ($item->is_shared) {
+            AdminNotification::create([
+                'type' => $item instanceof Media ? 'media_accepted' : 'product_accepted',
+                'to_user_id' => $item->user_id ?? null,
+                'media_id' => $item instanceof Media ? $item->id : null,
+                'product_id' => $item instanceof Product ? $item->id : null,
+            ]);
+        }
+
+        return response()->json(['message' => __('admin.saved'), 'item' => $this->present($item, $config)]);
+    }
+
+    public function destroy(string|int $resource, string|int|null $id = null)
+    {
+        [$resource, $id] = $this->routeArguments($resource, $id);
         $config = $this->config($resource);
         abort_if($config['readonly'] ?? false, 403);
         $config['model']::findOrFail($id)->delete();
@@ -218,6 +339,18 @@ class AdminResourceController extends Controller
         abort_unless(isset($this->resources[$resource]), 404);
 
         return $this->resources[$resource];
+    }
+
+    /**
+     * @return array{0: string, 1: int}
+     */
+    private function routeArguments(string|int $resource, string|int|null $id): array
+    {
+        if (! isset($this->resources[(string) $resource]) && isset($this->resources[(string) $id])) {
+            return [(string) $id, (int) $resource];
+        }
+
+        return [(string) $resource, (int) $id];
     }
 
     private function payload(Request $request, array $config, Model $item): array
@@ -258,6 +391,79 @@ class AdminResourceController extends Controller
         return $payload;
     }
 
+    private function saveChildren(Request $request, array $config, Model $item): void
+    {
+        if (($config['children'] ?? null) === 'pricing_descriptions') {
+            $item->descriptions()->delete();
+
+            foreach ($request->input('descriptions', []) as $description) {
+                if (! $this->hasTranslatedValue($description['description_title'] ?? [])) {
+                    continue;
+                }
+
+                $item->descriptions()->create([
+                    'description_title' => $this->translatedPayload($description['description_title'] ?? []),
+                    'description_content' => $this->translatedPayload($description['description_content'] ?? []),
+                ]);
+            }
+        }
+
+        if (($config['children'] ?? null) === 'about_titles') {
+            $item->titles()->each(function (AboutTitle $title): void {
+                $title->contents()->each(fn ($content) => $content->dashes()->delete());
+                $title->contents()->delete();
+            });
+            $item->titles()->delete();
+
+            foreach ($request->input('titles', []) as $titlePayload) {
+                if (! $this->hasTranslatedValue($titlePayload['title'] ?? [])) {
+                    continue;
+                }
+
+                $title = $item->titles()->create([
+                    'title' => $this->translatedPayload($titlePayload['title'] ?? []),
+                    'alias' => $titlePayload['alias'] ?? null,
+                ]);
+
+                foreach ($titlePayload['contents'] ?? [] as $contentPayload) {
+                    if (! $this->hasTranslatedValue($contentPayload['content'] ?? [])) {
+                        continue;
+                    }
+
+                    $content = $title->contents()->create([
+                        'subtitle' => $this->translatedPayload($contentPayload['subtitle'] ?? []),
+                        'content' => $this->translatedPayload($contentPayload['content'] ?? []),
+                    ]);
+
+                    foreach ($contentPayload['dashes'] ?? [] as $dashPayload) {
+                        if (! $this->hasTranslatedValue($dashPayload['dash_content'] ?? [])) {
+                            continue;
+                        }
+
+                        $content->dashes()->create([
+                            'dash_content' => $this->translatedPayload($dashPayload['dash_content'] ?? []),
+                            'belongs_to' => $dashPayload['belongs_to'] ?? null,
+                        ]);
+                    }
+                }
+            }
+        }
+    }
+
+    private function translatedPayload(array $payload): array
+    {
+        return [
+            'fr' => $payload['fr'] ?? null,
+            'en' => $payload['en'] ?? null,
+            'ln' => $payload['ln'] ?? null,
+        ];
+    }
+
+    private function hasTranslatedValue(array $payload): bool
+    {
+        return collect($payload)->filter(fn ($value) => filled($value))->isNotEmpty();
+    }
+
     private function present(Model $item, array $config): array
     {
         $raw = $item->toArray();
@@ -265,6 +471,13 @@ class AdminResourceController extends Controller
 
         foreach ($config['columns'] as $column) {
             $value = Arr::get($raw, $column);
+            if ($column === 'message' && $item instanceof AdminNotification) {
+                $raw['message_display'] = $this->notificationMessage($item);
+                $raw['url'] = $this->notificationUrl($item);
+
+                continue;
+            }
+
             if (is_array($value)) {
                 $raw[$column.'_display'] = $value[$locale] ?? $value['fr'] ?? reset($value);
             } else {
@@ -274,5 +487,34 @@ class AdminResourceController extends Controller
         }
 
         return $raw;
+    }
+
+    private function notificationMessage(AdminNotification $notification): string
+    {
+        $name = trim(($notification->fromUser?->firstname ?? '').' '.($notification->fromUser?->lastname ?? '')) ?: 'Un membre';
+
+        return match ($notification->type) {
+            'media_created' => "{$name} a envoye un nouveau media",
+            'media_accepted' => 'Votre media a ete accepte',
+            'product_added' => "{$name} a ajoute un nouveau produit",
+            'product_accepted' => 'Votre produit a ete accepte',
+            'comment_sent' => "{$name} a envoye un commentaire",
+            'report_sent' => "{$name} a signale un element",
+            'new_follower' => "{$name} vous suit",
+            default => str((string) $notification->type)->replace('_', ' ')->ucfirst()->toString(),
+        };
+    }
+
+    private function notificationUrl(AdminNotification $notification): ?string
+    {
+        if ($notification->media_id) {
+            return route('videos.show', $notification->media_id);
+        }
+
+        if ($notification->product_id) {
+            return route('products.show', $notification->product_id);
+        }
+
+        return null;
     }
 }
