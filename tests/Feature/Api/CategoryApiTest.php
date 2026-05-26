@@ -47,4 +47,14 @@ class CategoryApiTest extends TestCase
         $response->assertJsonCount(1, 'data');
         $response->assertJsonPath('data.0.category_name.fr', 'Culture');
     }
+
+    public function test_show_missing_category_returns_uniform_api_error(): void
+    {
+        $response = $this->getJson('/api/v1/category/999');
+
+        $response->assertNotFound()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('data', null)
+            ->assertJsonPath('message', 'Category not found.');
+    }
 }

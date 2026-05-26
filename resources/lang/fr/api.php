@@ -28,6 +28,10 @@ return [
     'file' => [
         'created_many' => 'Fichiers enregistrés avec succès.',
     ],
+    'errors' => [
+        'not_found' => 'Ressource introuvable.',
+        'query_failed' => 'La requête à la base de données a échoué.',
+    ],
     'password_reset' => [
         'invalid_token' => 'Le code est invalide.',
         'token_valid' => 'Le code est valide.',

@@ -28,6 +28,10 @@ return [
     'file' => [
         'created_many' => 'Files uploaded successfully.',
     ],
+    'errors' => [
+        'not_found' => 'Resource not found.',
+        'query_failed' => 'The database query failed.',
+    ],
     'password_reset' => [
         'invalid_token' => 'The token is invalid.',
         'token_valid' => 'The token is valid.',
