@@ -20,7 +20,7 @@ class Pricing extends SqlModel
 
     protected function fillableAttributes(): array
     {
-        return ['pricing_name', 'pricing_type', 'reason', 'pricing_cost', 'currency'];
+        return ['pricing_name', 'pricing_type', 'reason', 'pricing_cost', 'currency', 'image_url', 'icon', 'color'];
     }
 
     protected function castsAttributes(): array
