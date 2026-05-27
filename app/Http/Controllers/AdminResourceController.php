@@ -560,6 +560,12 @@ class AdminResourceController extends Controller
                 continue;
             }
 
+            if ($this->isDateTimeColumn($column)) {
+                $raw[$column.'_display'] = $this->dateTimeDisplay($value);
+
+                continue;
+            }
+
             if (is_array($value)) {
                 $raw[$column.'_display'] = $value[$locale] ?? $value['fr'] ?? reset($value);
             } else {
@@ -568,7 +574,31 @@ class AdminResourceController extends Controller
             }
         }
 
+        foreach ($raw as $column => $value) {
+            if ($this->isDateTimeColumn((string) $column) && ! array_key_exists($column.'_display', $raw)) {
+                $raw[$column.'_display'] = $this->dateTimeDisplay($value);
+            }
+        }
+
         return $raw;
+    }
+
+    private function isDateTimeColumn(string $column): bool
+    {
+        return str_ends_with($column, '_at') || str_ends_with($column, '_start') || str_ends_with($column, '_end');
+    }
+
+    private function dateTimeDisplay(mixed $value): mixed
+    {
+        if (blank($value)) {
+            return $value;
+        }
+
+        try {
+            return formatAdminDateTime($value);
+        } catch (\Throwable) {
+            return $value;
+        }
     }
 
     private function notificationMessage(AdminNotification $notification): string

@@ -136,6 +136,43 @@ if (! function_exists('explicitDate')) {
     }
 }
 
+// Relative admin date display for TIMESTAMP and DATETIME columns
+if (! function_exists('formatAdminDateTime')) {
+    function formatAdminDateTime($date): ?string
+    {
+        if (blank($date)) {
+            return null;
+        }
+
+        $date = Carbon::parse($date, config('app.timezone'))->timezone(config('app.timezone'));
+        $now = Carbon::now(config('app.timezone'));
+
+        if ($date->isToday()) {
+            $seconds = (int) max(0, $date->diffInSeconds($now));
+
+            if ($seconds >= 3600) {
+                $hours = intdiv($seconds, 3600);
+
+                return 'Il y a '.$hours.' heure'.($hours > 1 ? 's' : '');
+            }
+
+            if ($seconds >= 60) {
+                $minutes = intdiv($seconds, 60);
+
+                return 'Il y a '.$minutes.' minute'.($minutes > 1 ? 's' : '');
+            }
+
+            return 'Il y a '.$seconds.' seconde'.($seconds > 1 ? 's' : '');
+        }
+
+        if ($date->isYesterday()) {
+            return 'Hier a '.$date->format('H:i');
+        }
+
+        return 'Le '.$date->format('d/m/Y').' a '.$date->format('H:i');
+    }
+}
+
 // All days of specific week in month
 if (! function_exists('getStartAndEndOfWeekInMonth')) {
     function getStartAndEndOfWeekInMonth($year, $month, $weekNumber)

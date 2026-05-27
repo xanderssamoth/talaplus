@@ -443,7 +443,7 @@
             const read = item.is_read === 1 || item.is_read === true || item.is_read === '1';
             const status = read ? @json(__('admin.read')) : @json(__('admin.unread'));
             const message = display(item.message_display || item.type);
-            const date = display(item.created_at);
+            const date = display(item.created_at_display || item.created_at);
             const link = item.url ? `<a class="stretched-link" href="${item.url}" target="_blank" rel="noopener"></a>` : '';
             const readButton = read ? '' : `<button class="btn btn-sm btn-outline-primary mark-read position-relative z-1" data-id="${item.id}" type="button">
                 <i class="bi bi-check2-circle"></i> ${@json(__('admin.mark_read'))}
