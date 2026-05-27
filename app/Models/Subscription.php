@@ -11,11 +11,6 @@ class Subscription extends SqlModel
         return 'subscriptions';
     }
 
-    protected function fillableAttributes(): array
-    {
-        return ['user_id', 'follower_id', 'granted'];
-    }
-
     protected function castsAttributes(): array
     {
         return [

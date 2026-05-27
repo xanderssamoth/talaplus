@@ -18,11 +18,6 @@ class AboutSubject extends SqlModel
         return 'about_subjects';
     }
 
-    protected function fillableAttributes(): array
-    {
-        return ['subject', 'subject_description', 'status'];
-    }
-
     public function titles(): HasMany
     {
         return $this->hasMany(AboutTitle::class);

@@ -11,11 +11,6 @@ class PasswordReset extends SqlModel
         return 'password_resets';
     }
 
-    protected function fillableAttributes(): array
-    {
-        return ['email', 'phone', 'token', 'former_password'];
-    }
-
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'email', 'email');

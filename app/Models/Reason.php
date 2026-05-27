@@ -18,11 +18,6 @@ class Reason extends SqlModel
         return 'reasons';
     }
 
-    protected function fillableAttributes(): array
-    {
-        return ['reason_content', 'entity'];
-    }
-
     public function reports(): HasMany
     {
         return $this->hasMany(Report::class);

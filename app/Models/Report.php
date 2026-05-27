@@ -11,11 +11,6 @@ class Report extends SqlModel
         return 'reports';
     }
 
-    protected function fillableAttributes(): array
-    {
-        return ['entity', 'entity_id', 'report_content', 'muted', 'for_user_id', 'reason_id', 'user_id'];
-    }
-
     protected function castsAttributes(): array
     {
         return [

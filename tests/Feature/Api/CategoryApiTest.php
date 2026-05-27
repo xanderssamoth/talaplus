@@ -50,7 +50,7 @@ class CategoryApiTest extends TestCase
 
     public function test_show_missing_category_returns_uniform_api_error(): void
     {
-        $response = $this->getJson('/api/v1/category/999');
+        $response = $this->getJson('/api/v1/category/999?lang=en');
 
         $response->assertNotFound()
             ->assertJsonPath('success', false)

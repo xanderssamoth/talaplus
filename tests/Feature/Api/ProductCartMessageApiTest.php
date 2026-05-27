@@ -3,6 +3,7 @@
 namespace Tests\Feature\Api;
 
 use App\Models\AdminNotification;
+use App\Models\Comment;
 use App\Models\CustomerOrder;
 use App\Models\Group;
 use App\Models\History;
@@ -11,6 +12,7 @@ use App\Models\Product;
 use App\Models\Reaction;
 use App\Models\Role;
 use App\Models\Specification;
+use App\Models\Subscription;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -31,6 +33,9 @@ class ProductCartMessageApiTest extends TestCase
             'carts',
             'messages',
             'comments',
+            'hashtag_comment',
+            'hashtags',
+            'subscriptions',
             'group_user',
             'groups',
             'files',
@@ -48,6 +53,7 @@ class ProductCartMessageApiTest extends TestCase
             $table->id();
             $table->string('firstname')->nullable();
             $table->string('email')->nullable();
+            $table->string('username')->nullable();
             $table->text('password')->nullable();
             $table->timestamps();
             $table->softDeletes();
@@ -126,6 +132,7 @@ class ProductCartMessageApiTest extends TestCase
             $table->foreignId('to_user_id')->nullable();
             $table->foreignId('media_id')->nullable();
             $table->foreignId('product_id')->nullable();
+            $table->foreignId('comment_id')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
@@ -148,6 +155,7 @@ class ProductCartMessageApiTest extends TestCase
             $table->foreignId('pricing_id')->nullable();
             $table->foreignId('media_id')->nullable();
             $table->foreignId('product_id')->nullable();
+            $table->foreignId('comment_id')->nullable();
             $table->foreignId('user_id')->nullable();
             $table->timestamps();
             $table->softDeletes();
@@ -168,10 +176,34 @@ class ProductCartMessageApiTest extends TestCase
         Schema::create('comments', function (Blueprint $table): void {
             $table->id();
             $table->longText('comment_content')->nullable();
+            $table->string('type')->nullable();
+            $table->string('for_entity')->nullable();
             $table->unsignedBigInteger('answered_for')->nullable();
             $table->foreignId('media_id')->nullable();
             $table->foreignId('product_id')->nullable();
             $table->foreignId('user_id');
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('hashtags', function (Blueprint $table): void {
+            $table->id();
+            $table->string('keyword');
+            $table->timestamps();
+        });
+
+        Schema::create('hashtag_comment', function (Blueprint $table): void {
+            $table->id();
+            $table->foreignId('hashtag_id');
+            $table->foreignId('comment_id');
+            $table->timestamps();
+        });
+
+        Schema::create('subscriptions', function (Blueprint $table): void {
+            $table->id();
+            $table->foreignId('user_id');
+            $table->foreignId('follower_id');
+            $table->boolean('granted')->default(true);
             $table->timestamps();
             $table->softDeletes();
         });
@@ -317,6 +349,184 @@ class ProductCartMessageApiTest extends TestCase
             ->where('action', 'comment')
             ->where('user_id', $commenter->id)
             ->exists());
+    }
+
+    public function test_post_comment_notifies_followers_and_creates_post_history(): void
+    {
+        $owner = User::create(['email' => 'poster@example.com', 'password' => 'password']);
+        $follower = User::create(['email' => 'follower@example.com', 'password' => 'password']);
+        Subscription::create(['user_id' => $owner->id, 'follower_id' => $follower->id, 'granted' => true]);
+
+        $response = $this->postJson('/api/v1/comment', [
+            'comment_content' => 'My post',
+            'type' => 'post',
+            'for_entity' => 'user',
+            'user_id' => $owner->id,
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.type', 'post')
+            ->assertJsonPath('data.likes_count', 0);
+
+        $comment = Comment::query()->firstOrFail();
+        $this->assertTrue(AdminNotification::query()
+            ->where('type', 'post_sent')
+            ->where('from_user_id', $owner->id)
+            ->where('to_user_id', $follower->id)
+            ->where('comment_id', $comment->id)
+            ->exists());
+        $this->assertTrue(History::query()
+            ->where('entity', 'comment')
+            ->where('entity_id', $comment->id)
+            ->where('action', 'post')
+            ->where('user_id', $owner->id)
+            ->exists());
+    }
+
+    public function test_comment_like_creates_reaction_notification_history_and_count(): void
+    {
+        $owner = User::create(['email' => 'poster@example.com', 'password' => 'password']);
+        $liker = User::create(['email' => 'liker@example.com', 'password' => 'password']);
+        $comment = Comment::create([
+            'comment_content' => 'Post',
+            'type' => 'post',
+            'user_id' => $owner->id,
+        ]);
+
+        $this->postJson("/api/v1/comment/{$comment->id}/like", ['user_id' => $liker->id])
+            ->assertOk()
+            ->assertJsonPath('data.type', 'like')
+            ->assertJsonPath('data.comment_id', $comment->id);
+
+        $this->getJson("/api/v1/comment/{$comment->id}")
+            ->assertOk()
+            ->assertJsonPath('data.likes_count', 1);
+
+        $this->getJson("/api/v1/comment/{$comment->id}/like")
+            ->assertOk()
+            ->assertJsonPath('count', 1);
+
+        $this->assertTrue(AdminNotification::query()
+            ->where('type', 'like_sent')
+            ->where('from_user_id', $liker->id)
+            ->where('to_user_id', $owner->id)
+            ->where('comment_id', $comment->id)
+            ->exists());
+        $this->assertTrue(History::query()
+            ->where('entity', 'comment')
+            ->where('entity_id', $comment->id)
+            ->where('action', 'like')
+            ->where('user_id', $liker->id)
+            ->exists());
+    }
+
+    public function test_comment_store_and_update_sync_hashtags_and_mentions(): void
+    {
+        $owner = User::create(['email' => 'poster@example.com', 'username' => 'poster', 'password' => 'password']);
+        $oldMention = User::create(['email' => 'old@example.com', 'username' => 'oldUser', 'password' => 'password']);
+        $newMention = User::create(['email' => 'new@example.com', 'username' => 'newUser', 'password' => 'password']);
+
+        $response = $this->postJson('/api/v1/comment', [
+            'comment_content' => 'Hello #old @oldUser',
+            'type' => 'post',
+            'user_id' => $owner->id,
+        ]);
+
+        $response->assertOk();
+        $comment = Comment::query()->firstOrFail();
+        $this->assertTrue($comment->hashtags()->where('keyword', 'old')->exists());
+        $this->assertTrue(AdminNotification::query()
+            ->where('type', 'mention')
+            ->where('from_user_id', $owner->id)
+            ->where('to_user_id', $oldMention->id)
+            ->where('comment_id', $comment->id)
+            ->exists());
+
+        $this->patchJson("/api/v1/comment/{$comment->id}", [
+            'comment_content' => 'Hello #new @newUser',
+        ])->assertOk();
+
+        $this->assertFalse($comment->refresh()->hashtags()->where('keyword', 'old')->exists());
+        $this->assertTrue($comment->hashtags()->where('keyword', 'new')->exists());
+        $this->assertFalse(AdminNotification::query()
+            ->where('type', 'mention')
+            ->where('to_user_id', $oldMention->id)
+            ->where('comment_id', $comment->id)
+            ->exists());
+        $this->assertTrue(AdminNotification::query()
+            ->where('type', 'mention')
+            ->where('to_user_id', $newMention->id)
+            ->where('comment_id', $comment->id)
+            ->exists());
+        $this->assertFalse(History::query()
+            ->where('entity', 'comment')
+            ->where('action', 'mention')
+            ->where('word', 'oldUser')
+            ->where('entity_id', $comment->id)
+            ->exists());
+    }
+
+    public function test_comment_like_can_be_removed(): void
+    {
+        $owner = User::create(['email' => 'poster@example.com', 'password' => 'password']);
+        $liker = User::create(['email' => 'liker@example.com', 'password' => 'password']);
+        $comment = Comment::create([
+            'comment_content' => 'Post',
+            'type' => 'post',
+            'user_id' => $owner->id,
+        ]);
+
+        $this->postJson("/api/v1/comment/{$comment->id}/like", ['user_id' => $liker->id])->assertOk();
+        $this->postJson("/api/v1/comment/{$comment->id}/like", ['user_id' => $liker->id, 'action' => 'remove'])->assertOk();
+
+        $this->assertSame(0, Reaction::query()->where('type', 'like')->where('comment_id', $comment->id)->count());
+        $this->assertFalse(History::query()->where('entity', 'comment')->where('action', 'like')->where('entity_id', $comment->id)->exists());
+        $this->assertFalse(AdminNotification::query()->where('type', 'like_sent')->where('comment_id', $comment->id)->exists());
+    }
+
+    public function test_product_star_can_be_removed(): void
+    {
+        $owner = User::create(['email' => 'owner@example.com', 'password' => 'password']);
+        $actor = User::create(['email' => 'actor@example.com', 'password' => 'password']);
+        $product = Product::create(['product_name' => 'Book', 'price' => 10, 'currency' => 'USD', 'user_id' => $owner->id]);
+
+        $this->postJson("/api/v1/product/{$product->id}/rate", ['user_id' => $actor->id, 'number_of_stars' => 5])->assertOk();
+        $this->postJson("/api/v1/product/{$product->id}/rate", ['user_id' => $actor->id, 'action' => 'remove'])->assertOk();
+
+        $this->assertSame(0, Reaction::query()->where('type', 'star')->where('product_id', $product->id)->count());
+        $this->assertFalse(History::query()->where('entity', 'product')->whereIn('action', ['star', 'like'])->where('entity_id', $product->id)->exists());
+    }
+
+    public function test_comment_news_feed_prioritizes_interacted_followed_then_recent_posts(): void
+    {
+        $currentUser = User::create(['email' => 'current@example.com', 'password' => 'password']);
+        $followedUser = User::create(['email' => 'followed@example.com', 'password' => 'password']);
+        $likedOwner = User::create(['email' => 'liked-owner@example.com', 'password' => 'password']);
+        $commentedOwner = User::create(['email' => 'commented-owner@example.com', 'password' => 'password']);
+        $otherUser = User::create(['email' => 'other@example.com', 'password' => 'password']);
+
+        $likedPost = Comment::create(['comment_content' => 'Liked post', 'type' => 'post', 'user_id' => $likedOwner->id]);
+        $commentedPost = Comment::create(['comment_content' => 'Commented post', 'type' => 'post', 'user_id' => $commentedOwner->id]);
+        $followedPost = Comment::create(['comment_content' => 'Followed post', 'type' => 'post', 'user_id' => $followedUser->id]);
+        $otherPost = Comment::create(['comment_content' => 'Other post', 'type' => 'post', 'user_id' => $otherUser->id]);
+
+        Reaction::create(['type' => 'like', 'comment_id' => $likedPost->id, 'user_id' => $currentUser->id]);
+        Comment::create([
+            'comment_content' => 'Reply',
+            'type' => 'comment',
+            'answered_for' => $commentedPost->id,
+            'user_id' => $currentUser->id,
+        ]);
+        Subscription::create(['user_id' => $followedUser->id, 'follower_id' => $currentUser->id, 'granted' => true]);
+
+        $response = $this->getJson("/api/v1/comment/news-feed?user_id={$currentUser->id}");
+
+        $response->assertOk()
+            ->assertJsonPath('count', 4)
+            ->assertJsonPath('data.0.id', $commentedPost->id)
+            ->assertJsonPath('data.1.id', $likedPost->id)
+            ->assertJsonPath('data.2.id', $followedPost->id)
+            ->assertJsonPath('data.3.id', $otherPost->id);
     }
 
     public function test_add_remove_and_check_cart_restores_product_quantity(): void

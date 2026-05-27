@@ -15,25 +15,6 @@ class Product extends SqlModel
         return 'products';
     }
 
-    protected function fillableAttributes(): array
-    {
-        return [
-            'product_name',
-            'product_description',
-            'type',
-            'quantity',
-            'price',
-            'currency',
-            'action',
-            'is_shared',
-            'price_reduction_start',
-            'price_reduction_end',
-            'reduction_rate',
-            'category_id',
-            'user_id',
-        ];
-    }
-
     protected function castsAttributes(): array
     {
         return [

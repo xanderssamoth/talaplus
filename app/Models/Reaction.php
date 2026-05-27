@@ -14,11 +14,6 @@ class Reaction extends SqlModel
         return 'reactions';
     }
 
-    protected function fillableAttributes(): array
-    {
-        return ['type', 'number_of_stars', 'pricing_id', 'media_id', 'product_id', 'user_id'];
-    }
-
     public function pricing(): BelongsTo
     {
         return $this->belongsTo(Pricing::class);
@@ -32,6 +27,11 @@ class Reaction extends SqlModel
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function comment(): BelongsTo
+    {
+        return $this->belongsTo(Comment::class);
     }
 
     public function user(): BelongsTo

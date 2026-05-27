@@ -45,6 +45,7 @@ final class MediaController extends ApiResourceController
             return Hashtag::query()->firstOrCreate(['keyword' => $keyword])->id;
         });
         $media->hashtags()->sync($hashtagIds);
+        $this->syncMentions($media, (string) $request->input('media_description'));
 
         collect($request->file('files', []))->each(function ($uploadedFile) use ($media): void {
             $payload = [
@@ -77,6 +78,30 @@ final class MediaController extends ApiResourceController
         ]));
 
         return $this->handleResponse(MediaResource::make($media->refresh()), $this->apiMessage('created'));
+    }
+
+    public function update(Request $request, int $id): JsonResponse
+    {
+        $media = Media::query()->findOrFail($id);
+        $payload = $this->payload($request);
+
+        if ($request->hasFile('cover')) {
+            $payload['cover_url'] = Storage::disk('public')->url($request->file('cover')->store('medias/covers', 'public'));
+        }
+
+        $media->fill($payload);
+        $media->save();
+
+        if ($request->has('category_ids')) {
+            $media->categories()->sync(collect($request->input('category_ids', []))->filter()->values());
+        }
+
+        if ($request->has('media_description')) {
+            $this->syncHashtags($media, (string) $request->input('media_description'));
+            $this->syncMentions($media, (string) $request->input('media_description'));
+        }
+
+        return $this->handleResponse(MediaResource::make($media->refresh()), $this->apiMessage('updated'));
     }
 
     public function show(int $id): JsonResponse
@@ -230,19 +255,27 @@ final class MediaController extends ApiResourceController
 
     public function like(Request $request, int $id): JsonResponse
     {
-        $validated = $request->validate(['user_id' => ['required', 'integer', 'exists:users,id']]);
+        $validated = $request->validate([
+            'user_id' => ['required', 'integer', 'exists:users,id'],
+            'action' => ['nullable', 'string', 'in:add,remove'],
+        ]);
 
-        return $this->storeReaction($id, $validated['user_id'], 'like');
+        return $this->handleReaction($id, $validated['user_id'], 'like', $validated['action'] ?? 'add');
     }
 
     public function gift(Request $request, int $id): JsonResponse
     {
         $validated = $request->validate([
             'user_id' => ['required', 'integer', 'exists:users,id'],
-            'pricing_id' => ['required', 'integer', 'exists:pricings,id'],
+            'pricing_id' => ['nullable', 'integer', 'exists:pricings,id'],
+            'action' => ['nullable', 'string', 'in:add,remove'],
         ]);
 
-        return $this->storeReaction($id, $validated['user_id'], 'gift', $validated['pricing_id']);
+        if (($validated['action'] ?? 'add') === 'add' && ! isset($validated['pricing_id'])) {
+            return $this->handleError(['pricing_id' => ['The pricing id field is required.']], __('validation.required', ['attribute' => 'pricing id']), 422);
+        }
+
+        return $this->handleReaction($id, $validated['user_id'], 'gift', $validated['action'] ?? 'add', $validated['pricing_id'] ?? null);
     }
 
     public function report(Request $request, int $id, int $userId): JsonResponse
@@ -284,9 +317,34 @@ final class MediaController extends ApiResourceController
         return $this->handleResponse(ApiResource::collection($reactions), $this->apiMessage('find_all_success', 'reaction'), $reactions->lastPage(), $reactions->total());
     }
 
-    private function storeReaction(int $mediaId, int $userId, string $type, ?int $pricingId = null): JsonResponse
+    private function handleReaction(int $mediaId, int $userId, string $type, string $action, ?int $pricingId = null): JsonResponse
     {
         $media = Media::query()->findOrFail($mediaId);
+
+        if ($action === 'remove') {
+            Reaction::query()
+                ->where('type', $type)
+                ->where('media_id', $media->id)
+                ->where('user_id', $userId)
+                ->delete();
+
+            History::query()
+                ->where('entity', 'media')
+                ->where('entity_id', $media->id)
+                ->where('action', $type)
+                ->where('user_id', $userId)
+                ->delete();
+
+            AdminNotification::query()
+                ->where('type', $type === 'gift' ? 'gift_sent' : 'like_sent')
+                ->where('from_user_id', $userId)
+                ->where('to_user_id', $media->user_id)
+                ->where('media_id', $media->id)
+                ->delete();
+
+            return $this->handleResponse(null, $this->apiMessage('deleted', 'reaction'));
+        }
+
         $reaction = Reaction::create([
             'type' => $type,
             'pricing_id' => $pricingId,
@@ -309,5 +367,53 @@ final class MediaController extends ApiResourceController
         ]);
 
         return $this->handleResponse(ApiResource::make($reaction->load(['user', 'pricing'])), $this->apiMessage('created', 'reaction'));
+    }
+
+    private function syncHashtags(Media $media, string $description): void
+    {
+        $hashtagIds = collect(getHashtags($description))
+            ->unique()
+            ->map(fn (string $keyword): int => Hashtag::query()->firstOrCreate(['keyword' => $keyword])->id);
+
+        $media->hashtags()->sync($hashtagIds);
+    }
+
+    private function syncMentions(Media $media, string $description): void
+    {
+        AdminNotification::query()
+            ->where('type', 'mention')
+            ->where('media_id', $media->id)
+            ->delete();
+
+        History::query()
+            ->where('entity', 'media')
+            ->where('entity_id', $media->id)
+            ->where('action', 'mention')
+            ->delete();
+
+        collect(getMentions($description))
+            ->unique()
+            ->each(function (string $username) use ($media): void {
+                $mentionedUser = User::query()->where('username', $username)->first();
+
+                if ($mentionedUser === null || $mentionedUser->id === $media->user_id) {
+                    return;
+                }
+
+                AdminNotification::create([
+                    'type' => 'mention',
+                    'from_user_id' => $media->user_id,
+                    'to_user_id' => $mentionedUser->id,
+                    'media_id' => $media->id,
+                ]);
+
+                History::create([
+                    'word' => $username,
+                    'entity' => 'media',
+                    'entity_id' => $media->id,
+                    'action' => 'mention',
+                    'user_id' => $media->user_id,
+                ]);
+            });
     }
 }

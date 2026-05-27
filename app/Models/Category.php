@@ -19,11 +19,6 @@ class Category extends SqlModel
         return 'categories';
     }
 
-    protected function fillableAttributes(): array
-    {
-        return ['category_name', 'category_description', 'for_type'];
-    }
-
     public function medias(): BelongsToMany
     {
         return $this->belongsToMany(Media::class, 'category_media')->withTimestamps();

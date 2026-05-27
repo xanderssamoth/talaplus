@@ -15,18 +15,6 @@ class Message extends SqlModel
         return 'messages';
     }
 
-    protected function fillableAttributes(): array
-    {
-        return [
-            'message_content',
-            'answered_for',
-            'status',
-            'user_id',
-            'addressee_user_id',
-            'addressee_group_id',
-        ];
-    }
-
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

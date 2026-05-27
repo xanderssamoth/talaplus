@@ -44,6 +44,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             Localization::class,
         ]);
+        $middleware->api(append: [
+            Localization::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (ModelNotFoundException $exception, Request $request) {

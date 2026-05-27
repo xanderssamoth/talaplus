@@ -11,11 +11,6 @@ class BlockedUser extends SqlModel
         return 'blocked_users';
     }
 
-    protected function fillableAttributes(): array
-    {
-        return ['complaint', 'is_unlocked', 'user_id', 'about_title_id'];
-    }
-
     protected function castsAttributes(): array
     {
         return [

@@ -14,11 +14,6 @@ class MoneyTransfer extends SqlModel
         return 'money_transfers';
     }
 
-    protected function fillableAttributes(): array
-    {
-        return ['has_commission', 'commission_amount', 'status', 'payment_id'];
-    }
-
     protected function castsAttributes(): array
     {
         return [

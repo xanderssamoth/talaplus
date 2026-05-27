@@ -18,11 +18,6 @@ class PricingDescription extends SqlModel
         return 'pricing_descriptions';
     }
 
-    protected function fillableAttributes(): array
-    {
-        return ['description_title', 'description_content', 'pricing_id'];
-    }
-
     public function pricing(): BelongsTo
     {
         return $this->belongsTo(Pricing::class);

@@ -4,22 +4,18 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Schema;
 
 abstract class SqlModel extends Model
 {
     use HasFactory;
 
+    protected $guarded = [];
+
     /**
      * The table that backs the model.
      */
     abstract protected function tableName(): string;
-
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @return array<int, string>
-     */
-    abstract protected function fillableAttributes(): array;
 
     /**
      * The model attribute casts.
@@ -48,7 +44,10 @@ abstract class SqlModel extends Model
 
     public function getFillable(): array
     {
-        return $this->fillableAttributes();
+        return collect(Schema::getColumnListing($this->getTable()))
+            ->reject(fn (string $column): bool => in_array($column, ['id', 'created_at', 'updated_at', 'deleted_at'], true))
+            ->values()
+            ->all();
     }
 
     protected function casts(): array

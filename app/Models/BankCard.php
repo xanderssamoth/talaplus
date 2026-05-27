@@ -14,11 +14,6 @@ class BankCard extends SqlModel
         return 'bank_cards';
     }
 
-    protected function fillableAttributes(): array
-    {
-        return ['card_name', 'card_number', 'expiration_date', 'cvv_code', 'provider', 'is_main', 'user_id'];
-    }
-
     protected function castsAttributes(): array
     {
         return [

@@ -14,11 +14,6 @@ class History extends SqlModel
         return 'histories';
     }
 
-    protected function fillableAttributes(): array
-    {
-        return ['word', 'entity', 'entity_id', 'action', 'user_id'];
-    }
-
     protected function castsAttributes(): array
     {
         return [

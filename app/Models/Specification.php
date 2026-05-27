@@ -14,11 +14,6 @@ class Specification extends SqlModel
         return 'specifications';
     }
 
-    protected function fillableAttributes(): array
-    {
-        return ['spec_content', 'product_id'];
-    }
-
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);

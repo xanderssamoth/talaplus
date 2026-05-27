@@ -11,13 +11,13 @@ class Hashtag extends SqlModel
         return 'hashtags';
     }
 
-    protected function fillableAttributes(): array
-    {
-        return ['keyword'];
-    }
-
     public function medias(): BelongsToMany
     {
         return $this->belongsToMany(Media::class, 'hashtag_media')->withTimestamps();
+    }
+
+    public function comments(): BelongsToMany
+    {
+        return $this->belongsToMany(Comment::class, 'hashtag_comment')->withTimestamps();
     }
 }

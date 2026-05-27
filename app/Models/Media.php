@@ -20,24 +20,6 @@ class Media extends SqlModel
         return 'medias';
     }
 
-    protected function fillableAttributes(): array
-    {
-        return [
-            'media_title',
-            'media_description',
-            'media_url',
-            'cover_url',
-            'author_names',
-            'is_free',
-            'price',
-            'for_youth',
-            'belongs_to',
-            'type',
-            'is_shared',
-            'user_id',
-        ];
-    }
-
     protected function castsAttributes(): array
     {
         return [
@@ -71,5 +53,10 @@ class Media extends SqlModel
     public function comments(): HasMany
     {
         return $this->hasMany(Comment::class);
+    }
+
+    public function reactions(): HasMany
+    {
+        return $this->hasMany(Reaction::class);
     }
 }

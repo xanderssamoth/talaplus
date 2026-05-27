@@ -178,20 +178,44 @@ final class ProductController extends ApiResourceController
     {
         $validated = $request->validate([
             'user_id' => ['required', 'integer', 'exists:users,id'],
-            'number_of_stars' => ['required', 'integer', 'between:1,5'],
+            'number_of_stars' => ['nullable', 'integer', 'between:1,5'],
+            'action' => ['nullable', 'string', 'in:add,remove'],
         ]);
+
+        $product = Product::query()->findOrFail($id);
+
+        if (($validated['action'] ?? 'add') === 'remove') {
+            Reaction::query()
+                ->where('type', 'star')
+                ->where('product_id', $product->id)
+                ->where('user_id', $validated['user_id'])
+                ->delete();
+
+            History::query()
+                ->where('entity', 'product')
+                ->where('entity_id', $product->id)
+                ->whereIn('action', ['star', 'like'])
+                ->where('user_id', $validated['user_id'])
+                ->delete();
+
+            return $this->handleResponse(null, $this->apiMessage('deleted', 'reaction'));
+        }
+
+        if (! isset($validated['number_of_stars'])) {
+            return $this->handleError(['number_of_stars' => ['The number of stars field is required.']], __('validation.required', ['attribute' => 'number of stars']), 422);
+        }
 
         $reaction = Reaction::create([
             'type' => 'star',
             'number_of_stars' => $validated['number_of_stars'],
-            'product_id' => $id,
+            'product_id' => $product->id,
             'user_id' => $validated['user_id'],
         ]);
 
         History::create([
             'entity' => 'product',
-            'entity_id' => $id,
-            'action' => 'like',
+            'entity_id' => $product->id,
+            'action' => 'star',
             'user_id' => $validated['user_id'],
         ]);
 

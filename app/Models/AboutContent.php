@@ -19,11 +19,6 @@ class AboutContent extends SqlModel
         return 'about_contents';
     }
 
-    protected function fillableAttributes(): array
-    {
-        return ['subtitle', 'content', 'about_title_id'];
-    }
-
     public function title(): BelongsTo
     {
         return $this->belongsTo(AboutTitle::class, 'about_title_id');

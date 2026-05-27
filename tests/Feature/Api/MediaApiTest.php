@@ -45,6 +45,7 @@ class MediaApiTest extends TestCase
             $table->id();
             $table->string('firstname')->nullable();
             $table->string('email')->nullable();
+            $table->string('username')->nullable();
             $table->text('password')->nullable();
             $table->boolean('christian_preference')->default(false);
             $table->string('status')->default('created');
@@ -136,6 +137,7 @@ class MediaApiTest extends TestCase
             $table->foreignId('to_user_id')->nullable();
             $table->foreignId('media_id')->nullable();
             $table->foreignId('product_id')->nullable();
+            $table->foreignId('comment_id')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
@@ -193,16 +195,17 @@ class MediaApiTest extends TestCase
         });
     }
 
-    public function test_store_extracts_hashtags_and_notifies_admins(): void
+    public function test_store_extracts_hashtags_mentions_users_and_notifies_admins(): void
     {
         $owner = User::create(['email' => 'owner@example.com', 'password' => 'password']);
         $admin = User::create(['email' => 'admin@example.com', 'password' => 'password']);
+        $mentioned = User::create(['email' => 'mentioned@example.com', 'username' => 'donaldTrump', 'password' => 'password']);
         $role = Role::create(['role_name' => ['fr' => 'Administrateur', 'en' => 'Administrator']]);
         $role->users()->attach($admin->id);
 
         $response = $this->postJson('/api/v1/media', [
             'media_title' => 'Song',
-            'media_description' => 'A new #gospel song',
+            'media_description' => 'A new #gospel song for @donaldTrump',
             'media_url' => 'https://example.com/song.mp3',
             'cover_url' => 'https://example.com/cover.jpg',
             'type' => 'music',
@@ -220,6 +223,63 @@ class MediaApiTest extends TestCase
             ->where('from_user_id', $owner->id)
             ->where('to_user_id', $admin->id)
             ->exists());
+        $this->assertTrue(AdminNotification::query()
+            ->where('type', 'mention')
+            ->where('from_user_id', $owner->id)
+            ->where('to_user_id', $mentioned->id)
+            ->whereNotNull('media_id')
+            ->exists());
+        $this->assertTrue(History::query()
+            ->where('entity', 'media')
+            ->where('action', 'mention')
+            ->where('word', 'donaldTrump')
+            ->where('user_id', $owner->id)
+            ->exists());
+    }
+
+    public function test_update_media_resyncs_hashtags_and_mentions(): void
+    {
+        $owner = User::create(['email' => 'owner@example.com', 'password' => 'password']);
+        $oldMention = User::create(['email' => 'old@example.com', 'username' => 'oldUser', 'password' => 'password']);
+        $newMention = User::create(['email' => 'new@example.com', 'username' => 'newUser', 'password' => 'password']);
+        $media = Media::create([
+            'media_title' => 'Song',
+            'media_description' => '#old @oldUser',
+            'type' => 'music',
+            'price' => 0,
+            'user_id' => $owner->id,
+        ]);
+        $oldHashtag = Hashtag::create(['keyword' => 'old']);
+        $media->hashtags()->attach($oldHashtag->id);
+        AdminNotification::create([
+            'type' => 'mention',
+            'from_user_id' => $owner->id,
+            'to_user_id' => $oldMention->id,
+            'media_id' => $media->id,
+        ]);
+        History::create([
+            'word' => 'oldUser',
+            'entity' => 'media',
+            'entity_id' => $media->id,
+            'action' => 'mention',
+            'user_id' => $owner->id,
+        ]);
+
+        $this->patchJson("/api/v1/media/{$media->id}", ['media_description' => '#new @newUser'])
+            ->assertOk();
+
+        $this->assertFalse(AdminNotification::query()
+            ->where('type', 'mention')
+            ->where('to_user_id', $oldMention->id)
+            ->where('media_id', $media->id)
+            ->exists());
+        $this->assertTrue(AdminNotification::query()
+            ->where('type', 'mention')
+            ->where('to_user_id', $newMention->id)
+            ->where('media_id', $media->id)
+            ->exists());
+        $this->assertTrue($media->refresh()->hashtags()->where('keyword', 'new')->exists());
+        $this->assertFalse($media->hashtags()->where('keyword', 'old')->exists());
     }
 
     public function test_publish_media_notifies_followers(): void
@@ -286,5 +346,19 @@ class MediaApiTest extends TestCase
         $this->assertTrue(AdminNotification::query()->where('type', 'like_sent')->exists());
         $this->assertTrue(AdminNotification::query()->where('type', 'gift_sent')->exists());
         $this->assertTrue(AdminNotification::query()->where('type', 'report_sent')->exists());
+    }
+
+    public function test_media_reaction_can_be_removed(): void
+    {
+        $owner = User::create(['email' => 'owner@example.com', 'password' => 'password']);
+        $actor = User::create(['email' => 'actor@example.com', 'password' => 'password']);
+        $media = Media::create(['media_title' => 'Song', 'type' => 'music', 'price' => 0, 'user_id' => $owner->id]);
+
+        $this->postJson("/api/v1/media/{$media->id}/like", ['user_id' => $actor->id])->assertOk();
+        $this->postJson("/api/v1/media/{$media->id}/like", ['user_id' => $actor->id, 'action' => 'remove'])->assertOk();
+
+        $this->assertSame(0, Reaction::query()->where('type', 'like')->where('media_id', $media->id)->count());
+        $this->assertFalse(History::query()->where('entity', 'media')->where('action', 'like')->where('entity_id', $media->id)->exists());
+        $this->assertFalse(AdminNotification::query()->where('type', 'like_sent')->where('media_id', $media->id)->exists());
     }
 }

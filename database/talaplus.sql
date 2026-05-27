@@ -276,12 +276,14 @@ CREATE TABLE IF NOT EXISTS `comments` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
   `comment_content` LONGTEXT NULL,
   `answered_for` BIGINT NULL,
+  `type` ENUM('app_info', 'post', 'comment') NOT NULL DEFAULT 'post',
+  `for_entity` ENUM('user', 'media', 'product', 'message') NULL COMMENT 'This column is important for “app_info” comments, which provide information about a feature of the application.',
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `deleted_at` TIMESTAMP NULL,
   `media_id` BIGINT NULL,
   `product_id` BIGINT NULL,
-  `user_id` BIGINT NOT NULL,
+  `user_id` BIGINT NULL,
   PRIMARY KEY (`id`),
   UNIQUE INDEX `id_comments_UNIQUE` (`id` ASC),
   INDEX `fk_comments_medias_idx` (`media_id` ASC),
@@ -300,7 +302,7 @@ CREATE TABLE IF NOT EXISTS `comments` (
   CONSTRAINT `fk_comments_users`
     FOREIGN KEY (`user_id`)
     REFERENCES `users` (`id`)
-    ON DELETE CASCADE
+    ON DELETE SET NULL
     ON UPDATE CASCADE)
 ENGINE = InnoDB;
 
@@ -416,18 +418,20 @@ CREATE TABLE IF NOT EXISTS `notifications` (
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `deleted_at` TIMESTAMP NULL,
-  `type` ENUM('welcome_new_user', 'media_created', 'media_accepted', 'media_rejected', 'media_published', 'comment_sent', 'like_sent', 'gift_sent', 'report_sent', 'new_follower', 'product_added', 'product_accepted', 'product_rejected', 'product_ordered', 'stock_empty', 'payment_pending', 'payment_successful', 'payment_failed') NULL,
+  `type` ENUM('welcome_new_user', 'media_created', 'media_accepted', 'media_rejected', 'media_published', 'post_sent', 'comment_sent', 'like_sent', 'gift_sent', 'report_sent', 'new_follower', 'mention', 'product_added', 'product_accepted', 'product_rejected', 'product_ordered', 'stock_empty', 'payment_pending', 'payment_successful', 'payment_failed') NULL,
   `is_read` TINYINT NOT NULL DEFAULT 0,
   `from_user_id` BIGINT NULL,
   `to_user_id` BIGINT NULL,
   `media_id` BIGINT NULL,
   `product_id` BIGINT NULL,
+  `comment_id` BIGINT NULL,
   PRIMARY KEY (`id`),
   UNIQUE INDEX `id_notifications_UNIQUE` (`id` ASC),
   INDEX `fk_notifications_users1_idx` (`from_user_id` ASC),
   INDEX `fk_notifications_users2_idx` (`to_user_id` ASC),
   INDEX `fk_notifications_medias_idx` (`media_id` ASC),
   INDEX `fk_notifications_products_idx` (`product_id` ASC),
+  INDEX `fk_notifications_comments_idx` (`comment_id` ASC),
   CONSTRAINT `fk_notifications_users1`
     FOREIGN KEY (`from_user_id`)
     REFERENCES `users` (`id`)
@@ -446,6 +450,11 @@ CREATE TABLE IF NOT EXISTS `notifications` (
   CONSTRAINT `fk_notifications_products`
     FOREIGN KEY (`product_id`)
     REFERENCES `products` (`id`)
+    ON DELETE SET NULL
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_notifications_comments`
+    FOREIGN KEY (`comment_id`)
+    REFERENCES `comments` (`id`)
     ON DELETE SET NULL
     ON UPDATE CASCADE)
 ENGINE = InnoDB;
@@ -634,9 +643,9 @@ ENGINE = InnoDB;
 CREATE TABLE IF NOT EXISTS `histories` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
   `word` TEXT NULL COMMENT 'This refers to a search history of a user',
-  `entity` ENUM('media', 'product', 'user') NULL,
+  `entity` ENUM('media', 'product', 'comment', 'user') NULL,
   `entity_id` BIGINT NULL,
-  `action` ENUM('search', 'view', 'like', 'gift', 'star', 'comment', 'order', 'report') NULL,
+  `action` ENUM('search', 'view', 'like', 'gift', 'star', 'post', 'comment', 'order', 'report') NULL,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `deleted_at` TIMESTAMP NULL,
@@ -830,13 +839,15 @@ CREATE TABLE IF NOT EXISTS `reactions` (
   `pricing_id` BIGINT NULL,
   `media_id` BIGINT NULL,
   `product_id` BIGINT NULL,
+  `comment_id` BIGINT NULL,
   `user_id` BIGINT NULL,
   PRIMARY KEY (`id`),
   UNIQUE INDEX `id_reactions_UNIQUE` (`id` ASC),
   INDEX `fk_reactions_pricings_idx` (`pricing_id` ASC),
   INDEX `fk_reactions_medias_idx` (`media_id` ASC),
   INDEX `fk_reactions_products_idx` (`product_id` ASC),
-  INDEX `fk_reactions_users1_idx` (`user_id` ASC),
+  INDEX `fk_reactions_comments_idx` (`comment_id` ASC),
+  INDEX `fk_reactions_users_idx` (`user_id` ASC),
   CONSTRAINT `fk_reactions_pricings`
     FOREIGN KEY (`pricing_id`)
     REFERENCES `pricings` (`id`)
@@ -852,11 +863,16 @@ CREATE TABLE IF NOT EXISTS `reactions` (
     REFERENCES `products` (`id`)
     ON DELETE SET NULL
     ON UPDATE CASCADE,
-  CONSTRAINT `fk_reactions_users1`
+  CONSTRAINT `fk_reactions_comments`
+    FOREIGN KEY (`comment_id`)
+    REFERENCES `comments` (`id`)
+    ON DELETE SET NULL
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_reactions_users`
     FOREIGN KEY (`user_id`)
     REFERENCES `users` (`id`)
-    ON DELETE NO ACTION
-    ON UPDATE NO ACTION)
+    ON DELETE SET NULL
+    ON UPDATE CASCADE)
 ENGINE = InnoDB;
 
 
@@ -1050,6 +1066,32 @@ CREATE TABLE IF NOT EXISTS `specifications` (
   CONSTRAINT `fk_specifications_products`
     FOREIGN KEY (`product_id`)
     REFERENCES `products` (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE)
+ENGINE = InnoDB;
+
+
+-- -----------------------------------------------------
+-- Table `hashtag_comment`
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `hashtag_comment` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `hashtag_id` BIGINT NOT NULL,
+  `comment_id` BIGINT NOT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `id_hashtagcomment_UNIQUE` (`id` ASC),
+  INDEX `fk_hashtagcomment_hashtags_idx` (`hashtag_id` ASC),
+  INDEX `fk_hashtagcomment_comments_idx` (`comment_id` ASC),
+  CONSTRAINT `fk_hashtagcomment_hashtags`
+    FOREIGN KEY (`hashtag_id`)
+    REFERENCES `hashtags` (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_hashtagcomment_comments`
+    FOREIGN KEY (`comment_id`)
+    REFERENCES `comments` (`id`)
     ON DELETE CASCADE
     ON UPDATE CASCADE)
 ENGINE = InnoDB;

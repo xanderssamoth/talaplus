@@ -14,11 +14,6 @@ class CustomerOrder extends SqlModel
         return 'customer_orders';
     }
 
-    protected function fillableAttributes(): array
-    {
-        return ['price_at_that_time', 'currency', 'quantity', 'product_id', 'cart_id'];
-    }
-
     protected function castsAttributes(): array
     {
         return [

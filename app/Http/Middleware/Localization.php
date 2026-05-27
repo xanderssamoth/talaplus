@@ -3,12 +3,15 @@
 namespace App\Http\Middleware;
 
 use Closure;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Session;
 
 /**
  * @author Xanders
+ *
  * @see https://team.xsamtech.com/xanderssamoth
  */
 class Localization
@@ -16,9 +19,8 @@ class Localization
     /**
      * Handle an incoming request.
      *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \Closure(\Illuminate\Http\Request): (\Illuminate\Http\Response|\Illuminate\Http\RedirectResponse)  $next
-     * @return \Illuminate\Http\Response|\Illuminate\Http\RedirectResponse
+     * @param  Closure(Request): (Response|RedirectResponse)  $next
+     * @return Response|RedirectResponse
      */
     public function handle(Request $request, Closure $next)
     {
@@ -26,8 +28,10 @@ class Localization
             App::setLocale(Session::get('locale'));
 
         } else {
-            // Check header request and determine localization
-            $local = ($request->hasHeader('X-localization')) ? $request->header('X-localization') : 'fr';
+            $local = $request->input('lang')
+                ?? $request->input('locale')
+                ?? $request->input('language')
+                ?? (($request->hasHeader('X-localization')) ? $request->header('X-localization') : 'fr');
 
             App::setLocale($local);
         }

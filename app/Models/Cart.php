@@ -15,11 +15,6 @@ class Cart extends SqlModel
         return 'carts';
     }
 
-    protected function fillableAttributes(): array
-    {
-        return ['payment_code', 'user_id'];
-    }
-
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

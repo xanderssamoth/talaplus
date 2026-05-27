@@ -11,11 +11,6 @@ class PromoCode extends SqlModel
         return 'promo_codes';
     }
 
-    protected function fillableAttributes(): array
-    {
-        return ['code', 'validity', 'status', 'user_id'];
-    }
-
     protected function castsAttributes(): array
     {
         return [

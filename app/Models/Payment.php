@@ -11,26 +11,6 @@ class Payment extends SqlModel
         return 'payments';
     }
 
-    protected function fillableAttributes(): array
-    {
-        return [
-            'reference',
-            'provider_reference',
-            'order_number',
-            'amount',
-            'amount_customer',
-            'phone',
-            'currency',
-            'channel',
-            'type',
-            'status',
-            'reason',
-            'entity',
-            'entity_id',
-            'user_id',
-        ];
-    }
-
     protected function castsAttributes(): array
     {
         return [

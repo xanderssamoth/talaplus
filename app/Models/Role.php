@@ -18,11 +18,6 @@ class Role extends SqlModel
         return 'roles';
     }
 
-    protected function fillableAttributes(): array
-    {
-        return ['role_name', 'role_description'];
-    }
-
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class)->withPivot('is_selected')->withTimestamps();

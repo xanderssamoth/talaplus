@@ -68,6 +68,10 @@ Route::prefix('v1')->group(function (): void {
     Route::delete('cart/remove', [CartController::class, 'removeFromCart']);
     Route::get('cart/is-in-cart', [CartController::class, 'isInCart']);
 
+    Route::get('comment/news-feed', [CommentController::class, 'newsFeed']);
+    Route::get('comment/{comment}/like', [CommentController::class, 'commentLikes']);
+    Route::post('comment/{comment}/like', [CommentController::class, 'like']);
+
     Route::get('message/search/by-word', [MessageController::class, 'search']);
     Route::get('message/conversation', [MessageController::class, 'conversations']);
     Route::get('message/conversation/users', [MessageController::class, 'userConversation']);

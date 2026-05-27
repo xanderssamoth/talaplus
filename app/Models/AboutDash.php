@@ -18,11 +18,6 @@ class AboutDash extends SqlModel
         return 'about_dashes';
     }
 
-    protected function fillableAttributes(): array
-    {
-        return ['dash_content', 'belongs_to', 'about_content_id'];
-    }
-
     public function aboutContent(): BelongsTo
     {
         return $this->belongsTo(AboutContent::class);

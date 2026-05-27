@@ -15,11 +15,6 @@ class Group extends SqlModel
         return 'groups';
     }
 
-    protected function fillableAttributes(): array
-    {
-        return ['group_name', 'user_id'];
-    }
-
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -13,11 +14,6 @@ class Comment extends SqlModel
     protected function tableName(): string
     {
         return 'comments';
-    }
-
-    protected function fillableAttributes(): array
-    {
-        return ['comment_content', 'answered_for', 'media_id', 'product_id', 'user_id'];
     }
 
     public function media(): BelongsTo
@@ -43,5 +39,15 @@ class Comment extends SqlModel
     public function replies(): HasMany
     {
         return $this->hasMany(self::class, 'answered_for');
+    }
+
+    public function reactions(): HasMany
+    {
+        return $this->hasMany(Reaction::class);
+    }
+
+    public function hashtags(): BelongsToMany
+    {
+        return $this->belongsToMany(Hashtag::class, 'hashtag_comment')->withTimestamps();
     }
 }

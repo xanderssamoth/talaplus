@@ -19,11 +19,6 @@ class AboutTitle extends SqlModel
         return 'about_titles';
     }
 
-    protected function fillableAttributes(): array
-    {
-        return ['title', 'alias', 'about_subject_id'];
-    }
-
     public function subject(): BelongsTo
     {
         return $this->belongsTo(AboutSubject::class, 'about_subject_id');
