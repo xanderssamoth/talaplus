@@ -8,11 +8,13 @@ use App\Models\AdminNotification;
 use App\Models\File;
 use App\Models\History;
 use App\Models\PasswordReset;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 final class UserController extends ApiResourceController
@@ -35,34 +37,44 @@ final class UserController extends ApiResourceController
             'surname' => ['nullable', 'string', 'max:255'],
             'email' => ['nullable', 'email', 'max:255', 'unique:users,email'],
             'phone' => ['nullable', 'string', 'max:45', 'unique:users,phone'],
-            'username' => ['nullable', 'string', 'max:255', 'unique:users,username'],
-            'password' => ['required', 'string', 'confirmed'],
-            'password_confirmation' => ['required', 'string'],
+            'username' => ['required', 'string', 'max:255', 'unique:users,username'],
+            'password' => ['nullable', 'string', 'confirmed'],
+            'password_confirmation' => ['required_with:password', 'nullable', 'string'],
             'avatar_url' => ['nullable', 'string'],
             'cover_url' => ['nullable', 'string'],
             'christian_preference' => ['nullable', 'boolean'],
             'status' => ['nullable', Rule::in(['created', 'activated', 'disabled', 'blocked', 'deleted'])],
             'type' => ['nullable', Rule::in(['uncertified', 'certified'])],
-            'role_id' => ['nullable', 'integer', 'exists:roles,id'],
         ]);
 
-        $roleId = $validated['role_id'] ?? null;
         unset($validated['password_confirmation']);
-        unset($validated['role_id']);
+
+        $generatedPassword = null;
+        if (($validated['password'] ?? null) === null) {
+            if (($validated['email'] ?? null) !== null || ($validated['phone'] ?? null) !== null) {
+                $generatedPassword = Str::password(8, true, true, false, false);
+                $validated['password'] = $generatedPassword;
+            } else {
+                unset($validated['password']);
+            }
+        }
 
         $user = User::create($validated);
         $user->api_token = $this->issuePlainTextToken($user);
         $user->save();
 
-        if ($roleId !== null) {
-            $user->roles()->attach($roleId, ['is_selected' => true]);
-        }
+        $memberRole = $this->memberRole();
+        $user->roles()->attach($memberRole->id, ['is_selected' => true]);
 
-        $passwordReset = PasswordReset::create([
-            'email' => $user->email,
-            'phone' => $user->phone,
-            'token' => (string) random_int(100000, 999999),
-        ]);
+        $passwordReset = null;
+        if ($user->email !== null || $user->phone !== null) {
+            $passwordReset = PasswordReset::create([
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'token' => (string) random_int(100000, 999999),
+                'former_password' => $generatedPassword,
+            ]);
+        }
 
         AdminNotification::create([
             'type' => 'welcome_new_user',
@@ -71,8 +83,34 @@ final class UserController extends ApiResourceController
 
         return $this->handleResponse([
             'user' => UserResource::make($user->refresh()),
-            'password_reset' => ApiResource::make($passwordReset),
+            'password_reset' => $passwordReset !== null ? ApiResource::make($passwordReset) : null,
         ], $this->apiMessage('created'));
+    }
+
+    public function update(Request $request, int $id): JsonResponse
+    {
+        if (! $request->has('password_confirmation')) {
+            $request->merge([
+                'password_confirmation' => $request->input('confirm_password', $request->input('confirm_passord')),
+            ]);
+        }
+
+        $user = User::query()->findOrFail($id);
+        $payload = $this->payload($request);
+
+        if (array_key_exists('password', $payload) && $payload['password'] !== null) {
+            $request->validate([
+                'password' => ['required', 'string', 'confirmed'],
+                'password_confirmation' => ['required', 'string'],
+            ]);
+        } elseif (array_key_exists('password', $payload)) {
+            unset($payload['password']);
+        }
+
+        $user->fill($payload);
+        $user->save();
+
+        return $this->handleResponse(UserResource::make($user->refresh()), $this->apiMessage('updated'));
     }
 
     public function login(Request $request): JsonResponse
@@ -178,10 +216,16 @@ final class UserController extends ApiResourceController
 
     public function updatePassword(Request $request, int $id): JsonResponse
     {
+        if (! $request->has('password_confirmation')) {
+            $request->merge([
+                'password_confirmation' => $request->input('confirm_password', $request->input('confirm_passord')),
+            ]);
+        }
+
         $validated = $request->validate([
             'former_password' => ['required', 'string'],
             'new_password' => ['required', 'string'],
-            'confirm_password' => ['required', 'same:new_password'],
+            'password_confirmation' => ['required', 'same:new_password'],
         ]);
 
         $user = User::query()->findOrFail($id);
@@ -242,5 +286,27 @@ final class UserController extends ApiResourceController
     private function issuePlainTextToken(User $user): string
     {
         return $user->createToken('auth_token')->plainTextToken;
+    }
+
+    private function memberRole(): Role
+    {
+        $role = Role::query()->where('role_name->fr', 'Membre')->first();
+
+        if ($role !== null) {
+            return $role;
+        }
+
+        return Role::create([
+            'role_name' => [
+                'fr' => 'Membre',
+                'en' => 'Member',
+                'ln' => 'Mosangani',
+            ],
+            'role_description' => [
+                'fr' => 'Personne qui consulte ou commente les posts et les vidéos ; et qui commande des produits',
+                'en' => 'Person who views or comments on posts and videos, and orders products',
+                'ln' => 'Moto oyo atángaka to apesaka makanisi na ba posts mpe ba vidéos, mpe asombaka biloko',
+            ],
+        ]);
     }
 }
