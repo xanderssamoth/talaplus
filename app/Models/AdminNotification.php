@@ -14,6 +14,11 @@ class AdminNotification extends SqlModel
         return 'notifications';
     }
 
+    protected function fillableAttributes(): array
+    {
+        return ['type', 'is_read', 'from_user_id', 'to_user_id', 'media_id', 'product_id', 'comment_id'];
+    }
+
     protected function castsAttributes(): array
     {
         return [

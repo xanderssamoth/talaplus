@@ -65,6 +65,7 @@
             ['abouts', route('abouts.index'), 'bi-info-circle', 'abouts'],
             ['videos', route('videos.index'), 'bi-play-btn', 'videos'],
             ['products', route('products.index'), 'bi-bag', 'products'],
+            ['app-infos', route('app-infos.index'), 'bi-info-square', 'app_infos'],
             ['users', route('users.index'), 'bi-people', 'users'],
             ['messages', route('messages.index'), 'bi-envelope', 'messages'],
             ['notifications', route('notifications.index'), 'bi-bell', 'notifications'],

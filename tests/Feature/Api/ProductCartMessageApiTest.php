@@ -5,6 +5,7 @@ namespace Tests\Feature\Api;
 use App\Models\AdminNotification;
 use App\Models\Comment;
 use App\Models\CustomerOrder;
+use App\Models\File;
 use App\Models\Group;
 use App\Models\History;
 use App\Models\Message;
@@ -15,7 +16,9 @@ use App\Models\Specification;
 use App\Models\Subscription;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class ProductCartMessageApiTest extends TestCase
@@ -120,6 +123,7 @@ class ProductCartMessageApiTest extends TestCase
             $table->foreignId('user_id')->nullable();
             $table->foreignId('product_id')->nullable();
             $table->foreignId('message_id')->nullable();
+            $table->foreignId('comment_id')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
@@ -463,6 +467,49 @@ class ProductCartMessageApiTest extends TestCase
             ->where('action', 'mention')
             ->where('word', 'oldUser')
             ->where('entity_id', $comment->id)
+            ->exists());
+    }
+
+    public function test_comment_store_and_update_save_uploaded_files(): void
+    {
+        Storage::fake('public');
+        $owner = User::create(['email' => 'poster@example.com', 'username' => 'poster', 'password' => 'password']);
+
+        $response = $this->post('/api/v1/comment', [
+            'comment_content' => 'Post with file',
+            'type' => 'post',
+            'user_id' => $owner->id,
+            'files' => [
+                UploadedFile::fake()->create('first.jpg', 10, 'image/jpeg'),
+            ],
+        ], ['Accept' => 'application/json']);
+
+        $response->assertOk()
+            ->assertJsonPath('data.files.0.file_name', 'first.jpg')
+            ->assertJsonPath('data.files.0.file_type', 'photo');
+
+        $comment = Comment::query()->firstOrFail();
+        $this->assertTrue(File::query()
+            ->where('comment_id', $comment->id)
+            ->where('user_id', $owner->id)
+            ->where('file_name', 'first.jpg')
+            ->exists());
+        Storage::disk('public')->assertExists('comments/files/'.basename((string) $response->json('data.files.0.file_url')));
+
+        $this->patch('/api/v1/comment/'.$comment->id, [
+            'files' => [
+                UploadedFile::fake()->create('second.pdf', 10, 'application/pdf'),
+            ],
+            'file_description' => 'Attachment',
+        ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonCount(2, 'data.files');
+
+        $this->assertTrue(File::query()
+            ->where('comment_id', $comment->id)
+            ->where('file_name', 'second.pdf')
+            ->where('file_description', 'Attachment')
+            ->where('file_type', 'document')
             ->exists());
     }
 

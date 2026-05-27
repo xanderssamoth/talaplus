@@ -16,6 +16,19 @@ class Comment extends SqlModel
         return 'comments';
     }
 
+    protected function fillableAttributes(): array
+    {
+        return [
+            'comment_content',
+            'answered_for',
+            'type',
+            'for_entity',
+            'media_id',
+            'product_id',
+            'user_id',
+        ];
+    }
+
     public function media(): BelongsTo
     {
         return $this->belongsTo(Media::class);
@@ -44,6 +57,11 @@ class Comment extends SqlModel
     public function reactions(): HasMany
     {
         return $this->hasMany(Reaction::class);
+    }
+
+    public function files(): HasMany
+    {
+        return $this->hasMany(File::class);
     }
 
     public function hashtags(): BelongsToMany

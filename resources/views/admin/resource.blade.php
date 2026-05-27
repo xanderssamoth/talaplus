@@ -12,6 +12,7 @@
         'is_shared' => 'Publier',
         'is_free' => 'Gratuit',
         'for_youth' => 'Pour les jeunes',
+        'files_count' => 'Images',
     ], $fieldLabels);
     $groupField = collect($config['fields'] ?? [])->firstWhere('name', $config['group_by'] ?? null);
     $groupLabels = array_merge(['money' => __('admin.money'), 'percentage' => __('admin.percentage')], $groupField['options'] ?? []);
@@ -58,7 +59,7 @@
                             </button>
                         </div>
 
-                        <form id="resource-form">
+                        <form id="resource-form" enctype="multipart/form-data">
                             @csrf
                             <input type="hidden" id="item-id">
 
@@ -110,6 +111,11 @@
                                     <div class="form-check form-switch mb-3">
                                         <input class="form-check-input" id="{{ $name }}" name="{{ $name }}" type="checkbox" value="1">
                                         <label class="form-check-label" for="{{ $name }}">{{ $field['label'] }}</label>
+                                    </div>
+                                @elseif ($type === 'file-multiple')
+                                    <div class="mb-3">
+                                        <label class="form-label" for="{{ $name }}">{{ $field['label'] }}</label>
+                                        <input class="form-control" id="{{ $name }}" name="{{ $name }}[]" type="file" multiple accept="{{ $field['accept'] ?? '' }}">
                                     </div>
                                 @else
                                     <div class="mb-3">
@@ -274,6 +280,7 @@
         const groupBy = @json($config['group_by'] ?? null);
         const readonly = @json($config['readonly'] ?? false);
         const shareable = @json($config['shareable'] ?? false);
+        const hasFiles = @json($config['has_files'] ?? false);
         const columnLabels = @json($columnLabels);
         let descriptionIndex = 0;
         let titleIndex = 0;
@@ -409,7 +416,15 @@
                 .map(key => {
                     const label = columnLabels[key] || key.replaceAll('_', ' ');
                     let value = item[key + '_display'] ?? item[key];
-                    if (typeof value === 'object' && value !== null) {
+                    if (key === 'files' && Array.isArray(value)) {
+                        value = value.length ? `<div class="row g-2">${value.map(file => `
+                            <div class="col-md-4">
+                                <a href="${file.file_url}" target="_blank" rel="noopener">
+                                    <img src="${file.file_url}" class="img-fluid rounded border" alt="${display(file.file_name)}">
+                                </a>
+                            </div>
+                        `).join('')}</div>` : '-';
+                    } else if (typeof value === 'object' && value !== null) {
                         value = `<pre class="mb-0 small">${$('<div>').text(JSON.stringify(value, null, 2)).html()}</pre>`;
                     } else {
                         value = display(value, key);
@@ -424,10 +439,25 @@
         $('#resource-form').on('submit', function (event) {
             event.preventDefault();
             const id = $('#item-id').val();
-            const method = id ? 'PUT' : 'POST';
+            let method = id ? 'PUT' : 'POST';
             const url = id ? endpoints.update(id) : endpoints.store;
+            const ajaxOptions = {url, method};
 
-            $.ajax({url, method, data: $(this).serialize()})
+            if (hasFiles) {
+                const formData = new FormData(this);
+                if (id) {
+                    formData.append('_method', 'PUT');
+                    method = 'POST';
+                    ajaxOptions.method = method;
+                }
+                ajaxOptions.data = formData;
+                ajaxOptions.processData = false;
+                ajaxOptions.contentType = false;
+            } else {
+                ajaxOptions.data = $(this).serialize();
+            }
+
+            $.ajax(ajaxOptions)
                 .done(function (response) {
                     alertBox(response.message || @json(__('admin.saved')));
                     resetForm();
@@ -449,7 +479,7 @@
                         ['fr', 'en', 'ln'].forEach(locale => $(`[name="${key}[${locale}]"]`).val(translated?.[locale] || ''));
                     } else if ($(`[name="${key}"]`).is(':checkbox')) {
                         $(`[name="${key}"]`).prop('checked', value == 1);
-                    } else {
+                    } else if (!$(`[name="${key}"]`).is(':file')) {
                         $(`[name="${key}"]`).val(value);
                     }
                 });

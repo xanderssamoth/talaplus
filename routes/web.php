@@ -25,7 +25,7 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-    foreach (['categories', 'roles', 'reasons', 'pricings', 'abouts', 'videos', 'products', 'users', 'messages', 'notifications'] as $resource) {
+    foreach (['categories', 'roles', 'reasons', 'pricings', 'abouts', 'videos', 'products', 'app-infos', 'users', 'messages', 'notifications'] as $resource) {
         Route::get("/{$resource}", [AdminResourceController::class, 'index'])->defaults('resource', $resource)->name("{$resource}.index");
         Route::get("/{$resource}/data", [AdminResourceController::class, 'list'])->defaults('resource', $resource)->name("{$resource}.data");
         Route::get("/{$resource}/{id}", [AdminResourceController::class, 'show'])->defaults('resource', $resource)->whereNumber('id')->name("{$resource}.show");

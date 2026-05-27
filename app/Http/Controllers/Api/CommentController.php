@@ -6,6 +6,7 @@ use App\Http\Resources\Api\ApiResource;
 use App\Http\Resources\Api\CommentResource;
 use App\Models\AdminNotification;
 use App\Models\Comment;
+use App\Models\File;
 use App\Models\Hashtag;
 use App\Models\History;
 use App\Models\Media;
@@ -15,6 +16,7 @@ use App\Models\Subscription;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 final class CommentController extends ApiResourceController
 {
@@ -42,6 +44,7 @@ final class CommentController extends ApiResourceController
         $comment->load(['media', 'product']);
         $this->syncHashtags($comment, (string) $request->input('comment_content'));
         $this->syncMentions($comment, (string) $request->input('comment_content'));
+        $this->storeFiles($request, $comment);
 
         if ($comment->type === 'post') {
             Subscription::query()
@@ -61,7 +64,7 @@ final class CommentController extends ApiResourceController
                 'user_id' => $comment->user_id,
             ]);
 
-            return $this->handleResponse(CommentResource::make($comment->refresh()), $this->apiMessage('created'));
+            return $this->handleResponse(CommentResource::make($comment->refresh()->load('files')), $this->apiMessage('created'));
         }
 
         if ($comment->media_id !== null && $comment->media?->user_id !== null) {
@@ -102,7 +105,7 @@ final class CommentController extends ApiResourceController
             ]);
         }
 
-        return $this->handleResponse(CommentResource::make($comment->refresh()), $this->apiMessage('created'));
+        return $this->handleResponse(CommentResource::make($comment->refresh()->load('files')), $this->apiMessage('created'));
     }
 
     public function update(Request $request, int $id): JsonResponse
@@ -130,7 +133,9 @@ final class CommentController extends ApiResourceController
             $this->syncMentions($comment, (string) $request->input('comment_content'));
         }
 
-        return $this->handleResponse(CommentResource::make($comment->refresh()), $this->apiMessage('updated'));
+        $this->storeFiles($request, $comment);
+
+        return $this->handleResponse(CommentResource::make($comment->refresh()->load('files')), $this->apiMessage('updated'));
     }
 
     public function commentLikes(int $id): JsonResponse
@@ -299,5 +304,36 @@ final class CommentController extends ApiResourceController
                     'user_id' => $comment->user_id,
                 ]);
             });
+    }
+
+    private function storeFiles(Request $request, Comment $comment): void
+    {
+        $request->validate([
+            'files' => ['nullable', 'array'],
+            'files.*' => ['file', 'max:10240'],
+            'file_type' => ['nullable', 'string'],
+            'file_description' => ['nullable', 'string'],
+        ]);
+
+        collect($request->file('files', []))->each(function ($uploadedFile) use ($request, $comment): void {
+            File::create([
+                'file_name' => $uploadedFile->getClientOriginalName(),
+                'file_url' => Storage::disk('public')->url($uploadedFile->store('comments/files', 'public')),
+                'file_description' => $request->input('file_description'),
+                'file_type' => $request->input('file_type', $this->fileTypeFromMime((string) $uploadedFile->getMimeType())),
+                'user_id' => $comment->user_id,
+                'comment_id' => $comment->id,
+            ]);
+        });
+    }
+
+    private function fileTypeFromMime(string $mimeType): string
+    {
+        return match (true) {
+            str_starts_with($mimeType, 'image/') => 'photo',
+            str_starts_with($mimeType, 'video/') => 'video',
+            str_starts_with($mimeType, 'audio/') => 'audio',
+            default => 'document',
+        };
     }
 }

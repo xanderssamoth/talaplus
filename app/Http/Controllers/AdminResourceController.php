@@ -6,6 +6,8 @@ use App\Models\AboutSubject;
 use App\Models\AboutTitle;
 use App\Models\AdminNotification;
 use App\Models\Category;
+use App\Models\Comment;
+use App\Models\File;
 use App\Models\Media;
 use App\Models\Message;
 use App\Models\Pricing;
@@ -18,6 +20,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 
 class AdminResourceController extends Controller
 {
@@ -146,6 +149,22 @@ class AdminResourceController extends Controller
             'columns' => ['product_name', 'type', 'quantity', 'price', 'currency', 'action', 'is_shared', 'created_at'],
             'shareable' => true,
         ],
+        'app-infos' => [
+            'model' => Comment::class,
+            'title' => 'Fonctionnalites de la plateforme',
+            'icon' => 'bi-info-square',
+            'primary' => 'comment_content',
+            'where' => ['type' => 'app_info'],
+            'with' => ['files'],
+            'has_files' => true,
+            'fields' => [
+                ['name' => 'comment_content', 'label' => 'Description de la fonctionnalite', 'type' => 'textarea', 'required' => true],
+                ['name' => 'for_entity', 'label' => 'Espace concerne', 'type' => 'select', 'options' => ['user' => 'Utilisateur', 'media' => 'Video', 'product' => 'Produit', 'message' => 'Message'], 'required' => true],
+                ['name' => 'files', 'label' => 'Images', 'type' => 'file-multiple', 'accept' => 'image/*'],
+            ],
+            'columns' => ['comment_content', 'for_entity', 'files_count', 'created_at'],
+            'forced' => ['type' => 'app_info'],
+        ],
         'users' => [
             'model' => User::class,
             'title' => 'Users',
@@ -240,6 +259,7 @@ class AdminResourceController extends Controller
         $config = $this->config($resource);
         $query = $config['model']::query()
             ->when(! empty($config['with']), fn ($query) => $query->with($config['with']))
+            ->when(! empty($config['where']), fn ($query) => $query->where($config['where']))
             ->latest('id');
 
         return response()->json([
@@ -256,6 +276,7 @@ class AdminResourceController extends Controller
         return response()->json(
             $config['model']::query()
                 ->when(! empty($config['with']), fn ($query) => $query->with($config['with']))
+                ->when(! empty($config['where']), fn ($query) => $query->where($config['where']))
                 ->findOrFail($id)
         );
     }
@@ -270,6 +291,7 @@ class AdminResourceController extends Controller
             $item->fill($this->payload($request, $config, $item));
             $item->save();
             $this->saveChildren($request, $config, $item);
+            $this->saveFiles($request, $config, $item);
 
             return $item;
         });
@@ -288,6 +310,7 @@ class AdminResourceController extends Controller
             $item->fill($this->payload($request, $config, $item));
             $item->save();
             $this->saveChildren($request, $config, $item);
+            $this->saveFiles($request, $config, $item);
 
             return $item;
         });
@@ -361,6 +384,10 @@ class AdminResourceController extends Controller
             $name = $field['name'];
             $type = $field['type'];
 
+            if ($type === 'file-multiple') {
+                continue;
+            }
+
             if (str_starts_with($type, 'translatable')) {
                 $payload[$name] = [
                     'fr' => $request->input($name.'.fr'),
@@ -388,7 +415,38 @@ class AdminResourceController extends Controller
             $payload[$name] = $request->input($name);
         }
 
+        foreach ($config['forced'] ?? [] as $name => $value) {
+            $payload[$name] = $value;
+        }
+
+        if (($config['forced']['type'] ?? null) === 'app_info' && $item instanceof Comment) {
+            $payload['user_id'] = $item->exists ? $item->user_id : $request->user()?->id;
+        }
+
         return $payload;
+    }
+
+    private function saveFiles(Request $request, array $config, Model $item): void
+    {
+        if (empty($config['has_files']) || ! $item instanceof Comment) {
+            return;
+        }
+
+        $request->validate([
+            'files' => ['nullable', 'array'],
+            'files.*' => ['image', 'max:5120'],
+        ]);
+
+        foreach ($request->file('files', []) as $uploadedFile) {
+            File::create([
+                'file_name' => $uploadedFile->getClientOriginalName(),
+                'file_url' => Storage::disk('public')->url($uploadedFile->store('app-infos', 'public')),
+                'file_description' => $item->comment_content,
+                'file_type' => 'photo',
+                'user_id' => $item->user_id,
+                'comment_id' => $item->id,
+            ]);
+        }
     }
 
     private function saveChildren(Request $request, array $config, Model $item): void
@@ -471,6 +529,13 @@ class AdminResourceController extends Controller
 
         foreach ($config['columns'] as $column) {
             $value = Arr::get($raw, $column);
+            if ($column === 'files_count' && $item instanceof Comment) {
+                $raw['files_count'] = $item->files->count();
+                $raw['files_count_display'] = $item->files->count();
+
+                continue;
+            }
+
             if ($column === 'message' && $item instanceof AdminNotification) {
                 $raw['message_display'] = $this->notificationMessage($item);
                 $raw['url'] = $this->notificationUrl($item);

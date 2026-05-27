@@ -14,6 +14,20 @@ class File extends SqlModel
         return 'files';
     }
 
+    protected function fillableAttributes(): array
+    {
+        return [
+            'file_name',
+            'file_url',
+            'file_description',
+            'file_type',
+            'user_id',
+            'comment_id',
+            'product_id',
+            'message_id',
+        ];
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

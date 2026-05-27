@@ -5,7 +5,9 @@ namespace Tests\Feature;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class AdminResourceControllerTest extends TestCase
@@ -77,6 +79,36 @@ class AdminResourceControllerTest extends TestCase
         ]);
     }
 
+    public function test_app_info_can_be_saved_with_images(): void
+    {
+        Storage::fake('public');
+        $this->createAppInfoTables();
+
+        $admin = User::factory()->create();
+
+        $response = $this->actingAs($admin)->post('/app-infos', [
+            'comment_content' => 'Presentation des fonctionnalites video.',
+            'for_entity' => 'media',
+            'files' => [
+                UploadedFile::fake()->image('video-feature.jpg'),
+                UploadedFile::fake()->image('player-preview.png'),
+            ],
+        ]);
+
+        $response->assertOk();
+        $this->assertDatabaseHas('comments', [
+            'comment_content' => 'Presentation des fonctionnalites video.',
+            'type' => 'app_info',
+            'for_entity' => 'media',
+            'user_id' => $admin->id,
+        ]);
+        $this->assertDatabaseCount('files', 2);
+        $this->assertDatabaseHas('files', [
+            'file_type' => 'photo',
+            'user_id' => $admin->id,
+        ]);
+    }
+
     private function createMediaTables(): void
     {
         Schema::create('medias', function (Blueprint $table): void {
@@ -141,6 +173,36 @@ class AdminResourceControllerTest extends TestCase
             $table->timestamps();
             $table->softDeletes();
             $table->foreignId('pricing_id');
+        });
+    }
+
+    private function createAppInfoTables(): void
+    {
+        Schema::create('comments', function (Blueprint $table): void {
+            $table->id();
+            $table->longText('comment_content')->nullable();
+            $table->foreignId('answered_for')->nullable();
+            $table->string('type')->default('post');
+            $table->string('for_entity')->nullable();
+            $table->foreignId('media_id')->nullable();
+            $table->foreignId('product_id')->nullable();
+            $table->foreignId('user_id')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('files', function (Blueprint $table): void {
+            $table->id();
+            $table->string('file_name')->nullable();
+            $table->text('file_url');
+            $table->longText('file_description')->nullable();
+            $table->string('file_type')->default('photo');
+            $table->foreignId('user_id')->nullable();
+            $table->foreignId('comment_id')->nullable();
+            $table->foreignId('product_id')->nullable();
+            $table->foreignId('message_id')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
         });
     }
 

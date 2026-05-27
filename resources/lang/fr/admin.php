@@ -10,6 +10,7 @@ return [
     'abouts' => 'Infos legales',
     'videos' => 'Videos',
     'products' => 'Produits',
+    'app_infos' => 'Fonctionnalites de la plateforme',
     'users' => 'Utilisateurs',
     'messages' => 'Messages du public',
     'notifications' => 'Notifications',
