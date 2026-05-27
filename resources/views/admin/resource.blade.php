@@ -5,15 +5,17 @@
 @section('content')
 @php
     $fieldLabels = collect($config['fields'] ?? [])->pluck('label', 'name')->all();
-    $columnLabels = array_merge([
+    $baseLabels = [
         'message' => 'Notification',
-        'created_at' => 'Date de creation',
-        'updated_at' => 'Date de mise a jour',
+        'created_at' => 'Date de création',
+        'updated_at' => 'Date de mise à jour',
         'is_shared' => 'Publier',
         'is_free' => 'Gratuit',
         'for_youth' => 'Pour les jeunes',
         'files_count' => 'Images',
-    ], $fieldLabels);
+    ];
+    $tableLabels = array_merge($baseLabels, $fieldLabels, $config['table_labels'] ?? []);
+    $detailLabels = array_merge($baseLabels, $fieldLabels);
     $groupField = collect($config['fields'] ?? [])->firstWhere('name', $config['group_by'] ?? null);
     $groupLabels = array_merge(['money' => __('admin.money'), 'percentage' => __('admin.percentage')], $groupField['options'] ?? []);
 @endphp
@@ -48,7 +50,7 @@
                             <thead>
                             <tr>
                                 @foreach ($config['columns'] as $column)
-                                    <th>{{ $columnLabels[$column] ?? str($column)->replace('_', ' ')->title() }}</th>
+                                    <th>{{ $tableLabels[$column] ?? str($column)->replace('_', ' ')->title() }}</th>
                                 @endforeach
                                 <th class="text-end">{{ __('admin.actions') }}</th>
                             </tr>
@@ -354,6 +356,18 @@
         width: 9px;
     }
 
+    .category-icon-preview {
+        align-items: center;
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        display: inline-flex;
+        font-size: 1.25rem;
+        height: 36px;
+        justify-content: center;
+        width: 36px;
+    }
+
     @keyframes tala-loader {
         from { transform: translateY(0); opacity: .55; }
         to { transform: translateY(-8px); opacity: 1; }
@@ -375,7 +389,7 @@
         const shareable = @json($config['shareable'] ?? false);
         const hasFiles = @json($config['has_files'] ?? false);
         const socialFeed = @json($config['social_feed'] ?? false);
-        const columnLabels = @json($columnLabels);
+        const detailLabels = @json($detailLabels);
         let descriptionIndex = 0;
         let titleIndex = 0;
 
@@ -402,6 +416,15 @@
             return $('<div>').text(String(value)).html();
         }
 
+        function safeColor(value) {
+            const color = String(value || '#6c757d').trim();
+            const isHex = /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(color);
+            const isNamed = /^[a-zA-Z]+$/.test(color);
+            const isRgb = /^rgba?\([\d\s.,%]+\)$/i.test(color);
+
+            return isHex || isNamed || isRgb ? color : '#6c757d';
+        }
+
         function rowHtml(item) {
             const cells = columns.map(column => {
                 if (column === 'is_shared' && shareable) {
@@ -410,6 +433,9 @@
                 }
                 if (column === 'message' && item.url) {
                     return `<td><a href="${item.url}" class="fw-semibold">${display(item[column + '_display'] ?? item[column], column)}</a></td>`;
+                }
+                if (column === 'icon' && item.icon_preview?.class) {
+                    return `<td><span class="category-icon-preview" title="${display(item.icon)}"><i class="${display(item.icon_preview.class)}" style="color:${safeColor(item.icon_preview.color)}"></i></span></td>`;
                 }
 
                 return `<td>${display(item[column + '_display'] ?? item[column], column)}</td>`;
@@ -545,7 +571,7 @@
             const rows = Object.keys(item)
                 .filter(key => !String(key).endsWith('_display'))
                 .map(key => {
-                    const label = columnLabels[key] || key.replaceAll('_', ' ');
+                    const label = detailLabels[key] || key.replaceAll('_', ' ');
                     let value = item[key + '_display'] ?? item[key];
                     if (key === 'files' && Array.isArray(value)) {
                         value = value.length ? `<div class="row g-2">${value.map(file => `

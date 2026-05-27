@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\AdminResourceController;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -145,7 +146,7 @@ class AdminResourceControllerTest extends TestCase
             ->getJson('/notifications/data')
             ->assertOk()
             ->assertJsonCount(1, 'items')
-            ->assertJsonPath('items.0.message_display', 'Sarah Mbala a envoye une nouvelle video')
+            ->assertJsonPath('items.0.message_display', 'Sarah Mbala a envoyé une nouvelle vidéo')
             ->assertJsonPath('items.0.url', "https://tempor.silasmas.com/videos/{$mediaId}");
 
         $this->actingAs($recipient)
@@ -156,6 +157,45 @@ class AdminResourceControllerTest extends TestCase
             'id' => $visibleNotificationId,
             'is_read' => 1,
         ]);
+    }
+
+    public function test_category_page_uses_short_table_columns_and_full_form_labels(): void
+    {
+        $view = app(AdminResourceController::class)->index('categories');
+        $config = $view->getData()['config'];
+        $fields = collect($config['fields'])->keyBy('name');
+
+        $this->assertSame(['category_name', 'category_description', 'icon', 'created_at'], $config['columns']);
+        $this->assertSame('Nom de catégorie', $fields['category_name']['label']);
+        $this->assertSame('Description de catégorie', $fields['category_description']['label']);
+        $this->assertSame('Type concerné', $fields['for_type']['label']);
+        $this->assertSame('Nom', $config['table_labels']['category_name']);
+        $this->assertSame('Description', $config['table_labels']['category_description']);
+    }
+
+    public function test_category_icons_are_presented_with_their_color(): void
+    {
+        $this->createCategoryTables();
+
+        $admin = User::factory()->create();
+
+        \DB::table('categories')->insert([
+            'category_name' => json_encode(['fr' => 'Films']),
+            'category_description' => json_encode(['fr' => 'Films et séries']),
+            'icon' => 'fa-solid fa-film',
+            'color' => '#ff0033',
+            'for_type' => 'film_series',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->getJson('/categories/data')
+            ->assertOk()
+            ->assertJsonPath('group_by', 'for_type')
+            ->assertJsonPath('items.0.category_name_display', 'Films')
+            ->assertJsonPath('items.0.icon_preview.class', 'fa-solid fa-film')
+            ->assertJsonPath('items.0.icon_preview.color', '#ff0033');
     }
 
     private function createMediaTables(): void
@@ -195,6 +235,20 @@ class AdminResourceControllerTest extends TestCase
             $table->foreignId('media_id')->nullable();
             $table->foreignId('product_id')->nullable();
             $table->foreignId('comment_id')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
+        });
+    }
+
+    private function createCategoryTables(): void
+    {
+        Schema::create('categories', function (Blueprint $table): void {
+            $table->id();
+            $table->json('category_name')->nullable();
+            $table->json('category_description')->nullable();
+            $table->string('icon')->nullable();
+            $table->string('color')->nullable();
+            $table->string('for_type')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
