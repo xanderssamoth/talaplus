@@ -182,7 +182,7 @@ class AdminResourceControllerTest extends TestCase
         \DB::table('categories')->insert([
             'category_name' => json_encode(['fr' => 'Films']),
             'category_description' => json_encode(['fr' => 'Films et séries']),
-            'icon' => 'fa-solid fa-film',
+            'icon' => 'film',
             'color' => '#ff0033',
             'for_type' => 'film_series',
             'created_at' => now(),
@@ -194,6 +194,7 @@ class AdminResourceControllerTest extends TestCase
             ->assertOk()
             ->assertJsonPath('group_by', 'for_type')
             ->assertJsonPath('items.0.category_name_display', 'Films')
+            ->assertJsonPath('items.0.icon_display', 'film')
             ->assertJsonPath('items.0.icon_preview.class', 'fa-solid fa-film')
             ->assertJsonPath('items.0.icon_preview.color', '#ff0033');
     }

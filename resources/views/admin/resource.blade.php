@@ -7,7 +7,7 @@
     $fieldLabels = collect($config['fields'] ?? [])->pluck('label', 'name')->all();
     $baseLabels = [
         'message' => 'Notification',
-        'created_at' => 'Date de création',
+        'created_at' => 'Créé à',
         'updated_at' => 'Date de mise à jour',
         'is_shared' => 'Publier',
         'is_free' => 'Gratuit',
@@ -368,6 +368,12 @@
         width: 36px;
     }
 
+    .table-text-cell {
+        max-width: 370px;
+        overflow-wrap: anywhere;
+        white-space: normal;
+    }
+
     @keyframes tala-loader {
         from { transform: translateY(0); opacity: .55; }
         to { transform: translateY(-8px); opacity: 1; }
@@ -425,20 +431,25 @@
             return isHex || isNamed || isRgb ? color : '#6c757d';
         }
 
+        function textCellClass(value) {
+            return typeof value === 'string' && value.length > 60 ? ' class="table-text-cell"' : '';
+        }
+
         function rowHtml(item) {
             const cells = columns.map(column => {
+                const value = item[column + '_display'] ?? item[column];
                 if (column === 'is_shared' && shareable) {
                     const shared = item[column] === 1 || item[column] === true || item[column] === '1';
                     return `<td><button class="btn btn-sm ${shared ? 'btn-success' : 'btn-danger'} toggle-shared" data-id="${item.id}" type="button">${shared ? @json(__('admin.yes')) : @json(__('admin.no'))}</button></td>`;
                 }
                 if (column === 'message' && item.url) {
-                    return `<td><a href="${item.url}" class="fw-semibold">${display(item[column + '_display'] ?? item[column], column)}</a></td>`;
+                    return `<td${textCellClass(value)}><a href="${item.url}" class="fw-semibold">${display(value, column)}</a></td>`;
                 }
                 if (column === 'icon' && item.icon_preview?.class) {
                     return `<td><span class="category-icon-preview" title="${display(item.icon)}"><i class="${display(item.icon_preview.class)}" style="color:${safeColor(item.icon_preview.color)}"></i></span></td>`;
                 }
 
-                return `<td>${display(item[column + '_display'] ?? item[column], column)}</td>`;
+                return `<td${textCellClass(value)}>${display(value, column)}</td>`;
             }).join('');
             const writeActions = readonly ? '' : `
                 <button class="btn btn-sm btn-outline-primary edit-item" data-id="${item.id}" type="button"><i class="bi bi-pencil"></i></button>

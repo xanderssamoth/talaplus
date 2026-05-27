@@ -567,7 +567,7 @@ class AdminResourceController extends Controller
             if ($column === 'icon' && array_key_exists('color', $raw)) {
                 $raw['icon_display'] = $value;
                 $raw['icon_preview'] = [
-                    'class' => $value,
+                    'class' => $this->fontAwesomeIconClass($value),
                     'color' => $raw['color'] ?: '#6c757d',
                 ];
 
@@ -595,6 +595,21 @@ class AdminResourceController extends Controller
         }
 
         return $raw;
+    }
+
+    private function fontAwesomeIconClass(mixed $value): ?string
+    {
+        $icon = trim((string) $value);
+
+        if ($icon === '') {
+            return null;
+        }
+
+        if (str_contains($icon, ' ')) {
+            return $icon;
+        }
+
+        return 'fa-solid '.(str_starts_with($icon, 'fa-') ? $icon : 'fa-'.$icon);
     }
 
     private function isDateTimeColumn(string $column): bool
