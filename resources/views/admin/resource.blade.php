@@ -1,6 +1,6 @@
 @extends('layouts.admin')
 
-@section('title', __('admin.'.$resource))
+@section('title', __('admin.'.$resource) !== 'admin.'.$resource ? __('admin.'.$resource) : ($config['title'] ?? str($resource)->replace('-', ' ')->title()))
 
 @section('content')
 @php
@@ -17,6 +17,15 @@
     $groupField = collect($config['fields'] ?? [])->firstWhere('name', $config['group_by'] ?? null);
     $groupLabels = array_merge(['money' => __('admin.money'), 'percentage' => __('admin.percentage')], $groupField['options'] ?? []);
 @endphp
+<div class="ajax-loader d-none" id="ajax-loader">
+    <div class="ajax-loader-box">
+        <div class="ajax-loader-image" aria-hidden="true">
+            <span></span><span></span><span></span>
+        </div>
+        <div class="small fw-semibold mt-2">Traitement en cours...</div>
+    </div>
+</div>
+
 <section class="section">
     <div class="row">
         <div class="{{ ($config['readonly'] ?? false) ? 'col-lg-12' : 'col-lg-8' }}">
@@ -29,6 +38,11 @@
                         </button>
                     </div>
                     <div id="resource-alert"></div>
+                    @if ($config['social_feed'] ?? false)
+                        <div class="vstack gap-3" id="notifications-feed">
+                            <div class="text-center text-muted py-4">{{ __('admin.empty') }}</div>
+                        </div>
+                    @else
                     <div class="table-responsive">
                         <table class="table table-hover data-table">
                             <thead>
@@ -44,6 +58,7 @@
                             </tbody>
                         </table>
                     </div>
+                    @endif
                 </div>
             </div>
         </div>
@@ -267,6 +282,83 @@
 @endsection
 
 @push('scripts')
+<style>
+    .ajax-loader {
+        align-items: center;
+        background: rgba(255, 255, 255, .72);
+        inset: 0;
+        justify-content: center;
+        position: fixed;
+        z-index: 2000;
+    }
+
+    .ajax-loader:not(.d-none) {
+        display: flex;
+    }
+
+    .ajax-loader-box {
+        background: #fff;
+        border: 1px solid #e6edf7;
+        border-radius: 8px;
+        box-shadow: 0 12px 32px rgba(1, 41, 112, .16);
+        padding: 18px 22px;
+        text-align: center;
+    }
+
+    .ajax-loader-image {
+        display: inline-flex;
+        gap: 6px;
+    }
+
+    .ajax-loader-image span {
+        animation: tala-loader .8s infinite ease-in-out alternate;
+        background: #0d6efd;
+        border-radius: 999px;
+        display: block;
+        height: 12px;
+        width: 12px;
+    }
+
+    .ajax-loader-image span:nth-child(2) {
+        animation-delay: .15s;
+        background: #20c997;
+    }
+
+    .ajax-loader-image span:nth-child(3) {
+        animation-delay: .3s;
+        background: #ffc107;
+    }
+
+    .notification-card {
+        border: 1px solid #e6edf7;
+        border-left: 4px solid #adb5bd;
+        border-radius: 8px;
+        padding: 14px;
+    }
+
+    .notification-card.unread {
+        background: #f6faff;
+        border-left-color: #0d6efd;
+    }
+
+    .notification-card.read {
+        background: #fff;
+        opacity: .78;
+    }
+
+    .notification-dot {
+        background: #0d6efd;
+        border-radius: 999px;
+        display: inline-block;
+        height: 9px;
+        width: 9px;
+    }
+
+    @keyframes tala-loader {
+        from { transform: translateY(0); opacity: .55; }
+        to { transform: translateY(-8px); opacity: 1; }
+    }
+</style>
 <script>
     $(function () {
         const endpoints = {
@@ -275,18 +367,26 @@
             show: (id) => @json(url($resource)) + '/' + id,
             update: (id) => @json(url($resource)) + '/' + id,
             destroy: (id) => @json(url($resource)) + '/' + id,
+            read: (id) => @json(url($resource)) + '/' + id + '/read',
         };
         const columns = @json($config['columns']);
         const groupBy = @json($config['group_by'] ?? null);
         const readonly = @json($config['readonly'] ?? false);
         const shareable = @json($config['shareable'] ?? false);
         const hasFiles = @json($config['has_files'] ?? false);
+        const socialFeed = @json($config['social_feed'] ?? false);
         const columnLabels = @json($columnLabels);
         let descriptionIndex = 0;
         let titleIndex = 0;
 
         $.ajaxSetup({
             headers: {'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')}
+        });
+
+        $(document).ajaxStart(function () {
+            $('#ajax-loader').removeClass('d-none');
+        }).ajaxStop(function () {
+            $('#ajax-loader').addClass('d-none');
         });
 
         function alertBox(message, type = 'success') {
@@ -339,9 +439,40 @@
             }).join('');
         }
 
+        function notificationHtml(item) {
+            const read = item.is_read === 1 || item.is_read === true || item.is_read === '1';
+            const status = read ? @json(__('admin.read')) : @json(__('admin.unread'));
+            const message = display(item.message_display || item.type);
+            const date = display(item.created_at);
+            const link = item.url ? `<a class="stretched-link" href="${item.url}" target="_blank" rel="noopener"></a>` : '';
+            const readButton = read ? '' : `<button class="btn btn-sm btn-outline-primary mark-read position-relative z-1" data-id="${item.id}" type="button">
+                <i class="bi bi-check2-circle"></i> ${@json(__('admin.mark_read'))}
+            </button>`;
+
+            return `<div class="notification-card ${read ? 'read' : 'unread'} position-relative">
+                <div class="d-flex align-items-start justify-content-between gap-3">
+                    <div>
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            ${read ? '' : '<span class="notification-dot"></span>'}
+                            <span class="badge ${read ? 'bg-secondary' : 'bg-primary'}">${status}</span>
+                            <span class="text-muted small">${date}</span>
+                        </div>
+                        <div class="fw-semibold text-dark">${message}</div>
+                    </div>
+                    ${readButton}
+                </div>
+                ${link}
+            </div>`;
+        }
+
         function loadRows() {
             $.getJSON(endpoints.list, function (response) {
                 const items = response.items || [];
+                if (socialFeed) {
+                    $('#notifications-feed').html(items.length ? items.map(notificationHtml).join('') : `<div class="text-center text-muted py-4">{{ __('admin.empty') }}</div>`);
+                    return;
+                }
+
                 $('#resource-rows').html(items.length ? groupedRows(items) : `<tr><td colspan="${columns.length + 1}" class="text-center text-muted">{{ __('admin.empty') }}</td></tr>`);
             });
         }
@@ -499,6 +630,17 @@
             $.ajax({url: endpoints.show($(this).data('id')) + '/shared', method: 'PATCH'})
                 .done(function (response) {
                     alertBox(response.message || @json(__('admin.saved')));
+                    loadRows();
+                })
+                .fail(function (xhr) {
+                    alertBox(xhr.responseJSON?.message || xhr.statusText, 'danger');
+                });
+        });
+
+        $(document).on('click', '.mark-read', function () {
+            $.ajax({url: endpoints.read($(this).data('id')), method: 'PATCH'})
+                .done(function (response) {
+                    alertBox(response.message || @json(__('admin.notification_read')));
                     loadRows();
                 })
                 .fail(function (xhr) {

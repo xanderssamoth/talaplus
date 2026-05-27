@@ -109,6 +109,55 @@ class AdminResourceControllerTest extends TestCase
         ]);
     }
 
+    public function test_notifications_are_scoped_to_current_user_and_can_be_marked_read(): void
+    {
+        $this->createMediaTables();
+
+        $recipient = User::factory()->create();
+        $otherUser = User::factory()->create();
+        $sender = User::factory()->create([
+            'firstname' => 'Sarah',
+            'lastname' => 'Mbala',
+        ]);
+        $mediaId = $this->insertMedia($sender->id);
+
+        $visibleNotificationId = (int) \DB::table('notifications')->insertGetId([
+            'type' => 'media_created',
+            'is_read' => 0,
+            'from_user_id' => $sender->id,
+            'to_user_id' => $recipient->id,
+            'media_id' => $mediaId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        \DB::table('notifications')->insert([
+            'type' => 'media_created',
+            'is_read' => 0,
+            'from_user_id' => $sender->id,
+            'to_user_id' => $otherUser->id,
+            'media_id' => $mediaId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($recipient)
+            ->getJson('/notifications/data')
+            ->assertOk()
+            ->assertJsonCount(1, 'items')
+            ->assertJsonPath('items.0.message_display', 'Sarah Mbala a envoye une nouvelle video')
+            ->assertJsonPath('items.0.url', "https://tempor.silasmas.com/videos/{$mediaId}");
+
+        $this->actingAs($recipient)
+            ->patchJson("/notifications/{$visibleNotificationId}/read")
+            ->assertOk();
+
+        $this->assertDatabaseHas('notifications', [
+            'id' => $visibleNotificationId,
+            'is_read' => 1,
+        ]);
+    }
+
     private function createMediaTables(): void
     {
         Schema::create('medias', function (Blueprint $table): void {
@@ -145,6 +194,7 @@ class AdminResourceControllerTest extends TestCase
             $table->foreignId('to_user_id')->nullable();
             $table->foreignId('media_id')->nullable();
             $table->foreignId('product_id')->nullable();
+            $table->foreignId('comment_id')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });

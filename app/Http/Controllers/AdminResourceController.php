@@ -219,7 +219,9 @@ class AdminResourceController extends Controller
             'icon' => 'bi-bell',
             'primary' => 'type',
             'readonly' => true,
-            'with' => ['fromUser', 'toUser', 'media', 'product'],
+            'with' => ['fromUser', 'toUser', 'media', 'product', 'comment'],
+            'current_user_only' => true,
+            'social_feed' => true,
             'columns' => ['message', 'type', 'is_read', 'created_at'],
         ],
     ];
@@ -260,6 +262,7 @@ class AdminResourceController extends Controller
         $query = $config['model']::query()
             ->when(! empty($config['with']), fn ($query) => $query->with($config['with']))
             ->when(! empty($config['where']), fn ($query) => $query->where($config['where']))
+            ->when(! empty($config['current_user_only']), fn ($query) => $query->where('to_user_id', request()->user()?->id))
             ->latest('id');
 
         return response()->json([
@@ -277,6 +280,7 @@ class AdminResourceController extends Controller
             $config['model']::query()
                 ->when(! empty($config['with']), fn ($query) => $query->with($config['with']))
                 ->when(! empty($config['where']), fn ($query) => $query->where($config['where']))
+                ->when(! empty($config['current_user_only']), fn ($query) => $query->where('to_user_id', request()->user()?->id))
                 ->findOrFail($id)
         );
     }
@@ -338,6 +342,18 @@ class AdminResourceController extends Controller
         }
 
         return response()->json(['message' => __('admin.saved'), 'item' => $this->present($item, $config)]);
+    }
+
+    public function markNotificationAsRead(int $id)
+    {
+        $notification = AdminNotification::query()
+            ->where('to_user_id', request()->user()?->id)
+            ->findOrFail($id);
+
+        $notification->is_read = true;
+        $notification->save();
+
+        return response()->json(['message' => __('admin.notification_read'), 'item' => $this->present($notification->load(['fromUser', 'toUser', 'media', 'product', 'comment']), $this->config('notifications'))]);
     }
 
     public function destroy(string|int $resource, string|int|null $id = null)
@@ -539,6 +555,7 @@ class AdminResourceController extends Controller
             if ($column === 'message' && $item instanceof AdminNotification) {
                 $raw['message_display'] = $this->notificationMessage($item);
                 $raw['url'] = $this->notificationUrl($item);
+                $raw['sender_display'] = $this->notificationSenderName($item);
 
                 continue;
             }
@@ -556,16 +573,29 @@ class AdminResourceController extends Controller
 
     private function notificationMessage(AdminNotification $notification): string
     {
-        $name = trim(($notification->fromUser?->firstname ?? '').' '.($notification->fromUser?->lastname ?? '')) ?: 'Un membre';
+        $name = $this->notificationSenderName($notification);
 
         return match ($notification->type) {
-            'media_created' => "{$name} a envoye un nouveau media",
-            'media_accepted' => 'Votre media a ete accepte',
+            'welcome_new_user' => 'Bienvenue sur TalaPlus',
+            'media_created' => "{$name} a envoye une nouvelle video",
+            'media_accepted' => 'Votre video a ete acceptee',
+            'media_rejected' => 'Votre video a ete rejetee',
+            'media_published' => "{$name} a publie une video",
+            'post_sent' => "{$name} a publie une nouvelle publication",
             'product_added' => "{$name} a ajoute un nouveau produit",
             'product_accepted' => 'Votre produit a ete accepte',
+            'product_rejected' => 'Votre produit a ete rejete',
+            'product_ordered' => "{$name} a commande un produit",
             'comment_sent' => "{$name} a envoye un commentaire",
+            'like_sent' => "{$name} a aime votre contenu",
+            'gift_sent' => "{$name} vous a envoye un cadeau",
             'report_sent' => "{$name} a signale un element",
             'new_follower' => "{$name} vous suit",
+            'mention' => "{$name} vous a mentionne",
+            'stock_empty' => 'Un stock de produit est vide',
+            'payment_pending' => 'Un paiement est en attente',
+            'payment_successful' => 'Un paiement a reussi',
+            'payment_failed' => 'Un paiement a echoue',
             default => str((string) $notification->type)->replace('_', ' ')->ucfirst()->toString(),
         };
     }
@@ -573,13 +603,22 @@ class AdminResourceController extends Controller
     private function notificationUrl(AdminNotification $notification): ?string
     {
         if ($notification->media_id) {
-            return route('videos.show', $notification->media_id);
+            return 'https://tempor.silasmas.com/videos/'.$notification->media_id;
         }
 
         if ($notification->product_id) {
-            return route('products.show', $notification->product_id);
+            return 'https://tempor.silasmas.com/products/'.$notification->product_id;
+        }
+
+        if ($notification->comment_id) {
+            return 'https://tempor.silasmas.com/comments/'.$notification->comment_id;
         }
 
         return null;
+    }
+
+    private function notificationSenderName(AdminNotification $notification): string
+    {
+        return trim(($notification->fromUser?->firstname ?? '').' '.($notification->fromUser?->lastname ?? '')) ?: 'Un membre';
     }
 }

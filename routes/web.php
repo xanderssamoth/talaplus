@@ -33,6 +33,9 @@ Route::middleware('auth')->group(function () {
         if (in_array($resource, ['videos', 'products'], true)) {
             Route::patch("/{$resource}/{id}/shared", [AdminResourceController::class, 'toggleShared'])->defaults('resource', $resource)->whereNumber('id')->name("{$resource}.shared");
         }
+        if ($resource === 'notifications') {
+            Route::patch("/{$resource}/{id}/read", [AdminResourceController::class, 'markNotificationAsRead'])->whereNumber('id')->name("{$resource}.read");
+        }
         Route::put("/{$resource}/{id}", [AdminResourceController::class, 'update'])->defaults('resource', $resource)->whereNumber('id')->name("{$resource}.update");
         Route::delete("/{$resource}/{id}", [AdminResourceController::class, 'destroy'])->defaults('resource', $resource)->whereNumber('id')->name("{$resource}.destroy");
     }

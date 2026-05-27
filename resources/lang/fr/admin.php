@@ -10,6 +10,7 @@ return [
     'abouts' => 'Infos legales',
     'videos' => 'Videos',
     'products' => 'Produits',
+    'app-infos' => 'Fonctionnalites de la plateforme',
     'app_infos' => 'Fonctionnalites de la plateforme',
     'users' => 'Utilisateurs',
     'messages' => 'Messages du public',
@@ -42,5 +43,9 @@ return [
     'contents' => 'Contenus',
     'dashes' => 'Tirets',
     'add' => 'Ajouter',
+    'mark_read' => 'Marquer comme lu',
+    'read' => 'Lu',
+    'unread' => 'Non lu',
+    'notification_read' => 'Notification marquee comme lue.',
     'profile_hint' => 'Utilisez cette page pour ajuster les informations de compte et le mot de passe.',
 ];
