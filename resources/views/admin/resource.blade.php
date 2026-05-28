@@ -44,7 +44,7 @@
                             <i class="bi bi-arrow-clockwise"></i>
                         </button>
                     </div>
-                    <div id="resource-alert"></div>
+                    <div class="resource-alert-fixed" id="resource-alert"></div>
                     <div class="row g-2 align-items-center mb-3">
                         <div class="{{ ($config['group_by'] ?? false) || ($config['role_filter'] ?? false) ? 'col-md-7' : 'col-12' }}">
                             <input class="form-control" id="table-search" type="search" placeholder="Rechercher...">
@@ -76,6 +76,7 @@
                         <div class="vstack gap-3" id="notifications-feed">
                             <div class="text-center text-muted py-4">{{ __('admin.empty') }}</div>
                         </div>
+                        <div id="resource-pagination"></div>
                     @else
                     <div class="table-responsive">
                         <table class="table table-hover data-table">
@@ -92,6 +93,7 @@
                             </tbody>
                         </table>
                     </div>
+                    <div id="resource-pagination"></div>
                     @endif
                 </div>
             </div>
@@ -338,6 +340,20 @@
         display: flex;
     }
 
+    .resource-alert-fixed {
+        left: 50%;
+        max-width: 500px;
+        position: fixed;
+        top: 18px;
+        transform: translateX(-50%);
+        width: calc(100% - 32px);
+        z-index: 2050;
+    }
+
+    .resource-alert-fixed .alert {
+        box-shadow: 0 12px 32px rgba(1, 41, 112, .18);
+    }
+
     .ajax-loader-box {
         background: #fff;
         border: 1px solid #e6edf7;
@@ -452,7 +468,9 @@
         const statusEditable = @json($config['status_editable'] ?? false);
         const fieldOptions = @json($fieldOptions);
         const detailLabels = @json($detailLabels);
+        const perPage = 20;
         let allItems = [];
+        let currentPage = 1;
         let descriptionIndex = 0;
         let titleIndex = 0;
 
@@ -613,19 +631,64 @@
             });
         }
 
-        function renderRows() {
-            const items = filteredItems();
-            if (socialFeed) {
-                $('#notifications-feed').html(items.length ? items.map(notificationHtml).join('') : `<div class="text-center text-muted py-4">{{ __('admin.empty') }}</div>`);
+        function pagedItems(items) {
+            const totalPages = Math.max(1, Math.ceil(items.length / perPage));
+            currentPage = Math.min(Math.max(currentPage, 1), totalPages);
+            const start = (currentPage - 1) * perPage;
+
+            return items.slice(start, start + perPage);
+        }
+
+        function renderPagination(totalItems) {
+            const totalPages = Math.ceil(totalItems / perPage);
+            if (totalPages <= 1) {
+                $('#resource-pagination').empty();
                 return;
             }
 
-            $('#resource-rows').html(items.length ? groupedRows(items) : `<tr><td colspan="${columns.length + 1}" class="text-center text-muted">{{ __('admin.empty') }}</td></tr>`);
+            const pageButtons = Array.from({length: totalPages}, (_, index) => index + 1)
+                .filter(page => page === 1 || page === totalPages || Math.abs(page - currentPage) <= 2)
+                .map((page, index, pages) => {
+                    const gap = index > 0 && page - pages[index - 1] > 1 ? '<li class="page-item disabled"><span class="page-link">...</span></li>' : '';
+                    return `${gap}<li class="page-item ${page === currentPage ? 'active' : ''}">
+                        <button class="page-link pagination-page" data-page="${page}" type="button">${page}</button>
+                    </li>`;
+                })
+                .join('');
+
+            $('#resource-pagination').html(`<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3">
+                <div class="small text-muted">${totalItems} élément(s)</div>
+                <nav aria-label="Pagination">
+                    <ul class="pagination pagination-sm mb-0">
+                        <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+                            <button class="page-link pagination-page" data-page="${currentPage - 1}" type="button">Précédent</button>
+                        </li>
+                        ${pageButtons}
+                        <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+                            <button class="page-link pagination-page" data-page="${currentPage + 1}" type="button">Suivant</button>
+                        </li>
+                    </ul>
+                </nav>
+            </div>`);
+        }
+
+        function renderRows() {
+            const items = filteredItems();
+            const pageItems = pagedItems(items);
+            if (socialFeed) {
+                $('#notifications-feed').html(pageItems.length ? pageItems.map(notificationHtml).join('') : `<div class="text-center text-muted py-4">{{ __('admin.empty') }}</div>`);
+                renderPagination(items.length);
+                return;
+            }
+
+            $('#resource-rows').html(pageItems.length ? groupedRows(pageItems) : `<tr><td colspan="${columns.length + 1}" class="text-center text-muted">{{ __('admin.empty') }}</td></tr>`);
+            renderPagination(items.length);
         }
 
         function loadRows() {
             $.getJSON(endpoints.list, function (response) {
                 allItems = response.items || [];
+                currentPage = 1;
                 renderRows();
             });
         }
@@ -866,7 +929,15 @@
         });
 
         $('#refresh-table').on('click', loadRows);
-        $('#table-search, #group-filter, #role-filter').on('input change', renderRows);
+        $('#table-search, #group-filter, #role-filter').on('input change', function () {
+            currentPage = 1;
+            renderRows();
+        });
+        $(document).on('click', '.pagination-page', function () {
+            if ($(this).closest('.page-item').hasClass('disabled')) return;
+            currentPage = Number($(this).data('page')) || 1;
+            renderRows();
+        });
         $('#new-item, #reset-form').on('click', resetForm);
         $('#add-description').on('click', () => addDescription());
         $('#add-title').on('click', () => addTitle());
