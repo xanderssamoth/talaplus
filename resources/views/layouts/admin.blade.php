@@ -22,6 +22,10 @@
         .data-table td { vertical-align: middle; }
         .translatable-tabs .nav-link { padding: .35rem .65rem; }
         .table-responsive { min-height: 280px; }
+        .notification-nav-badge {
+            font-size: .65rem;
+            transform: translate(-35%, 15%);
+        }
     </style>
 </head>
 <body>
@@ -35,7 +39,25 @@
     </div>
 
     <nav class="header-nav ms-auto">
+        @php
+            $unreadNotifications = \Illuminate\Support\Facades\Schema::hasTable('notifications')
+                ? \App\Models\AdminNotification::query()
+                    ->where('to_user_id', auth()->id())
+                    ->where('is_read', false)
+                    ->count()
+                : 0;
+        @endphp
         <ul class="d-flex align-items-center">
+            <li class="nav-item">
+                <a class="nav-link nav-icon position-relative" href="{{ route('notifications.index') }}" aria-label="{{ __('admin.notifications') }}">
+                    <i class="bi bi-bell fs-5"></i>
+                    @if ($unreadNotifications > 0)
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger notification-nav-badge">
+                            {{ $unreadNotifications > 99 ? '99+' : $unreadNotifications }}
+                        </span>
+                    @endif
+                </a>
+            </li>
             <li class="nav-item dropdown pe-3">
                 <a class="nav-link nav-profile d-flex align-items-center pe-0" href="#" data-bs-toggle="dropdown">
                     <i class="bi bi-person-circle fs-4"></i>
@@ -69,8 +91,6 @@
             ['app-infos', route('app-infos.index'), 'bi-info-square', 'app_infos'],
             ['users', route('users.index'), 'bi-people', 'users'],
             ['messages', route('messages.index'), 'bi-envelope', 'messages'],
-            ['notifications', route('notifications.index'), 'bi-bell', 'notifications'],
-            ['account', route('account'), 'bi-person', 'account'],
         ];
     @endphp
     <ul class="sidebar-nav" id="sidebar-nav">

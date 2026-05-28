@@ -7,6 +7,7 @@
  */
 
 use Carbon\Carbon;
+use GuzzleHttp\Client;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 // Get web URL
@@ -349,6 +350,105 @@ if (! function_exists('addItemsToExplodedArray')) {
         $saved = array_merge($explodes, $items);
 
         return implode($separator, $saved);
+    }
+}
+
+// Add an item to exploded array
+if (! function_exists('getExchangeRate')) {
+    function getExchangeRate($baseCurrency, $targetCurrency)
+    {
+        $baseCurrency = $baseCurrency ?? 'USD';
+        $apiKey = config('services.exchangerate.key');
+        // ExchangeRate API URL
+        $url = "https://v6.exchangerate-api.com/v6/{$apiKey}/pair/{$baseCurrency}/{$targetCurrency}";
+
+        // Create a Guzzle client
+        $client = new Client;
+
+        // Perform the GET request
+        $response = $client->get($url);
+
+        // Decode the JSON response
+        $data = json_decode($response->getBody()->getContents(), true);
+
+        // Check if the answer is valid
+        if ($data['result'] === 'success') {
+            return $data['conversion_rate'];
+        }
+
+        // return ($baseCurrency == 'USD' ? 2885.00 : 0.00035);
+
+        // If the answer is invalid or there is an error
+        throw new Exception('Erreur lors de la récupération du taux de change');
+    }
+}
+
+// Add an item to exploded array
+if (! function_exists('showCountries')) {
+    function showCountries()
+    {
+        $response = Http::get('https://restcountries.com/v3.1/all?fields=cca2,idd,flags,name');
+
+        if (! $response->successful()) {
+            return [];
+        }
+
+        $countriesRaw = $response->json();
+        $phoneCodes = [];
+
+        return collect($countriesRaw)
+            ->map(function ($country) use (&$phoneCodes) {
+                $root = $country['idd']['root'] ?? '';
+                $suffix = $country['idd']['suffixes'][0] ?? '';
+                $fullPhoneCode = $root.$suffix;
+
+                if (empty($fullPhoneCode) || in_array($fullPhoneCode, $phoneCodes)) {
+                    return null;
+                }
+
+                $phoneCodes[] = $fullPhoneCode;
+
+                return [
+                    'value' => $fullPhoneCode,
+                    'name' => $country['name']['common'] ?? '',
+                    'code' => $country['cca2'] ?? '',
+                    'phone' => $fullPhoneCode,
+                    'flag' => $country['flags']['png'] ?? '',
+                    'label' => ($country['cca2'] ?? '').' ('.$fullPhoneCode.')',
+                ];
+            })
+            ->filter()
+            ->sortBy('label')
+            ->values();
+
+        // return abort(500, 'Erreur lors du chargement des pays');
+
+        // return [
+        //     [
+        //         'value' => '243',
+        //         'name' => 'DR Congo',
+        //         'code' => 'CD',
+        //         'phone' => '+243',
+        //         'flag' => '',
+        //         'label' => 'CD (+243)',
+        //     ],
+        //     [
+        //         'value' => '33',
+        //         'name' => 'France',
+        //         'code' => 'FR',
+        //         'phone' => '+33',
+        //         'flag' => '',
+        //         'label' => 'FR (+33)',
+        //     ],
+        //     [
+        //         'value' => '1',
+        //         'name' => 'United State',
+        //         'code' => 'US',
+        //         'phone' => '+1',
+        //         'flag' => '',
+        //         'label' => 'US (+1)',
+        //     ],
+        // ];
     }
 }
 

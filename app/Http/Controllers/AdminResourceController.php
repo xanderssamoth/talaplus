@@ -78,12 +78,13 @@ class AdminResourceController extends Controller
             'group_by' => 'pricing_type',
             'with' => ['descriptions'],
             'children' => 'pricing_descriptions',
+            'forced' => ['currency' => 'USD'],
             'fields' => [
                 ['name' => 'pricing_name', 'label' => 'Nom de la tarification', 'type' => 'translatable', 'required' => true],
                 ['name' => 'pricing_type', 'label' => 'Type de tarification', 'type' => 'select', 'options' => ['money' => 'Montant fixe', 'percentage' => 'Pourcentage'], 'required' => true],
                 ['name' => 'reason', 'label' => 'Motif', 'type' => 'select', 'options' => ['' => '-', 'media_boost' => 'Boost de vidéo', 'ad' => 'Publicité', 'gift_sent' => 'Cadeau envoyé', 'user_certfied' => 'Certification utilisateur']],
-                ['name' => 'pricing_cost', 'label' => 'Coût', 'type' => 'number', 'step' => '0.01'],
-                ['name' => 'currency', 'label' => 'Devise', 'type' => 'text'],
+                ['name' => 'pricing_cost', 'label' => 'Coût (en USD)', 'type' => 'number', 'step' => '0.01'],
+                ['name' => 'currency', 'label' => 'Devise', 'type' => 'hidden', 'value' => 'USD'],
                 ['name' => 'image_url', 'label' => 'URL de l image', 'type' => 'text'],
                 ['name' => 'icon', 'label' => 'Icône', 'type' => 'text'],
                 ['name' => 'color', 'label' => 'Couleur', 'type' => 'text'],
@@ -109,11 +110,12 @@ class AdminResourceController extends Controller
             'title' => 'Vidéos',
             'icon' => 'bi-play-btn',
             'primary' => 'media_title',
+            'with' => ['user'],
             'fields' => [
                 ['name' => 'media_title', 'label' => 'Titre de la vidéo', 'type' => 'translatable'],
                 ['name' => 'media_description', 'label' => 'Description', 'type' => 'translatable-textarea'],
-                ['name' => 'media_url', 'label' => 'URL de la vidéo', 'type' => 'text'],
-                ['name' => 'cover_url', 'label' => 'URL de la couverture', 'type' => 'text'],
+                ['name' => 'media_url', 'label' => 'Télécharger la vidéo', 'type' => 'file-url', 'accept' => 'video/*', 'directory' => 'videos', 'rules' => ['file', 'mimetypes:video/mp4,video/quicktime,video/x-msvideo,video/webm', 'max:102400']],
+                ['name' => 'cover_url', 'label' => 'Télécharger la couverture', 'type' => 'file-url', 'accept' => 'image/*', 'directory' => 'video-covers', 'rules' => ['image', 'max:5120']],
                 ['name' => 'author_names', 'label' => 'Noms des auteurs', 'type' => 'text'],
                 ['name' => 'is_free', 'label' => 'Gratuit', 'type' => 'checkbox'],
                 ['name' => 'price', 'label' => 'Prix', 'type' => 'number', 'step' => '0.01'],
@@ -304,6 +306,7 @@ class AdminResourceController extends Controller
     {
         $config = $this->config($resource);
         abort_if($config['readonly'] ?? false, 403);
+        $this->validateFileUrlUploads($request, $config);
 
         $item = DB::transaction(function () use ($request, $config): Model {
             $item = new $config['model'];
@@ -324,6 +327,7 @@ class AdminResourceController extends Controller
         [$resource, $id] = $this->routeArguments($resource, $id);
         $config = $this->config($resource);
         abort_if($config['readonly'] ?? false, 403);
+        $this->validateFileUrlUploads($request, $config);
 
         $item = DB::transaction(function () use ($request, $config, $id): Model {
             $item = $config['model']::findOrFail($id);
@@ -476,6 +480,14 @@ class AdminResourceController extends Controller
                 continue;
             }
 
+            if ($type === 'file-url') {
+                if ($request->hasFile($name)) {
+                    $payload[$name] = Storage::disk('public')->url($request->file($name)->store($field['directory'] ?? 'uploads', 'public'));
+                }
+
+                continue;
+            }
+
             if ($item instanceof User && $name === 'role_id') {
                 continue;
             }
@@ -516,6 +528,18 @@ class AdminResourceController extends Controller
         }
 
         return $payload;
+    }
+
+    private function validateFileUrlUploads(Request $request, array $config): void
+    {
+        $rules = collect($config['fields'] ?? [])
+            ->filter(fn (array $field): bool => ($field['type'] ?? null) === 'file-url')
+            ->mapWithKeys(fn (array $field): array => [$field['name'] => array_merge(['nullable'], $field['rules'] ?? ['file', 'max:10240'])])
+            ->all();
+
+        if ($rules !== []) {
+            $request->validate($rules);
+        }
     }
 
     private function saveFiles(Request $request, array $config, Model $item): void
@@ -655,6 +679,12 @@ class AdminResourceController extends Controller
                 continue;
             }
 
+            if ($column === 'price' && $item instanceof Media) {
+                $raw['price_display'] = $this->mediaPriceDisplay($item);
+
+                continue;
+            }
+
             if ($this->isDateTimeColumn($column)) {
                 $raw[$column.'_display'] = $this->dateTimeDisplay($value);
                 $raw[$column.'_detail_display'] = $this->dateTimeDetailDisplay($value);
@@ -694,6 +724,22 @@ class AdminResourceController extends Controller
         $field = collect($config['fields'] ?? [])->firstWhere('name', $column);
 
         return $field['options'] ?? null;
+    }
+
+    private function mediaPriceDisplay(Media $media): string
+    {
+        $price = (float) ($media->price ?? 0);
+        $currency = $media->user?->currency ?: 'USD';
+
+        if ($currency !== 'USD') {
+            try {
+                $price *= (float) getExchangeRate($currency, 'USD');
+            } catch (\Throwable) {
+                return number_format($price, 2, ',', ' ').' '.$currency;
+            }
+        }
+
+        return number_format($price, 2, ',', ' ').' USD';
     }
 
     private function fontAwesomeIconClass(mixed $value): ?string

@@ -22,6 +22,7 @@
     $groupField = collect($config['fields'] ?? [])->firstWhere('name', $config['group_by'] ?? null);
     $groupLabels = array_merge(['money' => __('admin.money'), 'percentage' => __('admin.percentage')], $groupField['options'] ?? []);
     $fieldOptions = collect($config['fields'] ?? [])->mapWithKeys(fn ($field) => [$field['name'] => $field['options'] ?? []])->all();
+    $hasFileUploads = ($config['has_files'] ?? false) || collect($config['fields'] ?? [])->contains(fn ($field) => ($field['type'] ?? null) === 'file-url');
 @endphp
 <div class="ajax-loader d-none" id="ajax-loader">
     <div class="ajax-loader-box">
@@ -118,7 +119,9 @@
                                     $required = !empty($field['required']) ? 'required' : '';
                                 @endphp
 
-                                @if (str_starts_with($type, 'translatable'))
+                                @if ($type === 'hidden')
+                                    <input id="{{ $name }}" name="{{ $name }}" type="hidden" value="{{ $field['value'] ?? '' }}">
+                                @elseif (str_starts_with($type, 'translatable'))
                                     <div class="mb-3 translatable-field" data-field="{{ $name }}">
                                         <label class="form-label">{{ $field['label'] }}</label>
                                         <ul class="nav nav-tabs translatable-tabs" role="tablist">
@@ -164,6 +167,12 @@
                                     <div class="mb-3">
                                         <label class="form-label" for="{{ $name }}">{{ $field['label'] }}</label>
                                         <input class="form-control" id="{{ $name }}" name="{{ $name }}[]" type="file" multiple accept="{{ $field['accept'] ?? '' }}">
+                                    </div>
+                                @elseif ($type === 'file-url')
+                                    <div class="mb-3">
+                                        <label class="form-label" for="{{ $name }}">{{ $field['label'] }}</label>
+                                        <input class="form-control" id="{{ $name }}" name="{{ $name }}" type="file" accept="{{ $field['accept'] ?? '' }}">
+                                        <div class="file-preview mt-2 d-none" data-preview-for="{{ $name }}"></div>
                                     </div>
                                 @else
                                     <div class="mb-3">
@@ -405,6 +414,19 @@
         white-space: normal;
     }
 
+    .file-preview-box {
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        padding: 10px;
+    }
+
+    .file-preview-box video,
+    .file-preview-box img {
+        max-height: 180px;
+        object-fit: cover;
+        width: 100%;
+    }
+
     @keyframes tala-loader {
         from { transform: translateY(0); opacity: .55; }
         to { transform: translateY(-8px); opacity: 1; }
@@ -425,7 +447,7 @@
         const groupBy = @json($config['group_by'] ?? null);
         const readonly = @json($config['readonly'] ?? false);
         const shareable = @json($config['shareable'] ?? false);
-        const hasFiles = @json($config['has_files'] ?? false);
+        const hasFiles = @json($hasFileUploads);
         const socialFeed = @json($config['social_feed'] ?? false);
         const statusEditable = @json($config['status_editable'] ?? false);
         const fieldOptions = @json($fieldOptions);
@@ -613,6 +635,7 @@
             $('#item-id').val('');
             $('#resource-form input[type=checkbox]').prop('checked', false);
             $('#descriptions-fields, #titles-fields').empty();
+            refreshFilePreviews();
             descriptionIndex = 0;
             titleIndex = 0;
         }
@@ -670,6 +693,32 @@
             ['fr', 'en', 'ln'].forEach(locale => {
                 $scope.find(`[name$="[${key}][${locale}]"]`).val(translated?.[locale] || '');
             });
+        }
+
+        function renderFilePreview(field, url) {
+            const $preview = $(`[data-preview-for="${field}"]`);
+            if (!$preview.length) return;
+
+            if (!url) {
+                $preview.addClass('d-none').empty();
+                return;
+            }
+
+            const escapedUrl = display(url);
+            const media = field === 'media_url'
+                ? `<video controls src="${escapedUrl}" class="rounded bg-dark"></video>`
+                : `<img src="${escapedUrl}" class="rounded" alt="Aperçu">`;
+
+            $preview.removeClass('d-none').html(`<div class="file-preview-box">
+                ${media}
+                <a class="btn btn-sm btn-outline-primary mt-2" href="${escapedUrl}" download target="_blank" rel="noopener">
+                    <i class="bi bi-download"></i> Télécharger
+                </a>
+            </div>`);
+        }
+
+        function refreshFilePreviews(item = {}) {
+            ['media_url', 'cover_url'].forEach(field => renderFilePreview(field, item[field] || ''));
         }
 
         function detailHtml(item) {
@@ -745,6 +794,7 @@
                         $(`[name="${key}"]`).val(value);
                     }
                 });
+                refreshFilePreviews(item);
                 (item.descriptions || []).forEach(addDescription);
                 (item.titles || []).forEach(addTitle);
             });
@@ -804,6 +854,11 @@
                 .fail(function (xhr) {
                     alertBox(xhr.responseJSON?.message || xhr.statusText, 'danger');
                 });
+        });
+
+        $(document).on('change', 'input[type="file"][name="media_url"], input[type="file"][name="cover_url"]', function () {
+            const file = this.files?.[0];
+            renderFilePreview(this.name, file ? URL.createObjectURL(file) : '');
         });
 
         $('#refresh-table').on('click', loadRows);

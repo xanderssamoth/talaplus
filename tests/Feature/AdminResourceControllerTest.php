@@ -80,6 +80,42 @@ class AdminResourceControllerTest extends TestCase
         ]);
     }
 
+    public function test_pricing_form_uses_usd_hidden_currency_and_cost_label(): void
+    {
+        $view = app(AdminResourceController::class)->index('pricings');
+        $fields = collect($view->getData()['config']['fields'])->keyBy('name');
+
+        $this->assertSame('Coût (en USD)', $fields['pricing_cost']['label']);
+        $this->assertSame('hidden', $fields['currency']['type']);
+        $this->assertSame('USD', $fields['currency']['value']);
+    }
+
+    public function test_video_files_can_be_uploaded_to_media_columns(): void
+    {
+        Storage::fake('public');
+        $this->createMediaTables();
+
+        $admin = User::factory()->create();
+        $owner = User::factory()->create(['currency' => 'USD']);
+
+        $response = $this->actingAs($admin)->post('/videos', [
+            'media_title' => ['fr' => 'Film'],
+            'media_description' => ['fr' => 'Description'],
+            'type' => 'film_series',
+            'price' => 5,
+            'user_id' => $owner->id,
+            'media_url' => UploadedFile::fake()->create('film.mp4', 256, 'video/mp4'),
+            'cover_url' => UploadedFile::fake()->image('cover.jpg'),
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('item.price_display', '5,00 USD');
+
+        $media = \DB::table('medias')->first();
+        $this->assertStringContainsString('/storage/videos/', $media->media_url);
+        $this->assertStringContainsString('/storage/video-covers/', $media->cover_url);
+    }
+
     public function test_app_info_can_be_saved_with_images(): void
     {
         Storage::fake('public');
