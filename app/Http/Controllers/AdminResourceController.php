@@ -15,12 +15,15 @@ use App\Models\Product;
 use App\Models\Reason;
 use App\Models\Role;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 
 class AdminResourceController extends Controller
 {
@@ -60,6 +63,7 @@ class AdminResourceController extends Controller
             'title' => 'Motifs de signalement',
             'icon' => 'bi-flag',
             'primary' => 'reason_content',
+            'group_by' => 'entity',
             'fields' => [
                 ['name' => 'reason_content', 'label' => 'Contenu du motif', 'type' => 'translatable-textarea', 'required' => true],
                 ['name' => 'entity', 'label' => 'Élément concerné', 'type' => 'select', 'options' => ['media' => 'Vidéo', 'product' => 'Produit', 'user' => 'Utilisateur'], 'required' => true],
@@ -174,6 +178,8 @@ class AdminResourceController extends Controller
             'title' => 'Utilisateurs',
             'icon' => 'bi-people',
             'primary' => 'email',
+            'with' => ['roles'],
+            'role_filter' => true,
             'fields' => [
                 ['name' => 'firstname', 'label' => 'Prénom', 'type' => 'text'],
                 ['name' => 'lastname', 'label' => 'Nom', 'type' => 'text'],
@@ -199,8 +205,13 @@ class AdminResourceController extends Controller
                 ['name' => 'christian_preference', 'label' => 'Préférence chrétienne', 'type' => 'checkbox'],
                 ['name' => 'status', 'label' => 'Statut', 'type' => 'select', 'options' => ['created' => 'Créé', 'activated' => 'Activé', 'disabled' => 'Désactivé', 'blocked' => 'Bloqué', 'deleted' => 'Supprimé']],
                 ['name' => 'type', 'label' => 'Type', 'type' => 'select', 'options' => ['uncertified' => 'Non certifié', 'certified' => 'Certifié']],
+                ['name' => 'role_id', 'label' => 'Rôle', 'type' => 'select', 'options' => []],
             ],
             'columns' => ['firstname', 'lastname', 'email', 'phone', 'status'],
+            'table_labels' => [
+                'status' => 'État',
+            ],
+            'status_editable' => true,
         ],
         'messages' => [
             'model' => Message::class,
@@ -280,13 +291,13 @@ class AdminResourceController extends Controller
         [$resource, $id] = $this->routeArguments($resource, $id);
         $config = $this->config($resource);
 
-        return response()->json(
-            $config['model']::query()
-                ->when(! empty($config['with']), fn ($query) => $query->with($config['with']))
-                ->when(! empty($config['where']), fn ($query) => $query->where($config['where']))
-                ->when(! empty($config['current_user_only']), fn ($query) => $query->where('to_user_id', request()->user()?->id))
-                ->findOrFail($id)
-        );
+        $item = $config['model']::query()
+            ->when(! empty($config['with']), fn ($query) => $query->with($config['with']))
+            ->when(! empty($config['where']), fn ($query) => $query->where($config['where']))
+            ->when(! empty($config['current_user_only']), fn ($query) => $query->where('to_user_id', request()->user()?->id))
+            ->findOrFail($id);
+
+        return response()->json($this->present($item, $config));
     }
 
     public function store(Request $request, string $resource)
@@ -300,6 +311,7 @@ class AdminResourceController extends Controller
             $item->save();
             $this->saveChildren($request, $config, $item);
             $this->saveFiles($request, $config, $item);
+            $this->saveUserRole($request, $item);
 
             return $item;
         });
@@ -319,6 +331,7 @@ class AdminResourceController extends Controller
             $item->save();
             $this->saveChildren($request, $config, $item);
             $this->saveFiles($request, $config, $item);
+            $this->saveUserRole($request, $item);
 
             return $item;
         });
@@ -360,6 +373,22 @@ class AdminResourceController extends Controller
         return response()->json(['message' => __('admin.notification_read'), 'item' => $this->present($notification->load(['fromUser', 'toUser', 'media', 'product', 'comment']), $this->config('notifications'))]);
     }
 
+    public function updateUserStatus(Request $request, int $id)
+    {
+        $config = $this->config('users');
+        $statusOptions = collect($config['fields'])->firstWhere('name', 'status')['options'];
+
+        $validated = $request->validate([
+            'status' => ['required', Rule::in(array_keys($statusOptions))],
+        ]);
+
+        $user = User::query()->with('roles')->findOrFail($id);
+        $user->status = $validated['status'];
+        $user->save();
+
+        return response()->json(['message' => __('admin.saved'), 'item' => $this->present($user->refresh()->load('roles'), $config)]);
+    }
+
     public function destroy(string|int $resource, string|int|null $id = null)
     {
         [$resource, $id] = $this->routeArguments($resource, $id);
@@ -381,7 +410,46 @@ class AdminResourceController extends Controller
     {
         abort_unless(isset($this->resources[$resource]), 404);
 
-        return $this->resources[$resource];
+        $config = $this->resources[$resource];
+
+        if ($resource === 'users') {
+            $config = $this->withRoleOptions($config);
+        }
+
+        return $config;
+    }
+
+    private function withRoleOptions(array $config): array
+    {
+        $options = $this->roleOptions();
+
+        foreach ($config['fields'] as &$field) {
+            if ($field['name'] === 'role_id') {
+                $field['options'] = $options;
+            }
+        }
+
+        $config['role_filter_options'] = $options;
+
+        return $config;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function roleOptions(): array
+    {
+        if (! Schema::hasTable('roles')) {
+            return ['' => '-'];
+        }
+
+        return ['' => '-'] + Role::query()
+            ->orderBy('id')
+            ->get()
+            ->mapWithKeys(fn (Role $role): array => [
+                (string) $role->id => $role->getTranslation('role_name', app()->getLocale(), false) ?: $role->getTranslation('role_name', 'fr', false) ?: (string) $role->id,
+            ])
+            ->all();
     }
 
     /**
@@ -405,6 +473,10 @@ class AdminResourceController extends Controller
             $type = $field['type'];
 
             if ($type === 'file-multiple') {
+                continue;
+            }
+
+            if ($item instanceof User && $name === 'role_id') {
                 continue;
             }
 
@@ -467,6 +539,15 @@ class AdminResourceController extends Controller
                 'comment_id' => $item->id,
             ]);
         }
+    }
+
+    private function saveUserRole(Request $request, Model $item): void
+    {
+        if (! $item instanceof User || ! Schema::hasTable('role_user') || ! $request->filled('role_id')) {
+            return;
+        }
+
+        $item->roles()->sync([(int) $request->input('role_id') => ['is_selected' => true]]);
     }
 
     private function saveChildren(Request $request, array $config, Model $item): void
@@ -576,11 +657,15 @@ class AdminResourceController extends Controller
 
             if ($this->isDateTimeColumn($column)) {
                 $raw[$column.'_display'] = $this->dateTimeDisplay($value);
+                $raw[$column.'_detail_display'] = $this->dateTimeDetailDisplay($value);
 
                 continue;
             }
 
-            if (is_array($value)) {
+            $fieldOptions = $this->fieldOptions($config, $column);
+            if ($fieldOptions !== null && ! is_array($value)) {
+                $raw[$column.'_display'] = $fieldOptions[$value] ?? $value;
+            } elseif (is_array($value)) {
                 $raw[$column.'_display'] = $value[$locale] ?? $value['fr'] ?? reset($value);
             } else {
                 $decoded = is_string($value) ? json_decode($value, true) : null;
@@ -588,13 +673,27 @@ class AdminResourceController extends Controller
             }
         }
 
+        if ($item instanceof User) {
+            $selectedRole = $item->roles?->firstWhere('pivot.is_selected', true) ?? $item->roles?->first();
+            $raw['role_id'] = $selectedRole?->id;
+            $raw['role_id_display'] = $selectedRole?->getTranslation('role_name', $locale, false) ?: $selectedRole?->getTranslation('role_name', 'fr', false);
+        }
+
         foreach ($raw as $column => $value) {
             if ($this->isDateTimeColumn((string) $column) && ! array_key_exists($column.'_display', $raw)) {
                 $raw[$column.'_display'] = $this->dateTimeDisplay($value);
+                $raw[$column.'_detail_display'] = $this->dateTimeDetailDisplay($value);
             }
         }
 
         return $raw;
+    }
+
+    private function fieldOptions(array $config, string $column): ?array
+    {
+        $field = collect($config['fields'] ?? [])->firstWhere('name', $column);
+
+        return $field['options'] ?? null;
     }
 
     private function fontAwesomeIconClass(mixed $value): ?string
@@ -625,6 +724,19 @@ class AdminResourceController extends Controller
 
         try {
             return formatAdminDateTime($value);
+        } catch (\Throwable) {
+            return $value;
+        }
+    }
+
+    private function dateTimeDetailDisplay(mixed $value): mixed
+    {
+        if (blank($value)) {
+            return $value;
+        }
+
+        try {
+            return 'Le '.Carbon::parse($value, config('app.timezone'))->timezone(config('app.timezone'))->format('d-m-y à H:i:s');
         } catch (\Throwable) {
             return $value;
         }

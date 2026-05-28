@@ -178,6 +178,7 @@ class AdminResourceControllerTest extends TestCase
         $this->createCategoryTables();
 
         $admin = User::factory()->create();
+        $createdAt = now()->setDate(2026, 5, 27)->setTime(14, 30, 12);
 
         \DB::table('categories')->insert([
             'category_name' => json_encode(['fr' => 'Films']),
@@ -185,8 +186,8 @@ class AdminResourceControllerTest extends TestCase
             'icon' => 'film',
             'color' => '#ff0033',
             'for_type' => 'film_series',
-            'created_at' => now(),
-            'updated_at' => now(),
+            'created_at' => $createdAt,
+            'updated_at' => $createdAt,
         ]);
 
         $this->actingAs($admin)
@@ -196,7 +197,47 @@ class AdminResourceControllerTest extends TestCase
             ->assertJsonPath('items.0.category_name_display', 'Films')
             ->assertJsonPath('items.0.icon_display', 'film')
             ->assertJsonPath('items.0.icon_preview.class', 'fa-solid fa-film')
-            ->assertJsonPath('items.0.icon_preview.color', '#ff0033');
+            ->assertJsonPath('items.0.icon_preview.color', '#ff0033')
+            ->assertJsonPath('items.0.created_at_detail_display', 'Le 27-05-26 à 14:30:12');
+    }
+
+    public function test_users_can_be_filtered_by_role_and_status_can_be_changed(): void
+    {
+        $this->createRoleTables();
+
+        $admin = User::factory()->create();
+        $user = User::factory()->create(['status' => 'created']);
+        $roleId = (int) \DB::table('roles')->insertGetId([
+            'role_name' => json_encode(['fr' => 'Administrateur']),
+            'role_description' => json_encode(['fr' => 'Gestion']),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        \DB::table('role_user')->insert([
+            'role_id' => $roleId,
+            'user_id' => $user->id,
+            'is_selected' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->getJson('/users/data')
+            ->assertOk()
+            ->assertJsonPath('items.0.role_id', $roleId)
+            ->assertJsonPath('items.0.role_id_display', 'Administrateur')
+            ->assertJsonPath('items.0.status_display', 'Créé');
+
+        $this->actingAs($admin)
+            ->patchJson("/users/{$user->id}/status", ['status' => 'activated'])
+            ->assertOk()
+            ->assertJsonPath('item.status', 'activated')
+            ->assertJsonPath('item.status_display', 'Activé');
+
+        $this->assertDatabaseHas('users', [
+            'id' => $user->id,
+            'status' => 'activated',
+        ]);
     }
 
     private function createMediaTables(): void
@@ -252,6 +293,24 @@ class AdminResourceControllerTest extends TestCase
             $table->string('for_type')->nullable();
             $table->timestamps();
             $table->softDeletes();
+        });
+    }
+
+    private function createRoleTables(): void
+    {
+        Schema::create('roles', function (Blueprint $table): void {
+            $table->id();
+            $table->json('role_name');
+            $table->json('role_description')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('role_user', function (Blueprint $table): void {
+            $table->foreignId('role_id');
+            $table->foreignId('user_id');
+            $table->boolean('is_selected')->default(false);
+            $table->timestamps();
         });
     }
 

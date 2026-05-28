@@ -14,10 +14,14 @@
         'for_youth' => 'Pour les jeunes',
         'files_count' => 'Images',
     ];
+    $detailBaseLabels = array_merge($baseLabels, [
+        'created_at' => 'Date de création',
+    ]);
     $tableLabels = array_merge($baseLabels, $fieldLabels, $config['table_labels'] ?? []);
-    $detailLabels = array_merge($baseLabels, $fieldLabels);
+    $detailLabels = array_merge($detailBaseLabels, $fieldLabels);
     $groupField = collect($config['fields'] ?? [])->firstWhere('name', $config['group_by'] ?? null);
     $groupLabels = array_merge(['money' => __('admin.money'), 'percentage' => __('admin.percentage')], $groupField['options'] ?? []);
+    $fieldOptions = collect($config['fields'] ?? [])->mapWithKeys(fn ($field) => [$field['name'] => $field['options'] ?? []])->all();
 @endphp
 <div class="ajax-loader d-none" id="ajax-loader">
     <div class="ajax-loader-box">
@@ -40,6 +44,33 @@
                         </button>
                     </div>
                     <div id="resource-alert"></div>
+                    <div class="row g-2 align-items-center mb-3">
+                        <div class="{{ ($config['group_by'] ?? false) || ($config['role_filter'] ?? false) ? 'col-md-7' : 'col-12' }}">
+                            <input class="form-control" id="table-search" type="search" placeholder="Rechercher...">
+                        </div>
+                        @if ($config['group_by'] ?? false)
+                            <div class="col-md-5">
+                                <select class="form-select" id="group-filter">
+                                    <option value="">Tous les groupes</option>
+                                    @foreach ($groupLabels as $value => $label)
+                                        <option value="{{ $value }}">{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                        @endif
+                        @if ($config['role_filter'] ?? false)
+                            <div class="col-md-5">
+                                <select class="form-select" id="role-filter">
+                                    <option value="">Tous les rôles</option>
+                                    @foreach (($config['role_filter_options'] ?? []) as $value => $label)
+                                        @if ($value !== '')
+                                            <option value="{{ $value }}">{{ $label }}</option>
+                                        @endif
+                                    @endforeach
+                                </select>
+                            </div>
+                        @endif
+                    </div>
                     @if ($config['social_feed'] ?? false)
                         <div class="vstack gap-3" id="notifications-feed">
                             <div class="text-center text-muted py-4">{{ __('admin.empty') }}</div>
@@ -388,6 +419,7 @@
             update: (id) => @json(url($resource)) + '/' + id,
             destroy: (id) => @json(url($resource)) + '/' + id,
             read: (id) => @json(url($resource)) + '/' + id + '/read',
+            status: (id) => @json(url($resource)) + '/' + id + '/status',
         };
         const columns = @json($config['columns']);
         const groupBy = @json($config['group_by'] ?? null);
@@ -395,7 +427,10 @@
         const shareable = @json($config['shareable'] ?? false);
         const hasFiles = @json($config['has_files'] ?? false);
         const socialFeed = @json($config['social_feed'] ?? false);
+        const statusEditable = @json($config['status_editable'] ?? false);
+        const fieldOptions = @json($fieldOptions);
         const detailLabels = @json($detailLabels);
+        let allItems = [];
         let descriptionIndex = 0;
         let titleIndex = 0;
 
@@ -435,9 +470,49 @@
             return typeof value === 'string' && value.length > 60 ? ' class="table-text-cell"' : '';
         }
 
+        function normalized(value) {
+            return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        }
+
+        function itemSearchText(item) {
+            return normalized(Object.keys(item)
+                .filter(key => !String(key).endsWith('_detail_display'))
+                .map(key => {
+                    const value = item[key + '_display'] ?? item[key];
+                    return typeof value === 'object' && value !== null ? JSON.stringify(value) : value;
+                })
+                .join(' '));
+        }
+
+        function statusButtonClass(status) {
+            return {
+                created: 'btn-outline-secondary',
+                activated: 'btn-outline-success',
+                disabled: 'btn-outline-warning',
+                blocked: 'btn-outline-danger',
+                deleted: 'btn-outline-dark',
+            }[status] || 'btn-outline-secondary';
+        }
+
+        function statusDropdown(item, value) {
+            const current = item.status || '';
+            const label = fieldOptions.status?.[current] || display(value, 'status');
+            const options = Object.keys(fieldOptions.status || {}).map(status => `
+                <li><button class="dropdown-item change-status ${status === current ? 'active' : ''}" data-id="${item.id}" data-status="${display(status)}" type="button">${display(fieldOptions.status[status])}</button></li>
+            `).join('');
+
+            return `<td><div class="dropdown">
+                <button class="btn btn-sm dropdown-toggle ${statusButtonClass(current)}" data-bs-toggle="dropdown" type="button">${display(label)}</button>
+                <ul class="dropdown-menu">${options}</ul>
+            </div></td>`;
+        }
+
         function rowHtml(item) {
             const cells = columns.map(column => {
                 const value = item[column + '_display'] ?? item[column];
+                if (column === 'status' && statusEditable) {
+                    return statusDropdown(item, value);
+                }
                 if (column === 'is_shared' && shareable) {
                     const shared = item[column] === 1 || item[column] === true || item[column] === '1';
                     return `<td><button class="btn btn-sm ${shared ? 'btn-success' : 'btn-danger'} toggle-shared" data-id="${item.id}" type="button">${shared ? @json(__('admin.yes')) : @json(__('admin.no'))}</button></td>`;
@@ -502,15 +577,34 @@
             </div>`;
         }
 
+        function filteredItems() {
+            const search = normalized($('#table-search').val());
+            const group = $('#group-filter').val();
+            const role = $('#role-filter').val();
+
+            return allItems.filter(item => {
+                const matchesSearch = !search || itemSearchText(item).includes(search);
+                const matchesGroup = !group || String(item[groupBy] || '') === String(group);
+                const matchesRole = !role || String(item.role_id || '') === String(role);
+
+                return matchesSearch && matchesGroup && matchesRole;
+            });
+        }
+
+        function renderRows() {
+            const items = filteredItems();
+            if (socialFeed) {
+                $('#notifications-feed').html(items.length ? items.map(notificationHtml).join('') : `<div class="text-center text-muted py-4">{{ __('admin.empty') }}</div>`);
+                return;
+            }
+
+            $('#resource-rows').html(items.length ? groupedRows(items) : `<tr><td colspan="${columns.length + 1}" class="text-center text-muted">{{ __('admin.empty') }}</td></tr>`);
+        }
+
         function loadRows() {
             $.getJSON(endpoints.list, function (response) {
-                const items = response.items || [];
-                if (socialFeed) {
-                    $('#notifications-feed').html(items.length ? items.map(notificationHtml).join('') : `<div class="text-center text-muted py-4">{{ __('admin.empty') }}</div>`);
-                    return;
-                }
-
-                $('#resource-rows').html(items.length ? groupedRows(items) : `<tr><td colspan="${columns.length + 1}" class="text-center text-muted">{{ __('admin.empty') }}</td></tr>`);
+                allItems = response.items || [];
+                renderRows();
             });
         }
 
@@ -583,7 +677,7 @@
                 .filter(key => !String(key).endsWith('_display'))
                 .map(key => {
                     const label = detailLabels[key] || key.replaceAll('_', ' ');
-                    let value = item[key + '_display'] ?? item[key];
+                    let value = item[key + '_detail_display'] ?? item[key + '_display'] ?? item[key];
                     if (key === 'files' && Array.isArray(value)) {
                         value = value.length ? `<div class="row g-2">${value.map(file => `
                             <div class="col-md-4">
@@ -685,6 +779,21 @@
                 });
         });
 
+        $(document).on('click', '.change-status', function () {
+            $.ajax({
+                url: endpoints.status($(this).data('id')),
+                method: 'PATCH',
+                data: {status: $(this).data('status')},
+            })
+                .done(function (response) {
+                    alertBox(response.message || @json(__('admin.saved')));
+                    loadRows();
+                })
+                .fail(function (xhr) {
+                    alertBox(xhr.responseJSON?.message || xhr.statusText, 'danger');
+                });
+        });
+
         $(document).on('click', '.delete-item', function () {
             if (!confirm(@json(__('admin.confirm_delete')))) return;
             $.ajax({url: endpoints.destroy($(this).data('id')), method: 'DELETE'})
@@ -698,6 +807,7 @@
         });
 
         $('#refresh-table').on('click', loadRows);
+        $('#table-search, #group-filter, #role-filter').on('input change', renderRows);
         $('#new-item, #reset-form').on('click', resetForm);
         $('#add-description').on('click', () => addDescription());
         $('#add-title').on('click', () => addTitle());
