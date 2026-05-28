@@ -17,11 +17,18 @@
     <link href="{{ asset('template/assets/vendor/boxicons/css/boxicons.min.css') }}" rel="stylesheet">
     <link href="{{ asset('template/assets/vendor/remixicon/remixicon.css') }}" rel="stylesheet">
     <link href="{{ asset('template/assets/css/style.css') }}" rel="stylesheet">
+    @stack('styles')
     <style>
         .logo img { max-height: 44px; }
         .data-table td { vertical-align: middle; }
         .translatable-tabs .nav-link { padding: .35rem .65rem; }
         .table-responsive { min-height: 280px; }
+        .admin-avatar {
+            border-radius: 999px;
+            height: 36px;
+            object-fit: cover;
+            width: 36px;
+        }
         .notification-nav-badge {
             font-size: .65rem;
             transform: translate(-35%, 15%);
@@ -60,7 +67,16 @@
             </li>
             <li class="nav-item dropdown pe-3">
                 <a class="nav-link nav-profile d-flex align-items-center pe-0" href="#" data-bs-toggle="dropdown">
-                    <i class="bi bi-person-circle fs-4"></i>
+                    @if (auth()->user()?->avatar_url)
+                        <img class="admin-avatar" id="topbar-avatar" src="{{ auth()->user()->avatar_url }}" alt="{{ auth()->user()->firstname ?? 'Avatar' }}">
+                    @else
+                        <svg class="admin-avatar" id="topbar-avatar-fallback" viewBox="0 0 64 64" role="img" aria-label="Avatar">
+                            <rect width="64" height="64" rx="32" fill="#e7f1ff"/>
+                            <circle cx="32" cy="24" r="12" fill="#0d6efd"/>
+                            <path d="M14 56c3.5-11 11-17 18-17s14.5 6 18 17" fill="#0d6efd"/>
+                        </svg>
+                        <img class="admin-avatar d-none" id="topbar-avatar" src="" alt="{{ auth()->user()->firstname ?? 'Avatar' }}">
+                    @endif
                     <span class="d-none d-md-block dropdown-toggle ps-2">{{ auth()->user()->firstname ?? auth()->user()->name ?? 'Admin' }}</span>
                 </a>
                 <ul class="dropdown-menu dropdown-menu-end dropdown-menu-arrow profile">

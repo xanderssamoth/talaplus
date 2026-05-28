@@ -2,13 +2,33 @@
 
 @section('title', __('admin.account'))
 
+@push('styles')
+<link href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css" rel="stylesheet">
+@endpush
+
 @section('content')
 <section class="section profile">
     <div class="row g-4">
         <div class="col-lg-4">
             <div class="card">
                 <div class="card-body text-center pt-4">
-                    <i class="bi bi-person-circle display-1 text-primary"></i>
+                    <div class="mx-auto position-relative" style="height: 132px; width: 132px;">
+                        @if ($user->avatar_url)
+                            <img class="rounded-circle border w-100 h-100 object-fit-cover" id="account-avatar" src="{{ $user->avatar_url }}" alt="{{ $user->firstname ?? 'Avatar' }}">
+                        @else
+                            <svg class="rounded-circle border w-100 h-100" id="account-avatar-fallback" viewBox="0 0 132 132" role="img" aria-label="Avatar">
+                                <rect width="132" height="132" rx="66" fill="#e7f1ff"/>
+                                <circle cx="66" cy="50" r="26" fill="#0d6efd"/>
+                                <path d="M29 116c7-24 23-38 37-38s30 14 37 38" fill="#0d6efd"/>
+                            </svg>
+                            <img class="rounded-circle border w-100 h-100 object-fit-cover d-none" id="account-avatar" src="" alt="{{ $user->firstname ?? 'Avatar' }}">
+                        @endif
+                    </div>
+                    <button class="btn btn-sm btn-outline-primary mt-3" id="change-avatar" type="button">
+                        <i class="bi bi-camera"></i> Modifier l’avatar
+                    </button>
+                    <input class="d-none" id="avatar-input" type="file" accept="image/*">
+                    <div class="small text-muted mt-2" id="avatar-status"></div>
                     <h5 class="mt-3 mb-1">{{ $user->firstname ?? $user->name ?? 'Admin' }} {{ $user->lastname }}</h5>
                     <p class="text-muted mb-0">{{ $user->email }}</p>
                     @if ($user->username)
@@ -142,4 +162,92 @@
         </div>
     </div>
 </section>
+
+<div class="modal fade" id="avatar-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Recadrer l’avatar</h5>
+                <button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="Fermer"></button>
+            </div>
+            <div class="modal-body">
+                <img class="img-fluid" id="avatar-crop-image" alt="Avatar à recadrer">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Annuler</button>
+                <button class="btn btn-primary" id="save-avatar" type="button">
+                    <i class="bi bi-check2"></i> Enregistrer
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 @endsection
+
+@push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"></script>
+<script>
+    $(function () {
+        let cropper = null;
+        const modal = new bootstrap.Modal('#avatar-modal');
+
+        $('#change-avatar').on('click', function () {
+            $('#avatar-input').trigger('click');
+        });
+
+        $('#avatar-input').on('change', function () {
+            const file = this.files?.[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function (event) {
+                $('#avatar-crop-image').attr('src', event.target.result);
+                modal.show();
+            };
+            reader.readAsDataURL(file);
+        });
+
+        $('#avatar-modal').on('shown.bs.modal', function () {
+            cropper?.destroy();
+            cropper = new Cropper(document.getElementById('avatar-crop-image'), {
+                aspectRatio: 1,
+                viewMode: 1,
+                autoCropArea: 1,
+            });
+        }).on('hidden.bs.modal', function () {
+            cropper?.destroy();
+            cropper = null;
+            $('#avatar-input').val('');
+        });
+
+        $('#save-avatar').on('click', function () {
+            if (!cropper) return;
+
+            $('#avatar-status').text('Envoi en cours...');
+            cropper.getCroppedCanvas({width: 512, height: 512}).toBlob(function (blob) {
+                const formData = new FormData();
+                formData.append('_method', 'PATCH');
+                formData.append('avatar', blob, 'avatar.png');
+
+                $.ajax({
+                    url: @json(route('account.avatar')),
+                    method: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    headers: {'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')},
+                }).done(function (response) {
+                    $('#account-avatar').attr('src', response.avatar_url).removeClass('d-none');
+                    $('#account-avatar-fallback').addClass('d-none');
+                    $('#topbar-avatar').attr('src', response.avatar_url).removeClass('d-none');
+                    $('#topbar-avatar-fallback').addClass('d-none');
+                    $('#avatar-status').text(response.message || 'Avatar mis à jour.');
+                    modal.hide();
+                }).fail(function (xhr) {
+                    $('#avatar-status').text(xhr.responseJSON?.message || 'Impossible d’envoyer l’avatar.');
+                });
+            }, 'image/png');
+        });
+    });
+</script>
+@endpush

@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ProfileUpdateRequest;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Redirect;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 class ProfileController extends Controller
@@ -39,6 +41,21 @@ class ProfileController extends Controller
             : 'profile.edit';
 
         return Redirect::route($redirectRoute)->with('status', 'profile-updated');
+    }
+
+    public function updateAvatar(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'avatar' => ['required', 'image', 'max:5120'],
+        ]);
+
+        $avatarUrl = Storage::disk('s3')->url($validated['avatar']->store('users/avatars', 's3'));
+        $request->user()->update(['avatar_url' => $avatarUrl]);
+
+        return response()->json([
+            'message' => 'Avatar mis à jour.',
+            'avatar_url' => $avatarUrl,
+        ]);
     }
 
     /**

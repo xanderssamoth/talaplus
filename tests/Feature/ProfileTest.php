@@ -3,12 +3,22 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class ProfileTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->withoutMiddleware(PreventRequestForgery::class);
+    }
 
     public function test_profile_page_is_displayed(): void
     {
@@ -98,6 +108,24 @@ class ProfileTest extends TestCase
             ->assertRedirect(route('account'));
 
         $this->assertSame('Grace', $user->refresh()->firstname);
+    }
+
+    public function test_account_avatar_can_be_uploaded_to_s3(): void
+    {
+        Storage::fake('s3');
+
+        $user = User::factory()->create();
+
+        $response = $this
+            ->actingAs($user)
+            ->post('/account/avatar', [
+                '_method' => 'PATCH',
+                'avatar' => UploadedFile::fake()->image('avatar.png'),
+            ]);
+
+        $response->assertOk();
+
+        $this->assertStringContainsString('users/avatars/', $user->refresh()->avatar_url);
     }
 
     public function test_user_can_delete_their_account(): void
