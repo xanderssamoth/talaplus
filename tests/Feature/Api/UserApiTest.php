@@ -3,13 +3,16 @@
 namespace Tests\Feature\Api;
 
 use App\Models\AdminNotification;
+use App\Models\File;
 use App\Models\History;
 use App\Models\PasswordReset;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class UserApiTest extends TestCase
@@ -20,6 +23,7 @@ class UserApiTest extends TestCase
 
         Schema::dropIfExists('notifications');
         Schema::dropIfExists('histories');
+        Schema::dropIfExists('files');
         Schema::dropIfExists('role_user');
         Schema::dropIfExists('roles');
         Schema::dropIfExists('personal_access_tokens');
@@ -81,6 +85,17 @@ class UserApiTest extends TestCase
             $table->foreignId('user_id');
             $table->boolean('is_selected')->default(false);
             $table->timestamps();
+        });
+
+        Schema::create('files', function (Blueprint $table): void {
+            $table->id();
+            $table->string('file_name')->nullable();
+            $table->text('file_url');
+            $table->longText('file_description')->nullable();
+            $table->string('file_type')->default('photo');
+            $table->foreignId('user_id')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
         });
 
         Schema::create('notifications', function (Blueprint $table): void {
@@ -268,5 +283,30 @@ class UserApiTest extends TestCase
 
         $response->assertOk();
         $this->assertTrue(Hash::check('new-password', $user->refresh()->password));
+    }
+
+    public function test_user_avatar_and_files_are_saved_to_s3(): void
+    {
+        Storage::fake('s3');
+        $user = User::create(['email' => 'files@example.com', 'username' => 'files', 'password' => 'password']);
+
+        $avatarResponse = $this->patch('/api/v1/user/'.$user->id.'/avatar', [
+            'avatar' => UploadedFile::fake()->image('avatar.jpg'),
+        ], ['Accept' => 'application/json']);
+
+        $avatarResponse->assertOk();
+        $user->refresh();
+        Storage::disk('s3')->assertExists('users/avatars/'.basename((string) $user->avatar_url));
+
+        $this->post('/api/v1/user/'.$user->id.'/file', [
+            'files' => [
+                UploadedFile::fake()->create('identity.pdf', 10, 'application/pdf'),
+            ],
+            'file_type' => 'document',
+        ], ['Accept' => 'application/json'])->assertOk();
+
+        $file = File::query()->where('file_name', 'identity.pdf')->firstOrFail();
+        $this->assertSame($user->id, $file->user_id);
+        Storage::disk('s3')->assertExists('users/files/'.basename((string) $file->file_url));
     }
 }

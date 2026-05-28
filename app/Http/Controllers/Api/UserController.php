@@ -199,7 +199,7 @@ final class UserController extends ApiResourceController
         ]);
 
         $user = User::query()->findOrFail($id);
-        $avatarUrl = $validated['avatar_url'] ?? Storage::disk('public')->url($request->file('avatar')->store('users/avatars', 'public'));
+        $avatarUrl = $validated['avatar_url'] ?? Storage::disk('s3')->url($request->file('avatar')->store('users/avatars', 's3'));
         $user->update(['avatar_url' => $avatarUrl]);
 
         if ($request->hasFile('avatar')) {
@@ -260,7 +260,7 @@ final class UserController extends ApiResourceController
 
         $user = User::query()->findOrFail($id);
         $files = collect($request->file('files'))->map(function ($uploadedFile) use ($validated, $user): File {
-            $url = Storage::disk('public')->url($uploadedFile->store('users/files', 'public'));
+            $url = Storage::disk('s3')->url($uploadedFile->store('users/files', 's3'));
 
             return File::create([
                 'file_name' => $uploadedFile->getClientOriginalName(),

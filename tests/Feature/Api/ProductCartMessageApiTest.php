@@ -317,6 +317,29 @@ class ProductCartMessageApiTest extends TestCase
             ->assertJsonPath('data.promotion.reduced_price', 75);
     }
 
+    public function test_product_store_saves_uploaded_files_to_s3(): void
+    {
+        Storage::fake('s3');
+        $owner = User::create(['email' => 'owner@example.com', 'password' => 'password']);
+
+        $response = $this->post('/api/v1/product', [
+            'product_name' => 'Book',
+            'price' => 10,
+            'currency' => 'USD',
+            'user_id' => $owner->id,
+            'files' => [
+                UploadedFile::fake()->create('manual.pdf', 10, 'application/pdf'),
+            ],
+        ], ['Accept' => 'application/json']);
+
+        $response->assertOk();
+        $file = File::query()->where('file_name', 'manual.pdf')->firstOrFail();
+
+        $this->assertSame($owner->id, $file->user_id);
+        $this->assertNotNull($file->product_id);
+        Storage::disk('s3')->assertExists('products/files/'.basename((string) $file->file_url));
+    }
+
     public function test_filter_products_can_search_by_word(): void
     {
         Product::create(['product_name' => 'Blue Book', 'price' => 10, 'currency' => 'USD']);
@@ -472,7 +495,7 @@ class ProductCartMessageApiTest extends TestCase
 
     public function test_comment_store_and_update_save_uploaded_files(): void
     {
-        Storage::fake('public');
+        Storage::fake('s3');
         $owner = User::create(['email' => 'poster@example.com', 'username' => 'poster', 'password' => 'password']);
 
         $response = $this->post('/api/v1/comment', [
@@ -494,7 +517,7 @@ class ProductCartMessageApiTest extends TestCase
             ->where('user_id', $owner->id)
             ->where('file_name', 'first.jpg')
             ->exists());
-        Storage::disk('public')->assertExists('comments/files/'.basename((string) $response->json('data.files.0.file_url')));
+        Storage::disk('s3')->assertExists('comments/files/'.basename((string) $response->json('data.files.0.file_url')));
 
         $this->patch('/api/v1/comment/'.$comment->id, [
             'files' => [

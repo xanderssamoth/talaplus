@@ -92,7 +92,7 @@ class AdminResourceControllerTest extends TestCase
 
     public function test_video_files_can_be_uploaded_to_media_columns(): void
     {
-        Storage::fake('public');
+        Storage::fake('s3');
         $this->createMediaTables();
 
         $admin = User::factory()->create();
@@ -112,13 +112,28 @@ class AdminResourceControllerTest extends TestCase
             ->assertJsonPath('item.price_display', '5,00 USD');
 
         $media = \DB::table('medias')->first();
-        $this->assertStringContainsString('/storage/videos/', $media->media_url);
-        $this->assertStringContainsString('/storage/video-covers/', $media->cover_url);
+        $this->assertStringContainsString('medias/videos/', $media->media_url);
+        $this->assertStringContainsString('medias/covers/', $media->cover_url);
+    }
+
+    public function test_video_uploads_are_required_when_creating_media(): void
+    {
+        $this->createMediaTables();
+
+        $admin = User::factory()->create();
+
+        $this->actingAs($admin)
+            ->post('/videos', [
+                'media_title' => ['fr' => 'Film'],
+                'type' => 'film_series',
+                'price' => 5,
+            ])
+            ->assertSessionHasErrors(['media_url', 'cover_url']);
     }
 
     public function test_app_info_can_be_saved_with_images(): void
     {
-        Storage::fake('public');
+        Storage::fake('s3');
         $this->createAppInfoTables();
 
         $admin = User::factory()->create();

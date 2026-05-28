@@ -12,7 +12,9 @@ use App\Models\Role;
 use App\Models\Subscription;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class MediaApiTest extends TestCase
@@ -197,27 +199,31 @@ class MediaApiTest extends TestCase
 
     public function test_store_extracts_hashtags_mentions_users_and_notifies_admins(): void
     {
+        Storage::fake('s3');
         $owner = User::create(['email' => 'owner@example.com', 'password' => 'password']);
         $admin = User::create(['email' => 'admin@example.com', 'password' => 'password']);
         $mentioned = User::create(['email' => 'mentioned@example.com', 'username' => 'donaldTrump', 'password' => 'password']);
         $role = Role::create(['role_name' => ['fr' => 'Administrateur', 'en' => 'Administrator']]);
         $role->users()->attach($admin->id);
 
-        $response = $this->postJson('/api/v1/media', [
+        $response = $this->post('/api/v1/media', [
             'media_title' => 'Song',
             'media_description' => 'A new #gospel song for @donaldTrump',
-            'media_url' => 'https://example.com/song.mp3',
-            'cover_url' => 'https://example.com/cover.jpg',
+            'media_url' => UploadedFile::fake()->create('song.mp4', 100, 'video/mp4'),
+            'cover_url' => UploadedFile::fake()->image('cover.jpg'),
             'type' => 'music',
             'price' => 0,
             'user_id' => $owner->id,
             'files' => [
-                ['file_name' => 'Cover', 'file_url' => 'https://example.com/file.jpg', 'file_type' => 'photo'],
+                UploadedFile::fake()->create('lyrics.pdf', 10, 'application/pdf'),
             ],
-        ]);
+        ], ['Accept' => 'application/json']);
 
         $response->assertOk()->assertJsonPath('success', true);
+        $media = Media::query()->firstOrFail();
         $this->assertTrue(Hashtag::query()->where('keyword', 'gospel')->exists());
+        Storage::disk('s3')->assertExists('medias/videos/'.basename((string) $media->media_url));
+        Storage::disk('s3')->assertExists('medias/covers/'.basename((string) $media->cover_url));
         $this->assertTrue(AdminNotification::query()
             ->where('type', 'media_created')
             ->where('from_user_id', $owner->id)
@@ -235,6 +241,25 @@ class MediaApiTest extends TestCase
             ->where('word', 'donaldTrump')
             ->where('user_id', $owner->id)
             ->exists());
+    }
+
+    public function test_store_requires_video_media_url_and_image_cover_url(): void
+    {
+        Storage::fake('s3');
+        $owner = User::create(['email' => 'owner@example.com', 'password' => 'password']);
+
+        $response = $this->post('/api/v1/media', [
+            'media_title' => 'Invalid media',
+            'media_description' => 'Wrong files',
+            'media_url' => UploadedFile::fake()->image('not-video.jpg'),
+            'cover_url' => UploadedFile::fake()->create('not-image.pdf', 10, 'application/pdf'),
+            'type' => 'music',
+            'price' => 0,
+            'user_id' => $owner->id,
+        ], ['Accept' => 'application/json']);
+
+        $response->assertUnprocessable()
+            ->assertJsonValidationErrors(['media_url', 'cover_url']);
     }
 
     public function test_update_media_resyncs_hashtags_and_mentions(): void

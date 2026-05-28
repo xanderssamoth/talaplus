@@ -28,8 +28,20 @@ class ProfileTest extends TestCase
         $response = $this
             ->actingAs($user)
             ->patch('/profile', [
-                'name' => 'Test User',
+                'firstname' => 'Test',
+                'lastname' => 'User',
+                'surname' => 'Middle',
+                'username' => 'test_user',
                 'email' => 'test@example.com',
+                'phone' => '+243999000111',
+                'gender' => 'male',
+                'birthdate' => '1990-01-02',
+                'country' => 'RDC',
+                'city' => 'Kinshasa',
+                'currency' => 'USD',
+                'p_o_box' => '123',
+                'address_1' => 'Adresse principale',
+                'address_2' => 'Adresse secondaire',
             ]);
 
         $response
@@ -38,8 +50,16 @@ class ProfileTest extends TestCase
 
         $user->refresh();
 
-        $this->assertSame('Test User', $user->name);
+        $this->assertSame('Test', $user->firstname);
+        $this->assertSame('User', $user->lastname);
+        $this->assertSame('Middle', $user->surname);
+        $this->assertSame('test_user', $user->username);
         $this->assertSame('test@example.com', $user->email);
+        $this->assertSame('+243999000111', $user->phone);
+        $this->assertSame('male', $user->gender);
+        $this->assertSame('RDC', $user->country);
+        $this->assertSame('Kinshasa', $user->city);
+        $this->assertSame('USD', $user->currency);
         $this->assertNull($user->email_verified_at);
     }
 
@@ -50,7 +70,7 @@ class ProfileTest extends TestCase
         $response = $this
             ->actingAs($user)
             ->patch('/profile', [
-                'name' => 'Test User',
+                'firstname' => 'Test',
                 'email' => $user->email,
             ]);
 
@@ -59,6 +79,25 @@ class ProfileTest extends TestCase
             ->assertRedirect('/profile');
 
         $this->assertNotNull($user->refresh()->email_verified_at);
+    }
+
+    public function test_account_identity_form_redirects_back_to_account(): void
+    {
+        $user = User::factory()->create();
+
+        $response = $this
+            ->actingAs($user)
+            ->patch('/profile', [
+                '_redirect' => 'account',
+                'firstname' => 'Grace',
+                'email' => $user->email,
+            ]);
+
+        $response
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('account'));
+
+        $this->assertSame('Grace', $user->refresh()->firstname);
     }
 
     public function test_user_can_delete_their_account(): void

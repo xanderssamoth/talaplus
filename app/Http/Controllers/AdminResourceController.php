@@ -114,8 +114,8 @@ class AdminResourceController extends Controller
             'fields' => [
                 ['name' => 'media_title', 'label' => 'Titre de la vidéo', 'type' => 'translatable'],
                 ['name' => 'media_description', 'label' => 'Description', 'type' => 'translatable-textarea'],
-                ['name' => 'media_url', 'label' => 'Télécharger la vidéo', 'type' => 'file-url', 'accept' => 'video/*', 'directory' => 'videos', 'rules' => ['file', 'mimetypes:video/mp4,video/quicktime,video/x-msvideo,video/webm', 'max:102400']],
-                ['name' => 'cover_url', 'label' => 'Télécharger la couverture', 'type' => 'file-url', 'accept' => 'image/*', 'directory' => 'video-covers', 'rules' => ['image', 'max:5120']],
+                ['name' => 'media_url', 'label' => 'Télécharger la vidéo', 'type' => 'file-url', 'accept' => 'video/*', 'directory' => 'medias/videos', 'required' => true, 'rules' => ['file', 'mimes:mp4,mov,avi,mkv,webm', 'max:512000']],
+                ['name' => 'cover_url', 'label' => 'Télécharger la couverture', 'type' => 'file-url', 'accept' => 'image/*', 'directory' => 'medias/covers', 'required' => true, 'rules' => ['image', 'mimes:jpg,jpeg,png,webp,gif', 'max:10240']],
                 ['name' => 'author_names', 'label' => 'Noms des auteurs', 'type' => 'text'],
                 ['name' => 'is_free', 'label' => 'Gratuit', 'type' => 'checkbox'],
                 ['name' => 'price', 'label' => 'Prix', 'type' => 'number', 'step' => '0.01'],
@@ -482,7 +482,7 @@ class AdminResourceController extends Controller
 
             if ($type === 'file-url') {
                 if ($request->hasFile($name)) {
-                    $payload[$name] = Storage::disk('public')->url($request->file($name)->store($field['directory'] ?? 'uploads', 'public'));
+                    $payload[$name] = Storage::disk('s3')->url($request->file($name)->store($field['directory'] ?? 'uploads', 's3'));
                 }
 
                 continue;
@@ -532,9 +532,10 @@ class AdminResourceController extends Controller
 
     private function validateFileUrlUploads(Request $request, array $config): void
     {
+        $isUpdate = $request->isMethod('put') || $request->isMethod('patch') || $request->input('_method') === 'PUT';
         $rules = collect($config['fields'] ?? [])
             ->filter(fn (array $field): bool => ($field['type'] ?? null) === 'file-url')
-            ->mapWithKeys(fn (array $field): array => [$field['name'] => array_merge(['nullable'], $field['rules'] ?? ['file', 'max:10240'])])
+            ->mapWithKeys(fn (array $field): array => [$field['name'] => array_merge([$isUpdate || empty($field['required']) ? 'nullable' : 'required'], $field['rules'] ?? ['file', 'max:10240'])])
             ->all();
 
         if ($rules !== []) {
@@ -556,7 +557,7 @@ class AdminResourceController extends Controller
         foreach ($request->file('files', []) as $uploadedFile) {
             File::create([
                 'file_name' => $uploadedFile->getClientOriginalName(),
-                'file_url' => Storage::disk('public')->url($uploadedFile->store('app-infos', 'public')),
+                'file_url' => Storage::disk('s3')->url($uploadedFile->store('app-infos', 's3')),
                 'file_description' => $item->comment_content,
                 'file_type' => 'photo',
                 'user_id' => $item->user_id,

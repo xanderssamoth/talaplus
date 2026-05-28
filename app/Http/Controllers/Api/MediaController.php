@@ -27,11 +27,16 @@ final class MediaController extends ApiResourceController
 
     public function store(Request $request): JsonResponse
     {
-        $payload = $this->payload($request);
+        $request->validate([
+            'media_url' => ['required', 'file', 'mimes:mp4,mov,avi,mkv,webm', 'max:512000'],
+            'cover_url' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,gif', 'max:10240'],
+            'files' => ['nullable', 'array'],
+            'files.*' => ['file', 'max:512000'],
+        ]);
 
-        if ($request->hasFile('cover')) {
-            $payload['cover_url'] = Storage::disk('public')->url($request->file('cover')->store('medias/covers', 'public'));
-        }
+        $payload = $this->payload($request);
+        $payload['media_url'] = Storage::disk('s3')->url($request->file('media_url')->store('medias/videos', 's3'));
+        $payload['cover_url'] = Storage::disk('s3')->url($request->file('cover_url')->store('medias/covers', 's3'));
 
         $media = Media::create($payload);
 
@@ -50,7 +55,7 @@ final class MediaController extends ApiResourceController
         collect($request->file('files', []))->each(function ($uploadedFile) use ($media): void {
             $payload = [
                 'file_name' => $uploadedFile->getClientOriginalName(),
-                'file_url' => Storage::disk('public')->url($uploadedFile->store('medias/files', 'public')),
+                'file_url' => Storage::disk('s3')->url($uploadedFile->store('medias/files', 's3')),
                 'file_type' => str_starts_with((string) $uploadedFile->getMimeType(), 'video/') ? 'video' : 'document',
                 'user_id' => $media->user_id,
             ];
@@ -82,11 +87,20 @@ final class MediaController extends ApiResourceController
 
     public function update(Request $request, int $id): JsonResponse
     {
+        $request->validate([
+            'media_url' => ['nullable', 'file', 'mimes:mp4,mov,avi,mkv,webm', 'max:512000'],
+            'cover_url' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,gif', 'max:10240'],
+        ]);
+
         $media = Media::query()->findOrFail($id);
         $payload = $this->payload($request);
 
-        if ($request->hasFile('cover')) {
-            $payload['cover_url'] = Storage::disk('public')->url($request->file('cover')->store('medias/covers', 'public'));
+        if ($request->hasFile('media_url')) {
+            $payload['media_url'] = Storage::disk('s3')->url($request->file('media_url')->store('medias/videos', 's3'));
+        }
+
+        if ($request->hasFile('cover_url')) {
+            $payload['cover_url'] = Storage::disk('s3')->url($request->file('cover_url')->store('medias/covers', 's3'));
         }
 
         $media->fill($payload);

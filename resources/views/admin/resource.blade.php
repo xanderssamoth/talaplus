@@ -171,7 +171,7 @@
                                 @elseif ($type === 'file-url')
                                     <div class="mb-3">
                                         <label class="form-label" for="{{ $name }}">{{ $field['label'] }}</label>
-                                        <input class="form-control" id="{{ $name }}" name="{{ $name }}" type="file" accept="{{ $field['accept'] ?? '' }}">
+                                        <input class="form-control file-url-input" id="{{ $name }}" name="{{ $name }}" type="file" accept="{{ $field['accept'] ?? '' }}" data-required-on-create="{{ !empty($field['required']) ? '1' : '0' }}" {{ !empty($field['required']) ? 'required' : '' }}>
                                         <div class="file-preview mt-2 d-none" data-preview-for="{{ $name }}"></div>
                                     </div>
                                 @else
@@ -634,6 +634,9 @@
             $('#resource-form')[0]?.reset();
             $('#item-id').val('');
             $('#resource-form input[type=checkbox]').prop('checked', false);
+            $('#resource-form .file-url-input').each(function () {
+                $(this).prop('required', $(this).data('required-on-create') == 1);
+            });
             $('#descriptions-fields, #titles-fields').empty();
             refreshFilePreviews();
             descriptionIndex = 0;
@@ -783,6 +786,7 @@
             $.getJSON(endpoints.show($(this).data('id')), function (item) {
                 resetForm();
                 $('#item-id').val(item.id);
+                $('#resource-form .file-url-input').prop('required', false);
                 Object.keys(item).forEach(function (key) {
                     const value = item[key];
                     const translated = parseTranslated(value);

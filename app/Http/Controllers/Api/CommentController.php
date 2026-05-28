@@ -318,7 +318,7 @@ final class CommentController extends ApiResourceController
         collect($request->file('files', []))->each(function ($uploadedFile) use ($request, $comment): void {
             File::create([
                 'file_name' => $uploadedFile->getClientOriginalName(),
-                'file_url' => Storage::disk('public')->url($uploadedFile->store('comments/files', 'public')),
+                'file_url' => Storage::disk('s3')->url($uploadedFile->store('comments/files', 's3')),
                 'file_description' => $request->input('file_description'),
                 'file_type' => $request->input('file_type', $this->fileTypeFromMime((string) $uploadedFile->getMimeType())),
                 'user_id' => $comment->user_id,

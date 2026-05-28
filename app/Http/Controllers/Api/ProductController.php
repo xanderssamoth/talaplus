@@ -39,7 +39,7 @@ final class ProductController extends ApiResourceController
         collect($request->file('files', []))->each(function ($uploadedFile) use ($product): void {
             File::create([
                 'file_name' => $uploadedFile->getClientOriginalName(),
-                'file_url' => Storage::disk('public')->url($uploadedFile->store('products/files', 'public')),
+                'file_url' => Storage::disk('s3')->url($uploadedFile->store('products/files', 's3')),
                 'file_type' => str_starts_with((string) $uploadedFile->getMimeType(), 'image/') ? 'photo' : 'document',
                 'user_id' => $product->user_id,
                 'product_id' => $product->id,
