@@ -16,6 +16,7 @@ use App\Models\Specification;
 use App\Models\Subscription;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -23,30 +24,53 @@ use Tests\TestCase;
 
 class ProductCartMessageApiTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        RefreshDatabaseState::$migrated = false;
+
+        parent::tearDown();
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
 
+        Schema::disableForeignKeyConstraints();
+
         foreach ([
+            'bank_cards',
+            'blocked_users',
             'notifications',
             'reactions',
             'reports',
             'histories',
+            'money_transfers',
+            'payments',
+            'promo_codes',
             'customer_orders',
             'carts',
+            'files',
             'messages',
-            'comments',
             'hashtag_comment',
+            'hashtag_media',
+            'comments',
             'hashtags',
             'subscriptions',
             'group_user',
             'groups',
-            'files',
             'specifications',
             'role_user',
             'roles',
             'products',
+            'category_media',
             'categories',
+            'medias',
+            'pricings',
+            'pricing_descriptions',
+            'reasons',
+            'password_resets',
+            'personal_access_tokens',
+            'sessions',
             'users',
         ] as $table) {
             Schema::dropIfExists($table);
@@ -258,6 +282,8 @@ class ProductCartMessageApiTest extends TestCase
             $table->timestamps();
             $table->softDeletes();
         });
+
+        Schema::enableForeignKeyConstraints();
     }
 
     public function test_product_store_publish_rate_and_report(): void
@@ -280,7 +306,18 @@ class ProductCartMessageApiTest extends TestCase
 
         $response->assertOk()->assertJsonPath('success', true);
         $product = Product::query()->firstOrFail();
-        $this->assertTrue(AdminNotification::query()->where('type', 'product_added')->where('to_user_id', $admin->id)->exists());
+        $this->assertTrue(AdminNotification::query()
+            ->where('type', 'product_added')
+            ->where('from_user_id', $owner->id)
+            ->where('to_user_id', $admin->id)
+            ->where('product_id', $product->id)
+            ->exists());
+        $this->assertTrue(History::query()
+            ->where('entity', 'product')
+            ->where('entity_id', $product->id)
+            ->where('action', 'post')
+            ->where('user_id', $owner->id)
+            ->exists());
 
         $this->patchJson("/api/v1/product/{$product->id}/publish")->assertOk();
         $this->assertTrue($product->refresh()->is_shared);

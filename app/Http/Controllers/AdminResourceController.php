@@ -93,6 +93,7 @@ class AdminResourceController extends Controller
                 ['name' => 'color', 'label' => 'Couleur', 'type' => 'text'],
             ],
             'columns' => ['pricing_name', 'pricing_type', 'reason', 'pricing_cost', 'currency'],
+            'wide_form' => true,
         ],
         'abouts' => [
             'model' => AboutSubject::class,
@@ -107,6 +108,7 @@ class AdminResourceController extends Controller
                 ['name' => 'status', 'label' => 'Statut', 'type' => 'select', 'options' => ['selected' => 'Sélectionné', 'rejected' => 'Rejeté']],
             ],
             'columns' => ['subject', 'subject_description', 'status'],
+            'wide_form' => true,
         ],
         'videos' => [
             'model' => Media::class,
@@ -123,7 +125,7 @@ class AdminResourceController extends Controller
                 ['name' => 'is_free', 'label' => 'Gratuit', 'type' => 'checkbox'],
                 ['name' => 'price', 'label' => 'Prix', 'type' => 'number', 'step' => '0.01'],
                 ['name' => 'for_youth', 'label' => 'Pour les jeunes', 'type' => 'checkbox'],
-                ['name' => 'belongs_to', 'label' => 'Dépend de la vidéo ID', 'type' => 'number'],
+                ['name' => 'belongs_to', 'label' => 'Est un épisode de', 'type' => 'select', 'options' => []],
                 ['name' => 'type', 'label' => 'Type', 'type' => 'select', 'options' => [
                     'film_series' => 'Films et séries',
                     'comedy' => 'Comédie',
@@ -135,7 +137,7 @@ class AdminResourceController extends Controller
                     'documentary' => 'Documentaire',
                 ], 'required' => true],
                 ['name' => 'is_shared', 'label' => 'Publier', 'type' => 'checkbox'],
-                ['name' => 'user_id', 'label' => 'Utilisateur ID', 'type' => 'number'],
+                ['name' => 'user_id', 'label' => 'Appartient à', 'type' => 'select', 'options' => []],
             ],
             'columns' => ['media_title', 'type', 'price', 'is_free', 'is_shared', 'created_at'],
             'shareable' => true,
@@ -157,7 +159,8 @@ class AdminResourceController extends Controller
                 ['name' => 'price_reduction_start', 'label' => 'Début réduction', 'type' => 'datetime-local'],
                 ['name' => 'price_reduction_end', 'label' => 'Fin réduction', 'type' => 'datetime-local'],
                 ['name' => 'reduction_rate', 'label' => 'Taux de réduction', 'type' => 'number', 'step' => '0.01'],
-                ['name' => 'category_id', 'label' => 'Categorie ID', 'type' => 'number'],
+                ['name' => 'category_id', 'label' => 'Catégorie', 'type' => 'select', 'options' => []],
+                ['name' => 'user_id', 'label' => 'Appartient à', 'type' => 'select', 'options' => []],
             ],
             'columns' => ['product_name', 'type', 'quantity', 'price', 'currency', 'action', 'is_shared', 'created_at'],
             'shareable' => true,
@@ -602,6 +605,14 @@ class AdminResourceController extends Controller
             $config = $this->withRoleOptions($config);
         }
 
+        if ($resource === 'videos') {
+            $config = $this->withVideoOptions($config);
+        }
+
+        if ($resource === 'products') {
+            $config = $this->withProductOptions($config);
+        }
+
         return $config;
     }
 
@@ -634,6 +645,151 @@ class AdminResourceController extends Controller
         ];
 
         return $config;
+    }
+
+    private function withVideoOptions(array $config): array
+    {
+        $contentCreatorRole = $this->ensureRole(
+            'Créateur de contenu',
+            'Content creator',
+            'Mokeli ya makambo',
+            'Personne qui envoie des vidéos à publier sur la plateforme',
+            'Person who sends videos to publish on the platform.',
+            'Moto oyo atindaka bavideo mpo ebimisama na plateforme.'
+        );
+
+        foreach ($config['fields'] as &$field) {
+            if ($field['name'] === 'belongs_to') {
+                $field['options'] = $this->videoSeriesOptions();
+            }
+
+            if ($field['name'] === 'user_id') {
+                $field['options'] = $this->usersByRoleOptions($contentCreatorRole);
+            }
+        }
+
+        return $config;
+    }
+
+    private function withProductOptions(array $config): array
+    {
+        $memberRole = $this->ensureRole(
+            'Membre',
+            'Member',
+            'Mosangani',
+            'Personne qui consulte ou commente les posts et les vidéos ; et qui commande des produits',
+            'Person who views or comments on posts and videos, and orders products.',
+            'Moto oyo atángaka to apesaka makanisi na ba posts mpe ba vidéos, mpe asombaka biloko.'
+        );
+
+        foreach ($config['fields'] as &$field) {
+            if ($field['name'] === 'category_id') {
+                [$field['options'], $field['option_attrs']] = $this->productCategoryOptions();
+            }
+
+            if ($field['name'] === 'user_id') {
+                $field['options'] = $this->usersByRoleOptions($memberRole);
+            }
+        }
+
+        return $config;
+    }
+
+    private function ensureRole(
+        string $frName,
+        string $enName,
+        string $lnName,
+        string $frDescription,
+        string $enDescription,
+        string $lnDescription
+    ): ?Role {
+        if (! Schema::hasTable('roles')) {
+            return null;
+        }
+
+        return Role::query()->where('role_name->fr', $frName)->first()
+            ?? Role::create([
+                'role_name' => [
+                    'fr' => $frName,
+                    'en' => $enName,
+                    'ln' => $lnName,
+                ],
+                'role_description' => [
+                    'fr' => $frDescription,
+                    'en' => $enDescription,
+                    'ln' => $lnDescription,
+                ],
+            ]);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function usersByRoleOptions(?Role $role): array
+    {
+        if ($role === null || ! Schema::hasTable('role_user') || ! Schema::hasTable('users')) {
+            return ['' => '-'];
+        }
+
+        return ['' => '-'] + User::query()
+            ->whereHas('roles', fn ($query) => $query
+                ->whereKey($role->id)
+                ->where('role_user.is_selected', true))
+            ->orderBy('firstname')
+            ->orderBy('lastname')
+            ->get()
+            ->mapWithKeys(fn (User $user): array => [
+                (string) $user->id => trim(($user->firstname ?? '').' '.($user->lastname ?? '')) ?: ($user->email ?? (string) $user->id),
+            ])
+            ->all();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function videoSeriesOptions(): array
+    {
+        if (! Schema::hasTable('medias')) {
+            return ['' => '-'];
+        }
+
+        return ['' => '-'] + Media::query()
+            ->where('type', 'film_series')
+            ->orderByDesc('id')
+            ->get()
+            ->mapWithKeys(fn (Media $media): array => [
+                (string) $media->id => $media->getTranslation('media_title', app()->getLocale(), false)
+                    ?: $media->getTranslation('media_title', 'fr', false)
+                    ?: 'Vidéo #'.$media->id,
+            ])
+            ->all();
+    }
+
+    /**
+     * @return array{0: array<string, string>, 1: array<string, array<string, string>>}
+     */
+    private function productCategoryOptions(): array
+    {
+        if (! Schema::hasTable('categories')) {
+            return [['' => '-'], []];
+        }
+
+        $options = ['' => '-'];
+        $attributes = ['' => ['data-for-type' => '']];
+
+        Category::query()
+            ->whereIn('for_type', ['product', 'service'])
+            ->orderBy('id')
+            ->get()
+            ->each(function (Category $category) use (&$options, &$attributes): void {
+                $id = (string) $category->id;
+                $options[$id] = $category->getTranslation('category_name', app()->getLocale(), false)
+                    ?: $category->getTranslation('category_name', 'fr', false)
+                    ?: 'Catégorie #'.$category->id;
+                $attributes[$id] = ['data-for-type' => (string) $category->for_type];
+            });
+
+        return [$options, $attributes];
     }
 
     /**
@@ -890,17 +1046,33 @@ class AdminResourceController extends Controller
                         'content' => $this->translatedPayload($contentPayload['content'] ?? []),
                     ]);
 
-                    foreach ($contentPayload['dashes'] ?? [] as $dashPayload) {
-                        if (! $this->hasTranslatedValue($dashPayload['dash_content'] ?? [])) {
-                            continue;
-                        }
-
-                        $content->dashes()->create([
-                            'dash_content' => $this->translatedPayload($dashPayload['dash_content'] ?? []),
-                            'belongs_to' => $dashPayload['belongs_to'] ?? null,
-                        ]);
-                    }
+                    $this->saveAboutDashes($content, $contentPayload['dashes'] ?? []);
                 }
+            }
+        }
+    }
+
+    private function saveAboutDashes(Model $content, array $dashes): void
+    {
+        foreach ($dashes as $dashPayload) {
+            if (! $this->hasTranslatedValue($dashPayload['dash_content'] ?? [])) {
+                continue;
+            }
+
+            $dash = $content->dashes()->create([
+                'dash_content' => $this->translatedPayload($dashPayload['dash_content'] ?? []),
+                'belongs_to' => null,
+            ]);
+
+            foreach ($dashPayload['sub_dashes'] ?? [] as $subDashPayload) {
+                if (! $this->hasTranslatedValue($subDashPayload['dash_content'] ?? [])) {
+                    continue;
+                }
+
+                $content->dashes()->create([
+                    'dash_content' => $this->translatedPayload($subDashPayload['dash_content'] ?? []),
+                    'belongs_to' => $dash->id,
+                ]);
             }
         }
     }
@@ -981,6 +1153,10 @@ class AdminResourceController extends Controller
             $raw['role_id_display'] = $selectedRole?->getTranslation('role_name', $locale, false) ?: $selectedRole?->getTranslation('role_name', 'fr', false);
         }
 
+        if ($item instanceof AboutSubject && isset($raw['titles'])) {
+            $raw['titles'] = $this->nestedAboutTitles($raw['titles']);
+        }
+
         foreach ($raw as $column => $value) {
             if ($this->isDateTimeColumn((string) $column) && ! array_key_exists($column.'_display', $raw)) {
                 $raw[$column.'_display'] = $this->dateTimeDisplay($value);
@@ -989,6 +1165,36 @@ class AdminResourceController extends Controller
         }
 
         return $raw;
+    }
+
+    private function nestedAboutTitles(array $titles): array
+    {
+        return collect($titles)
+            ->map(function (array $title): array {
+                $title['contents'] = collect($title['contents'] ?? [])
+                    ->map(function (array $content): array {
+                        $dashes = collect($content['dashes'] ?? []);
+                        $subDashes = $dashes->whereNotNull('belongs_to')->groupBy('belongs_to');
+
+                        $content['dashes'] = $dashes
+                            ->filter(fn (array $dash): bool => empty($dash['belongs_to']))
+                            ->map(function (array $dash) use ($subDashes): array {
+                                $dash['sub_dashes'] = $subDashes->get($dash['id'], collect())->values()->all();
+
+                                return $dash;
+                            })
+                            ->values()
+                            ->all();
+
+                        return $content;
+                    })
+                    ->values()
+                    ->all();
+
+                return $title;
+            })
+            ->values()
+            ->all();
     }
 
     private function fieldOptions(array $config, string $column): ?array

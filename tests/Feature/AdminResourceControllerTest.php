@@ -124,6 +124,38 @@ class AdminResourceControllerTest extends TestCase
         $this->assertStringContainsString('medias/covers/', $media->cover_url);
     }
 
+    public function test_video_form_uses_episode_and_content_creator_selects(): void
+    {
+        $this->createMediaTables();
+        $this->createRoleTables();
+
+        $creator = User::factory()->create(['firstname' => 'Paul', 'lastname' => 'Kiese']);
+        $roleId = (int) \DB::table('roles')->insertGetId([
+            'role_name' => json_encode(['fr' => 'Créateur de contenu']),
+            'role_description' => json_encode(['fr' => 'Personne qui envoie des vidéos à publier sur la plateforme']),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        \DB::table('role_user')->insert([
+            'role_id' => $roleId,
+            'user_id' => $creator->id,
+            'is_selected' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $seriesId = $this->insertMedia($creator->id);
+
+        $view = app(AdminResourceController::class)->index('videos');
+        $fields = collect($view->getData()['config']['fields'])->keyBy('name');
+
+        $this->assertSame('Est un épisode de', $fields['belongs_to']['label']);
+        $this->assertSame('select', $fields['belongs_to']['type']);
+        $this->assertArrayHasKey((string) $seriesId, $fields['belongs_to']['options']);
+        $this->assertSame('Appartient à', $fields['user_id']['label']);
+        $this->assertSame('select', $fields['user_id']['type']);
+        $this->assertSame('Paul Kiese', $fields['user_id']['options'][(string) $creator->id]);
+    }
+
     public function test_video_uploads_are_required_when_creating_media(): void
     {
         $this->createMediaTables();
@@ -331,6 +363,115 @@ class AdminResourceControllerTest extends TestCase
         $html = app(AdminResourceController::class)->index('videos')->render();
 
         $this->assertStringContainsString('form-check-input toggle-shared', $html);
+        $this->assertStringContainsString('bi-three-dots-vertical', $html);
+        $this->assertStringContainsString('>Voir<', $html);
+        $this->assertStringContainsString('>Modifier<', $html);
+        $this->assertStringContainsString('>Supprimer<', $html);
+        $this->assertStringContainsString('<th class="text-end"></th>', $html);
+    }
+
+    public function test_pricing_and_about_forms_use_wider_columns_and_full_width_language_fields(): void
+    {
+        $pricingHtml = app(AdminResourceController::class)->index('pricings')->render();
+        $aboutHtml = app(AdminResourceController::class)->index('abouts')->render();
+
+        $this->assertStringContainsString('class="col-lg-6"', $pricingHtml);
+        $this->assertStringContainsString('name="descriptions[__INDEX__][description_content][fr]" rows="3"', $pricingHtml);
+        $this->assertStringContainsString('class="col-lg-6"', $aboutHtml);
+        $this->assertStringContainsString('name="titles[__TITLE__][contents][__CONTENT__][subtitle][fr]"', $aboutHtml);
+        $this->assertStringContainsString('name="titles[__TITLE__][contents][__CONTENT__][content][fr]" rows="3"', $aboutHtml);
+        $this->assertStringContainsString('Sous-tiret', $aboutHtml);
+        $this->assertStringNotContainsString('Depend du tiret ID', $aboutHtml);
+    }
+
+    public function test_about_form_saves_nested_sub_dashes_with_parent_belongs_to(): void
+    {
+        $this->createAboutTables();
+
+        $admin = User::factory()->create();
+
+        $response = $this->actingAs($admin)->postJson('/abouts', [
+            'subject' => ['fr' => 'Conditions'],
+            'subject_description' => ['fr' => 'Description'],
+            'status' => 'selected',
+            'titles' => [
+                [
+                    'title' => ['fr' => 'Titre 1'],
+                    'alias' => 'titre-1',
+                    'contents' => [
+                        [
+                            'subtitle' => ['fr' => 'Sous-titre'],
+                            'content' => ['fr' => 'Contenu'],
+                            'dashes' => [
+                                [
+                                    'dash_content' => ['fr' => 'Tiret 1'],
+                                    'sub_dashes' => [
+                                        ['dash_content' => ['fr' => 'Sous-tiret 1']],
+                                        ['dash_content' => ['fr' => 'Sous-tiret 2']],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        $response->assertOk();
+
+        $parent = \DB::table('about_dashes')->where('dash_content->fr', 'Tiret 1')->first();
+        $this->assertNotNull($parent);
+        $this->assertDatabaseHas('about_dashes', [
+            'dash_content->fr' => 'Sous-tiret 1',
+            'belongs_to' => $parent->id,
+        ]);
+        $this->assertDatabaseHas('about_dashes', [
+            'dash_content->fr' => 'Sous-tiret 2',
+            'belongs_to' => $parent->id,
+        ]);
+    }
+
+    public function test_product_form_uses_category_and_member_selects(): void
+    {
+        $this->createCategoryTables();
+        $this->createRoleTables();
+
+        $member = User::factory()->create(['firstname' => 'Anne', 'lastname' => 'Lutumba']);
+        $roleId = (int) \DB::table('roles')->insertGetId([
+            'role_name' => json_encode(['fr' => 'Membre']),
+            'role_description' => json_encode(['fr' => 'Personne qui consulte ou commente les posts et les vidéos ; et qui commande des produits']),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        \DB::table('role_user')->insert([
+            'role_id' => $roleId,
+            'user_id' => $member->id,
+            'is_selected' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $productCategoryId = (int) \DB::table('categories')->insertGetId([
+            'category_name' => json_encode(['fr' => 'Boutique']),
+            'for_type' => 'product',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $serviceCategoryId = (int) \DB::table('categories')->insertGetId([
+            'category_name' => json_encode(['fr' => 'Services']),
+            'for_type' => 'service',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $view = app(AdminResourceController::class)->index('products');
+        $fields = collect($view->getData()['config']['fields'])->keyBy('name');
+
+        $this->assertSame('Catégorie', $fields['category_id']['label']);
+        $this->assertSame('select', $fields['category_id']['type']);
+        $this->assertSame('product', $fields['category_id']['option_attrs'][(string) $productCategoryId]['data-for-type']);
+        $this->assertSame('service', $fields['category_id']['option_attrs'][(string) $serviceCategoryId]['data-for-type']);
+        $this->assertSame('Appartient à', $fields['user_id']['label']);
+        $this->assertSame('Anne Lutumba', $fields['user_id']['options'][(string) $member->id]);
     }
 
     public function test_users_form_creates_partner_role_and_excludes_it_from_user_role_select(): void
@@ -569,6 +710,45 @@ class AdminResourceControllerTest extends TestCase
             $table->foreignId('comment_id')->nullable();
             $table->foreignId('product_id')->nullable();
             $table->foreignId('message_id')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
+        });
+    }
+
+    private function createAboutTables(): void
+    {
+        Schema::create('about_subjects', function (Blueprint $table): void {
+            $table->id();
+            $table->json('subject')->nullable();
+            $table->json('subject_description');
+            $table->string('status')->default('rejected');
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('about_titles', function (Blueprint $table): void {
+            $table->id();
+            $table->json('title');
+            $table->string('alias')->nullable();
+            $table->foreignId('about_subject_id')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('about_contents', function (Blueprint $table): void {
+            $table->id();
+            $table->json('subtitle')->nullable();
+            $table->json('content');
+            $table->foreignId('about_title_id');
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('about_dashes', function (Blueprint $table): void {
+            $table->id();
+            $table->json('dash_content');
+            $table->foreignId('belongs_to')->nullable();
+            $table->foreignId('about_content_id')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });

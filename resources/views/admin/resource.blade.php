@@ -10,6 +10,8 @@
 
 @section('content')
 @php
+    $listColumnClass = ($config['readonly'] ?? false) ? 'col-lg-12' : (($config['wide_form'] ?? false) ? 'col-lg-6' : 'col-lg-8');
+    $formColumnClass = ($config['wide_form'] ?? false) ? 'col-lg-6' : 'col-lg-4';
     $fieldLabels = collect($config['fields'] ?? [])->pluck('label', 'name')->all();
     $baseLabels = [
         'message' => 'Notification',
@@ -41,7 +43,7 @@
 
 <section class="section">
     <div class="row">
-        <div class="{{ ($config['readonly'] ?? false) ? 'col-lg-12' : 'col-lg-8' }}">
+        <div class="{{ $listColumnClass }}">
             <div class="card">
                 <div class="card-body">
                     <div class="d-flex align-items-center justify-content-between">
@@ -91,7 +93,7 @@
                                 @foreach ($config['columns'] as $column)
                                     <th>{{ $tableLabels[$column] ?? str($column)->replace('_', ' ')->title() }}</th>
                                 @endforeach
-                                <th class="text-end">{{ __('admin.actions') }}</th>
+                                <th class="text-end"></th>
                             </tr>
                             </thead>
                             <tbody id="resource-rows">
@@ -106,7 +108,7 @@
         </div>
 
         @unless ($config['readonly'] ?? false)
-            <div class="col-lg-4">
+            <div class="{{ $formColumnClass }}">
                 <div class="card">
                     <div class="card-body">
                         <div class="d-flex align-items-center justify-content-between">
@@ -170,7 +172,7 @@
                                         <label class="form-label" for="{{ $name }}">{{ $field['label'] }}</label>
                                         <select class="form-select" id="{{ $name }}" name="{{ $name }}" {{ $required }}>
                                             @foreach ($field['options'] as $value => $label)
-                                                <option value="{{ $value }}">{{ $label }}</option>
+                                                <option value="{{ $value }}" @foreach (($field['option_attrs'][$value] ?? []) as $attribute => $attributeValue) {{ $attribute }}="{{ $attributeValue }}" @endforeach>{{ $label }}</option>
                                             @endforeach
                                         </select>
                                     </div>
@@ -302,8 +304,12 @@
                 <label class="form-label">{{ $fieldLabel }}</label>
                 <div class="row g-2">
                     @foreach (['fr' => 'FR', 'en' => 'EN', 'ln' => 'LN'] as $locale => $localeLabel)
-                        <div class="col-md-4">
-                            <input class="form-control" name="descriptions[__INDEX__][{{ $fieldName }}][{{ $locale }}]" placeholder="{{ $localeLabel }}">
+                        <div class="col-12">
+                            @if ($fieldName === 'description_content')
+                                <textarea class="form-control" name="descriptions[__INDEX__][{{ $fieldName }}][{{ $locale }}]" rows="3" placeholder="{{ $localeLabel }}"></textarea>
+                            @else
+                                <input class="form-control" name="descriptions[__INDEX__][{{ $fieldName }}][{{ $locale }}]" placeholder="{{ $localeLabel }}">
+                            @endif
                         </div>
                     @endforeach
                 </div>
@@ -322,7 +328,7 @@
             <label class="form-label">Titre</label>
             <div class="row g-2">
                 @foreach (['fr' => 'FR', 'en' => 'EN', 'ln' => 'LN'] as $locale => $localeLabel)
-                    <div class="col-md-4">
+                    <div class="col-12">
                         <input class="form-control" name="titles[__TITLE__][title][{{ $locale }}]" placeholder="{{ $localeLabel }}">
                     </div>
                 @endforeach
@@ -351,8 +357,12 @@
                 <label class="form-label">{{ $fieldLabel }}</label>
                 <div class="row g-2">
                     @foreach (['fr' => 'FR', 'en' => 'EN', 'ln' => 'LN'] as $locale => $localeLabel)
-                        <div class="col-md-4">
-                            <textarea class="form-control" name="titles[__TITLE__][contents][__CONTENT__][{{ $fieldName }}][{{ $locale }}]" rows="2" placeholder="{{ $localeLabel }}"></textarea>
+                        <div class="col-12">
+                            @if ($fieldName === 'subtitle')
+                                <input class="form-control" name="titles[__TITLE__][contents][__CONTENT__][{{ $fieldName }}][{{ $locale }}]" placeholder="{{ $localeLabel }}">
+                            @else
+                                <textarea class="form-control" name="titles[__TITLE__][contents][__CONTENT__][{{ $fieldName }}][{{ $locale }}]" rows="3" placeholder="{{ $localeLabel }}"></textarea>
+                            @endif
                         </div>
                     @endforeach
                 </div>
@@ -374,12 +384,32 @@
         </div>
         <div class="row g-2">
             @foreach (['fr' => 'FR', 'en' => 'EN', 'ln' => 'LN'] as $locale => $localeLabel)
-                <div class="col-md-4">
+                <div class="col-12">
                     <input class="form-control" name="titles[__TITLE__][contents][__CONTENT__][dashes][__DASH__][dash_content][{{ $locale }}]" placeholder="{{ $localeLabel }}">
                 </div>
             @endforeach
         </div>
-        <input class="form-control mt-2" name="titles[__TITLE__][contents][__CONTENT__][dashes][__DASH__][belongs_to]" type="number" placeholder="Depend du tiret ID">
+        <div class="d-flex justify-content-between align-items-center mt-2">
+            <span class="small fw-semibold">Sous-tirets</span>
+            <button class="btn btn-sm btn-outline-secondary add-sub-dash" type="button"><i class="bi bi-plus-lg"></i> Sous-tiret</button>
+        </div>
+        <div class="vstack gap-2 mt-2 sub-dashes-fields"></div>
+    </div>
+</template>
+
+<template id="sub-dash-template">
+    <div class="border rounded p-2 sub-dash-block" data-sub-dash-index="__SUBDASH__">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <strong>Sous-tiret</strong>
+            <button class="btn btn-sm btn-outline-danger remove-child" type="button"><i class="bi bi-trash"></i></button>
+        </div>
+        <div class="row g-2">
+            @foreach (['fr' => 'FR', 'en' => 'EN', 'ln' => 'LN'] as $locale => $localeLabel)
+                <div class="col-12">
+                    <input class="form-control" name="titles[__TITLE__][contents][__CONTENT__][dashes][__DASH__][sub_dashes][__SUBDASH__][dash_content][{{ $locale }}]" placeholder="{{ $localeLabel }}">
+                </div>
+            @endforeach
+        </div>
     </div>
 </template>
 @endsection
@@ -542,6 +572,7 @@
         const userModes = @json($config['user_modes'] ?? null);
         const partnerRoleId = @json((string) ($config['partner_role_id'] ?? ''));
         const hasAvatarCropper = @json($config['avatar_cropper'] ?? false);
+        const resourceName = @json($resource);
         const perPage = 20;
         let allItems = [];
         let currentPage = 1;
@@ -650,11 +681,18 @@
                 return `<td${textCellClass(value)}>${display(value, column)}</td>`;
             }).join('');
             const writeActions = readonly ? '' : `
-                <button class="btn btn-sm btn-outline-primary edit-item" data-id="${item.id}" type="button"><i class="bi bi-pencil"></i></button>
-                <button class="btn btn-sm btn-outline-danger delete-item" data-id="${item.id}" type="button"><i class="bi bi-trash"></i></button>`;
+                <li><button class="dropdown-item edit-item" data-id="${item.id}" type="button"><i class="bi bi-pencil me-2"></i>Modifier</button></li>
+                <li><button class="dropdown-item text-danger delete-item" data-id="${item.id}" type="button"><i class="bi bi-trash me-2"></i>Supprimer</button></li>`;
             const actions = `<td class="text-end">
-                <button class="btn btn-sm btn-outline-secondary detail-item" data-id="${item.id}" type="button"><i class="bi bi-eye"></i></button>
-                ${writeActions}
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown" type="button" aria-label="Actions">
+                        <i class="bi bi-three-dots-vertical"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><button class="dropdown-item detail-item" data-id="${item.id}" type="button"><i class="bi bi-eye me-2"></i>Voir</button></li>
+                        ${writeActions}
+                    </ul>
+                </div>
             </td>`;
             return `<tr>${cells}${actions}</tr>`;
         }
@@ -815,6 +853,7 @@
             setAvatarPreview('');
             $('#avatar_base64').val('');
             applyUserMode('user');
+            filterProductCategories();
             descriptionIndex = 0;
             titleIndex = 0;
         }
@@ -864,7 +903,38 @@
             const $block = $(html);
             $contentBlock.find('.dashes-fields').append($block);
             fillTranslated($block, 'dash_content', values.dash_content);
-            $block.find(`[name$="[belongs_to]"]`).val(values.belongs_to || '');
+            (values.sub_dashes || []).forEach(subDash => addSubDash($block, subDash));
+        }
+
+        function addSubDash($dashBlock, values = {}) {
+            const titleIdx = $dashBlock.closest('.child-block').data('title-index');
+            const contentIdx = $dashBlock.closest('.content-block').data('content-index');
+            const dashIdx = $dashBlock.data('dash-index');
+            const subDashIdx = $dashBlock.find('.sub-dash-block').length;
+            const html = $('#sub-dash-template').html()
+                .replaceAll('__TITLE__', titleIdx)
+                .replaceAll('__CONTENT__', contentIdx)
+                .replaceAll('__DASH__', dashIdx)
+                .replaceAll('__SUBDASH__', subDashIdx);
+            const $block = $(html);
+            $dashBlock.find('.sub-dashes-fields').append($block);
+            fillTranslated($block, 'dash_content', values.dash_content);
+        }
+
+        function filterProductCategories() {
+            if (resourceName !== 'products') return;
+
+            const type = $('#type').val();
+            const $category = $('#category_id');
+            $category.find('option').each(function () {
+                const optionType = $(this).data('for-type');
+                const visible = !optionType || optionType === type;
+                $(this).prop('hidden', !visible).prop('disabled', !visible);
+            });
+
+            if ($category.find('option:selected').prop('disabled')) {
+                $category.val('');
+            }
         }
 
         function fillTranslated($scope, key, value) {
@@ -976,6 +1046,7 @@
                     }
                 });
                 refreshFilePreviews(item);
+                filterProductCategories();
                 setAvatarPreview(item.avatar_url || '');
                 (item.descriptions || []).forEach(addDescription);
                 (item.titles || []).forEach(addTitle);
@@ -1100,6 +1171,7 @@
             currentPage = 1;
             renderRows();
         });
+        $('#type').on('change', filterProductCategories);
         $(document).on('click', '.pagination-page', function () {
             if ($(this).closest('.page-item').hasClass('disabled')) return;
             currentPage = Number($(this).data('page')) || 1;
@@ -1110,9 +1182,11 @@
         $('#add-title').on('click', () => addTitle());
         $(document).on('click', '.add-content', function () { addContent($(this).closest('.child-block')); });
         $(document).on('click', '.add-dash', function () { addDash($(this).closest('.content-block')); });
-        $(document).on('click', '.remove-child', function () { $(this).closest('.child-block, .content-block, .dash-block').remove(); });
+        $(document).on('click', '.add-sub-dash', function () { addSubDash($(this).closest('.dash-block')); });
+        $(document).on('click', '.remove-child', function () { $(this).closest('.child-block, .content-block, .dash-block, .sub-dash-block').remove(); });
         applyUserMode('user');
         setAvatarPreview('');
+        filterProductCategories();
         loadRows();
     });
 </script>

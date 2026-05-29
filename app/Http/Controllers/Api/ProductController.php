@@ -46,6 +46,15 @@ final class ProductController extends ApiResourceController
             ]);
         });
 
+        if ($product->user_id !== null) {
+            History::create([
+                'entity' => 'product',
+                'entity_id' => $product->id,
+                'action' => 'post',
+                'user_id' => $product->user_id,
+            ]);
+        }
+
         Role::query()
             ->where('role_name->fr', 'Administrateur')
             ->with('users:id')

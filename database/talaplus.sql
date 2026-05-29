@@ -1,7 +1,9 @@
 -- -----------------------------------------------------
 -- Schema talaplus
 --
--- Datamodel for the "TALA+" platform
+-- Datamodel for the "TALA+" platform.
+-- == Copyright (c) 2026
+-- == Designed by Xanders Samoth (https://xanderssamoth.xsamtech.com)
 -- -----------------------------------------------------
 -- -----------------------------------------------------
 -- Table `users`
@@ -258,12 +260,19 @@ CREATE TABLE IF NOT EXISTS `products` (
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `deleted_at` TIMESTAMP NULL,
   `category_id` BIGINT NULL,
+  `user_id` BIGINT NULL,
   PRIMARY KEY (`id`),
   UNIQUE INDEX `id_products_UNIQUE` (`id` ASC),
   INDEX `fk_products_categories_idx` (`category_id` ASC),
+  INDEX `fk_products_users_idx` (`user_id` ASC),
   CONSTRAINT `fk_products_categories`
     FOREIGN KEY (`category_id`)
     REFERENCES `categories` (`id`)
+    ON DELETE SET NULL
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_products_users`
+    FOREIGN KEY (`user_id`)
+    REFERENCES `users` (`id`)
     ON DELETE SET NULL
     ON UPDATE CASCADE)
 ENGINE = InnoDB;
