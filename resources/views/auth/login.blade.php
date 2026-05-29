@@ -10,9 +10,9 @@
         @csrf
 
         <div class="col-12">
-            <label class="form-label" for="email">Adresse email</label>
-            <input class="form-control @error('email') is-invalid @enderror" id="email" name="email" type="email" value="{{ old('email') }}" required autofocus autocomplete="username">
-            @error('email')
+            <label class="form-label" for="login">Adresse email ou téléphone</label>
+            <input class="form-control @error('login') is-invalid @enderror" id="login" name="login" type="text" value="{{ old('login') }}" required autofocus autocomplete="username">
+            @error('login')
                 <div class="invalid-feedback">{{ $message }}</div>
             @enderror
         </div>
@@ -40,7 +40,9 @@
             @if (Route::has('password.request'))
                 <a href="{{ route('password.request') }}">Mot de passe oublie ?</a>
             @endif
-            <a href="{{ route('register') }}">Creer un compte</a>
+            @if ($canRegister ?? true)
+                <a href="{{ route('register') }}">Créer un compte</a>
+            @endif
         </div>
     </form>
 </x-guest-layout>

@@ -10,6 +10,7 @@ use App\Models\Comment;
 use App\Models\File;
 use App\Models\Media;
 use App\Models\Message;
+use App\Models\Payment;
 use App\Models\Pricing;
 use App\Models\Product;
 use App\Models\Reason;
@@ -19,10 +20,12 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class AdminResourceController extends Controller
@@ -199,8 +202,7 @@ class AdminResourceController extends Controller
                 ['name' => 'phone', 'label' => 'Téléphone', 'type' => 'text'],
                 ['name' => 'username', 'label' => 'Nom d’utilisateur', 'type' => 'text'],
                 ['name' => 'password', 'label' => 'Mot de passe', 'type' => 'password'],
-                ['name' => 'avatar_url', 'label' => 'URL avatar', 'type' => 'text'],
-                ['name' => 'cover_url', 'label' => 'URL couverture', 'type' => 'text'],
+                ['name' => 'password_confirmation', 'label' => 'Confirmation du mot de passe', 'type' => 'password'],
                 ['name' => 'promo_code', 'label' => 'Code promotionnel', 'type' => 'text'],
                 ['name' => 'tips_at_every_login', 'label' => 'Conseils à chaque connexion', 'type' => 'checkbox'],
                 ['name' => 'is_online', 'label' => 'En ligne', 'type' => 'checkbox'],
@@ -214,6 +216,7 @@ class AdminResourceController extends Controller
                 'status' => 'État',
             ],
             'status_editable' => true,
+            'avatar_cropper' => true,
         ],
         'messages' => [
             'model' => Message::class,
@@ -259,12 +262,12 @@ class AdminResourceController extends Controller
     public function dashboard()
     {
         return view('admin.dashboard', [
-            'stats' => [
-                'videos' => Media::count(),
-                'users' => User::count(),
-                'categories' => Category::count(),
-                'notifications' => AdminNotification::where('is_read', 0)->count(),
-            ],
+            'stats' => $this->dashboardStats(),
+            'paymentStats' => $this->paymentStats(),
+            'recentUsers' => $this->recentMemberUsers(),
+            'recentVideos' => $this->recentItems(Media::class, ['user']),
+            'recentProducts' => $this->recentItems(Product::class, ['user']),
+            'statusOptions' => $this->userStatusOptions(),
         ]);
     }
 
@@ -307,10 +310,12 @@ class AdminResourceController extends Controller
         $config = $this->config($resource);
         abort_if($config['readonly'] ?? false, 403);
         $this->validateFileUrlUploads($request, $config);
+        $this->validateUserPayload($request, $config);
 
         $item = DB::transaction(function () use ($request, $config): Model {
             $item = new $config['model'];
             $item->fill($this->payload($request, $config, $item));
+            $this->fillUserAvatar($request, $item);
             $item->save();
             $this->saveChildren($request, $config, $item);
             $this->saveFiles($request, $config, $item);
@@ -328,10 +333,12 @@ class AdminResourceController extends Controller
         $config = $this->config($resource);
         abort_if($config['readonly'] ?? false, 403);
         $this->validateFileUrlUploads($request, $config);
+        $this->validateUserPayload($request, $config);
 
         $item = DB::transaction(function () use ($request, $config, $id): Model {
             $item = $config['model']::findOrFail($id);
             $item->fill($this->payload($request, $config, $item));
+            $this->fillUserAvatar($request, $item);
             $item->save();
             $this->saveChildren($request, $config, $item);
             $this->saveFiles($request, $config, $item);
@@ -410,6 +417,111 @@ class AdminResourceController extends Controller
         ]);
     }
 
+    /**
+     * @return array<int, array{label: string, value: int, icon: string, color: string}>
+     */
+    private function dashboardStats(): array
+    {
+        return [
+            [
+                'label' => 'Vidéos publiées',
+                'value' => $this->countByShared(Media::class, true),
+                'icon' => 'bi-play-circle',
+                'color' => 'primary',
+            ],
+            [
+                'label' => 'Vidéos non publiées',
+                'value' => $this->countByShared(Media::class, false),
+                'icon' => 'bi-play-btn',
+                'color' => 'warning',
+            ],
+            [
+                'label' => 'Produits publiés',
+                'value' => $this->countByShared(Product::class, true),
+                'icon' => 'bi-bag-check',
+                'color' => 'success',
+            ],
+            [
+                'label' => 'Produits non publiés',
+                'value' => $this->countByShared(Product::class, false),
+                'icon' => 'bi-bag-x',
+                'color' => 'danger',
+            ],
+            [
+                'label' => 'Utilisateurs',
+                'value' => Schema::hasTable('users') ? User::count() : 0,
+                'icon' => 'bi-people',
+                'color' => 'info',
+            ],
+            [
+                'label' => 'Catégories',
+                'value' => Schema::hasTable('categories') ? Category::count() : 0,
+                'icon' => 'bi-tags',
+                'color' => 'secondary',
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function paymentStats(): array
+    {
+        if (! Schema::hasTable('payments')) {
+            return [
+                'pending' => 0,
+                'successful' => 0,
+                'failed' => 0,
+            ];
+        }
+
+        return [
+            'pending' => Payment::query()->where('status', 1)->count(),
+            'successful' => Payment::query()->where('status', 0)->count(),
+            'failed' => Payment::query()->where('status', 2)->count(),
+        ];
+    }
+
+    private function recentMemberUsers(): Collection
+    {
+        if (! Schema::hasTable('roles') || ! Schema::hasTable('role_user')) {
+            return collect();
+        }
+
+        return User::query()
+            ->with('roles')
+            ->whereHas('roles', fn ($query) => $query
+                ->where('role_name->fr', 'Membre')
+                ->where('role_user.is_selected', true))
+            ->latest('id')
+            ->limit(5)
+            ->get();
+    }
+
+    private function recentItems(string $model, array $with = []): Collection
+    {
+        $table = (new $model)->getTable();
+        if (! Schema::hasTable($table)) {
+            return collect();
+        }
+
+        return $model::query()
+            ->when($with !== [], fn ($query) => $query->with($with))
+            ->latest('id')
+            ->limit(5)
+            ->get();
+    }
+
+    private function countByShared(string $model, bool $shared): int
+    {
+        $table = (new $model)->getTable();
+        if (! Schema::hasTable($table)) {
+            return 0;
+        }
+
+        return $model::query()->where('is_shared', $shared)->count();
+    }
+
     private function config(string $resource): array
     {
         abort_unless(isset($this->resources[$resource]), 404);
@@ -425,7 +537,12 @@ class AdminResourceController extends Controller
 
     private function withRoleOptions(array $config): array
     {
-        $options = $this->roleOptions();
+        if (! Schema::hasTable('roles') || ! Schema::hasTable('role_user')) {
+            $config['with'] = [];
+        }
+
+        $partnerRole = $this->ensurePartnerRole();
+        $options = $this->roleOptions(exceptRoleId: $partnerRole?->id);
 
         foreach ($config['fields'] as &$field) {
             if ($field['name'] === 'role_id') {
@@ -433,7 +550,18 @@ class AdminResourceController extends Controller
             }
         }
 
-        $config['role_filter_options'] = $options;
+        $config['role_filter_options'] = $this->roleOptions();
+        $config['partner_role_id'] = $partnerRole?->id;
+        $config['user_modes'] = [
+            'user' => [
+                'label' => 'Ajouter utilisateur',
+                'hidden' => ['partner_name'],
+            ],
+            'partner' => [
+                'label' => 'Ajouter partenaire',
+                'hidden' => ['firstname', 'lastname', 'surname', 'gender', 'birthdate', 'address_2', 'role_id'],
+            ],
+        ];
 
         return $config;
     }
@@ -441,19 +569,50 @@ class AdminResourceController extends Controller
     /**
      * @return array<string, string>
      */
-    private function roleOptions(): array
+    private function userStatusOptions(): array
+    {
+        return collect($this->resources['users']['fields'])
+            ->firstWhere('name', 'status')['options'];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function roleOptions(?int $exceptRoleId = null): array
     {
         if (! Schema::hasTable('roles')) {
             return ['' => '-'];
         }
 
         return ['' => '-'] + Role::query()
+            ->when($exceptRoleId !== null, fn ($query) => $query->whereKeyNot($exceptRoleId))
             ->orderBy('id')
             ->get()
             ->mapWithKeys(fn (Role $role): array => [
                 (string) $role->id => $role->getTranslation('role_name', app()->getLocale(), false) ?: $role->getTranslation('role_name', 'fr', false) ?: (string) $role->id,
             ])
             ->all();
+    }
+
+    private function ensurePartnerRole(): ?Role
+    {
+        if (! Schema::hasTable('roles')) {
+            return null;
+        }
+
+        return Role::query()->where('role_name->fr', 'Partenaire')->first()
+            ?? Role::create([
+                'role_name' => [
+                    'fr' => 'Partenaire',
+                    'en' => 'Partner',
+                    'ln' => 'Moninga ya mosala',
+                ],
+                'role_description' => [
+                    'fr' => 'Personne qui paie pour faire la publicité sur la plateforme.',
+                    'en' => 'Person who pays to advertise on the platform.',
+                    'ln' => 'Moto oyo afutaka mpo na kosala piblisite na plateforme.',
+                ],
+            ]);
     }
 
     /**
@@ -477,6 +636,10 @@ class AdminResourceController extends Controller
             $type = $field['type'];
 
             if ($type === 'file-multiple') {
+                continue;
+            }
+
+            if ($item instanceof User && $name === 'password_confirmation') {
                 continue;
             }
 
@@ -527,7 +690,45 @@ class AdminResourceController extends Controller
             $payload['user_id'] = $item->exists ? $item->user_id : $request->user()?->id;
         }
 
+        if ($item instanceof User && ! $item->exists) {
+            $payload['status'] ??= 'created';
+            $payload['type'] ??= 'uncertified';
+        }
+
         return $payload;
+    }
+
+    private function validateUserPayload(Request $request, array $config): void
+    {
+        if (($config['model'] ?? null) !== User::class) {
+            return;
+        }
+
+        $request->validate([
+            'password' => ['nullable', 'confirmed'],
+            'avatar_base64' => ['nullable', 'string'],
+        ]);
+    }
+
+    private function fillUserAvatar(Request $request, Model $item): void
+    {
+        if (! $item instanceof User || ! $request->filled('avatar_base64')) {
+            return;
+        }
+
+        $image = (string) $request->input('avatar_base64');
+        if (! preg_match('/^data:image\/(?:png|jpe?g|webp);base64,/', $image)) {
+            return;
+        }
+
+        $binary = base64_decode((string) preg_replace('/^data:image\/(?:png|jpe?g|webp);base64,/', '', $image), true);
+        if ($binary === false) {
+            return;
+        }
+
+        $path = 'users/avatars/'.Str::uuid().'.png';
+        Storage::disk('s3')->put($path, $binary);
+        $item->avatar_url = Storage::disk('s3')->url($path);
     }
 
     private function validateFileUrlUploads(Request $request, array $config): void
@@ -704,7 +905,7 @@ class AdminResourceController extends Controller
             }
         }
 
-        if ($item instanceof User) {
+        if ($item instanceof User && Schema::hasTable('roles') && Schema::hasTable('role_user')) {
             $selectedRole = $item->roles?->firstWhere('pivot.is_selected', true) ?? $item->roles?->first();
             $raw['role_id'] = $selectedRole?->id;
             $raw['role_id_display'] = $selectedRole?->getTranslation('role_name', $locale, false) ?: $selectedRole?->getTranslation('role_name', 'fr', false);

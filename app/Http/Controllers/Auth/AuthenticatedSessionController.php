@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Models\Role;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class AuthenticatedSessionController extends Controller
@@ -16,7 +18,9 @@ class AuthenticatedSessionController extends Controller
      */
     public function create(): View
     {
-        return view('auth.login');
+        return view('auth.login', [
+            'canRegister' => ! $this->administratorExists(),
+        ]);
     }
 
     /**
@@ -43,5 +47,17 @@ class AuthenticatedSessionController extends Controller
         $request->session()->regenerateToken();
 
         return redirect('/');
+    }
+
+    private function administratorExists(): bool
+    {
+        if (! Schema::hasTable('roles') || ! Schema::hasTable('role_user')) {
+            return false;
+        }
+
+        return Role::query()
+            ->where('role_name->fr', 'Administrateur')
+            ->whereHas('users', fn ($query) => $query->where('role_user.is_selected', true))
+            ->exists();
     }
 }

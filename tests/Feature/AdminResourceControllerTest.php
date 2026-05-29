@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Http\Controllers\AdminResourceController;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Schema;
@@ -14,6 +15,13 @@ use Tests\TestCase;
 class AdminResourceControllerTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->withoutMiddleware(PreventRequestForgery::class);
+    }
 
     public function test_media_can_be_published_and_owner_is_notified(): void
     {
@@ -210,6 +218,67 @@ class AdminResourceControllerTest extends TestCase
         ]);
     }
 
+    public function test_dashboard_displays_requested_statistics_and_recent_blocks(): void
+    {
+        $this->createMediaTables();
+        $this->createCategoryTables();
+        $this->createRoleTables();
+        $this->createPaymentTables();
+
+        $admin = User::factory()->create();
+        $memberRoleId = (int) \DB::table('roles')->insertGetId([
+            'role_name' => json_encode(['fr' => 'Membre']),
+            'role_description' => json_encode(['fr' => 'Utilisateur de la plateforme']),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $members = User::factory()->count(6)->create();
+        foreach ($members as $member) {
+            \DB::table('role_user')->insert([
+                'role_id' => $memberRoleId,
+                'user_id' => $member->id,
+                'is_selected' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        \DB::table('categories')->insert([
+            ['category_name' => json_encode(['fr' => 'Films']), 'for_type' => 'film_series', 'created_at' => now(), 'updated_at' => now()],
+            ['category_name' => json_encode(['fr' => 'Musique']), 'for_type' => 'music', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        \DB::table('medias')->insert([
+            ['media_title' => json_encode(['fr' => 'Publiée']), 'type' => 'film_series', 'is_shared' => 1, 'user_id' => $members[0]->id, 'created_at' => now(), 'updated_at' => now()],
+            ['media_title' => json_encode(['fr' => 'Non publiée']), 'type' => 'film_series', 'is_shared' => 0, 'user_id' => $members[1]->id, 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        \DB::table('products')->insert([
+            ['product_name' => 'Produit publié', 'is_shared' => 1, 'created_at' => now(), 'updated_at' => now()],
+            ['product_name' => 'Produit non publié', 'is_shared' => 0, 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        \DB::table('payments')->insert([
+            ['status' => 1, 'created_at' => now(), 'updated_at' => now()],
+            ['status' => 0, 'created_at' => now(), 'updated_at' => now()],
+            ['status' => 0, 'created_at' => now(), 'updated_at' => now()],
+            ['status' => 2, 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        $response = $this->actingAs($admin)->get('/dashboard');
+
+        $response->assertOk()
+            ->assertSee('Vidéos publiées')
+            ->assertSee('Statistiques des paiements')
+            ->assertSee('5 utilisateurs les plus récents')
+            ->assertSee('dashboard-toggle-shared', false)
+            ->assertSee('dashboard-change-status', false);
+
+        $this->assertSame([1, 2, 1], array_values($response->viewData('paymentStats')));
+        $this->assertSame(5, $response->viewData('recentUsers')->count());
+    }
+
     public function test_category_page_uses_short_table_columns_and_full_form_labels(): void
     {
         $view = app(AdminResourceController::class)->index('categories');
@@ -222,6 +291,69 @@ class AdminResourceControllerTest extends TestCase
         $this->assertSame('Type concerné', $fields['for_type']['label']);
         $this->assertSame('Nom', $config['table_labels']['category_name']);
         $this->assertSame('Description', $config['table_labels']['category_description']);
+        $this->assertSame([
+            'film_series',
+            'comedy',
+            'music',
+            'education',
+            'business',
+            'crafts_diy',
+            'sports',
+            'documentary',
+            'product',
+            'service',
+        ], array_keys($fields['for_type']['options']));
+    }
+
+    public function test_shareable_resource_tables_use_bootstrap_switches(): void
+    {
+        $html = app(AdminResourceController::class)->index('videos')->render();
+
+        $this->assertStringContainsString('form-check-input toggle-shared', $html);
+    }
+
+    public function test_users_form_creates_partner_role_and_excludes_it_from_user_role_select(): void
+    {
+        $this->createRoleTables();
+
+        $view = app(AdminResourceController::class)->index('users');
+        $config = $view->getData()['config'];
+        $fields = collect($config['fields'])->keyBy('name');
+        $partnerRoleId = (string) $config['partner_role_id'];
+
+        $this->assertDatabaseHas('roles', [
+            'role_name->fr' => 'Partenaire',
+            'role_description->fr' => 'Personne qui paie pour faire la publicité sur la plateforme.',
+        ]);
+        $this->assertArrayHasKey('user', $config['user_modes']);
+        $this->assertArrayHasKey('partner', $config['user_modes']);
+        $this->assertArrayNotHasKey($partnerRoleId, $fields['role_id']['options']);
+        $this->assertArrayHasKey($partnerRoleId, $config['role_filter_options']);
+        $this->assertArrayNotHasKey('avatar_url', $fields->all());
+        $this->assertArrayNotHasKey('cover_url', $fields->all());
+        $this->assertArrayHasKey('password_confirmation', $fields->all());
+    }
+
+    public function test_user_avatar_base64_is_saved_to_s3(): void
+    {
+        Storage::fake('s3');
+
+        $admin = User::factory()->create();
+        $image = 'data:image/png;base64,'.base64_encode(base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='));
+
+        $response = $this->actingAs($admin)->postJson('/users', [
+            'firstname' => 'Mireille',
+            'lastname' => 'Kanza',
+            'email' => 'mireille@example.com',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+            'avatar_base64' => $image,
+        ]);
+
+        $response->assertOk();
+
+        $createdUser = User::query()->where('email', 'mireille@example.com')->firstOrFail();
+        $this->assertStringContainsString('users/avatars/', $createdUser->avatar_url);
     }
 
     public function test_category_icons_are_presented_with_their_color(): void
@@ -416,6 +548,16 @@ class AdminResourceControllerTest extends TestCase
             $table->foreignId('comment_id')->nullable();
             $table->foreignId('product_id')->nullable();
             $table->foreignId('message_id')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
+        });
+    }
+
+    private function createPaymentTables(): void
+    {
+        Schema::create('payments', function (Blueprint $table): void {
+            $table->id();
+            $table->integer('status')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });

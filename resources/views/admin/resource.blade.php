@@ -2,6 +2,12 @@
 
 @section('title', __('admin.'.$resource) !== 'admin.'.$resource ? __('admin.'.$resource) : ($config['title'] ?? str($resource)->replace('-', ' ')->title()))
 
+@if ($config['avatar_cropper'] ?? false)
+    @push('styles')
+        <link href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css" rel="stylesheet">
+    @endpush
+@endif
+
 @section('content')
 @php
     $fieldLabels = collect($config['fields'] ?? [])->pluck('label', 'name')->all();
@@ -20,7 +26,7 @@
     $tableLabels = array_merge($baseLabels, $fieldLabels, $config['table_labels'] ?? []);
     $detailLabels = array_merge($detailBaseLabels, $fieldLabels);
     $groupField = collect($config['fields'] ?? [])->firstWhere('name', $config['group_by'] ?? null);
-    $groupLabels = array_merge(['money' => __('admin.money'), 'percentage' => __('admin.percentage')], $groupField['options'] ?? []);
+    $groupLabels = $groupField['options'] ?? [];
     $fieldOptions = collect($config['fields'] ?? [])->mapWithKeys(fn ($field) => [$field['name'] => $field['options'] ?? []])->all();
     $hasFileUploads = ($config['has_files'] ?? false) || collect($config['fields'] ?? [])->contains(fn ($field) => ($field['type'] ?? null) === 'file-url');
 @endphp
@@ -114,6 +120,14 @@
                             @csrf
                             <input type="hidden" id="item-id">
 
+                            @if ($config['user_modes'] ?? false)
+                                <div class="btn-group w-100 mb-3" role="group" aria-label="Type d’utilisateur">
+                                    <button class="btn btn-primary user-mode-switch active" data-user-mode="user" type="button">Ajouter utilisateur</button>
+                                    <button class="btn btn-outline-primary user-mode-switch" data-user-mode="partner" type="button">Ajouter partenaire</button>
+                                </div>
+                                <input id="partner_role_id" name="role_id" type="hidden" value="{{ $config['partner_role_id'] ?? '' }}" disabled>
+                            @endif
+
                             @foreach ($config['fields'] as $field)
                                 @php
                                     $name = $field['name'];
@@ -124,7 +138,7 @@
                                 @if ($type === 'hidden')
                                     <input id="{{ $name }}" name="{{ $name }}" type="hidden" value="{{ $field['value'] ?? '' }}">
                                 @elseif (str_starts_with($type, 'translatable'))
-                                    <div class="mb-3 translatable-field" data-field="{{ $name }}">
+                                    <div class="mb-3 translatable-field" data-field="{{ $name }}" data-field-wrapper="{{ $name }}">
                                         <label class="form-label">{{ $field['label'] }}</label>
                                         <ul class="nav nav-tabs translatable-tabs" role="tablist">
                                             @foreach (['fr' => __('admin.french'), 'en' => __('admin.english'), 'ln' => __('admin.lingala')] as $locale => $label)
@@ -147,12 +161,12 @@
                                         </div>
                                     </div>
                                 @elseif ($type === 'textarea')
-                                    <div class="mb-3">
+                                    <div class="mb-3" data-field-wrapper="{{ $name }}">
                                         <label class="form-label" for="{{ $name }}">{{ $field['label'] }}</label>
                                         <textarea class="form-control" id="{{ $name }}" name="{{ $name }}" rows="3" {{ $required }}></textarea>
                                     </div>
                                 @elseif ($type === 'select')
-                                    <div class="mb-3">
+                                    <div class="mb-3" data-field-wrapper="{{ $name }}">
                                         <label class="form-label" for="{{ $name }}">{{ $field['label'] }}</label>
                                         <select class="form-select" id="{{ $name }}" name="{{ $name }}" {{ $required }}>
                                             @foreach ($field['options'] as $value => $label)
@@ -161,28 +175,51 @@
                                         </select>
                                     </div>
                                 @elseif ($type === 'checkbox')
-                                    <div class="form-check form-switch mb-3">
+                                    <div class="form-check form-switch mb-3" data-field-wrapper="{{ $name }}">
                                         <input class="form-check-input" id="{{ $name }}" name="{{ $name }}" type="checkbox" value="1">
                                         <label class="form-check-label" for="{{ $name }}">{{ $field['label'] }}</label>
                                     </div>
                                 @elseif ($type === 'file-multiple')
-                                    <div class="mb-3">
+                                    <div class="mb-3" data-field-wrapper="{{ $name }}">
                                         <label class="form-label" for="{{ $name }}">{{ $field['label'] }}</label>
                                         <input class="form-control" id="{{ $name }}" name="{{ $name }}[]" type="file" multiple accept="{{ $field['accept'] ?? '' }}">
                                     </div>
                                 @elseif ($type === 'file-url')
-                                    <div class="mb-3">
+                                    <div class="mb-3" data-field-wrapper="{{ $name }}">
                                         <label class="form-label" for="{{ $name }}">{{ $field['label'] }}</label>
                                         <input class="form-control file-url-input" id="{{ $name }}" name="{{ $name }}" type="file" accept="{{ $field['accept'] ?? '' }}" data-required-on-create="{{ !empty($field['required']) ? '1' : '0' }}" {{ !empty($field['required']) ? 'required' : '' }}>
                                         <div class="file-preview mt-2 d-none" data-preview-for="{{ $name }}"></div>
                                     </div>
                                 @else
-                                    <div class="mb-3">
+                                    <div class="mb-3" data-field-wrapper="{{ $name }}">
                                         <label class="form-label" for="{{ $name }}">{{ $field['label'] }}</label>
-                                        <input class="form-control" id="{{ $name }}" name="{{ $name }}" type="{{ $type }}" step="{{ $field['step'] ?? '' }}" {{ $required }}>
+                                        @if ($type === 'password')
+                                            <div class="input-group">
+                                                <input class="form-control" id="{{ $name }}" name="{{ $name }}" type="password" step="{{ $field['step'] ?? '' }}" {{ $required }}>
+                                                <button class="btn btn-outline-secondary toggle-password" data-target="{{ $name }}" type="button" aria-label="Afficher ou cacher le mot de passe">
+                                                    <i class="bi bi-eye"></i>
+                                                </button>
+                                            </div>
+                                        @else
+                                            <input class="form-control" id="{{ $name }}" name="{{ $name }}" type="{{ $type }}" step="{{ $field['step'] ?? '' }}" {{ $required }}>
+                                        @endif
                                     </div>
                                 @endif
                             @endforeach
+
+                            @if ($config['avatar_cropper'] ?? false)
+                                <div class="border rounded p-3 mb-3">
+                                    <label class="form-label">Photo de profil</label>
+                                    <input id="avatar_base64" name="avatar_base64" type="hidden">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <img class="rounded-circle border object-fit-cover" id="admin-user-avatar-preview" src="" alt="Aperçu avatar" width="72" height="72">
+                                        <div>
+                                            <input class="form-control form-control-sm" id="admin-user-avatar-input" type="file" accept="image/*">
+                                            <div class="form-text">Recadrez l’image avant d’enregistrer.</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            @endif
 
                             @if (($config['children'] ?? null) === 'pricing_descriptions')
                                 <div class="border rounded p-3 mb-3">
@@ -231,6 +268,28 @@
         </div>
     </div>
 </div>
+
+@if ($config['avatar_cropper'] ?? false)
+    <div class="modal fade" id="admin-user-avatar-modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Recadrer la photo</h5>
+                    <button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="avatar-crop-frame border rounded bg-light p-2">
+                        <img class="img-fluid d-block mx-auto" id="admin-user-avatar-crop-image" alt="Photo à recadrer">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Annuler</button>
+                    <button class="btn btn-primary" id="admin-user-avatar-crop-save" type="button">Utiliser cette photo</button>
+                </div>
+            </div>
+        </div>
+    </div>
+@endif
 
 <template id="description-template">
     <div class="border rounded p-3 child-block" data-description-index="__INDEX__">
@@ -443,11 +502,23 @@
         width: 100%;
     }
 
+    .avatar-crop-frame {
+        max-height: min(62vh, 460px);
+        overflow: hidden;
+    }
+
+    .avatar-crop-frame img {
+        max-width: 100%;
+    }
+
     @keyframes tala-loader {
         from { transform: translateY(0); opacity: .55; }
         to { transform: translateY(-8px); opacity: 1; }
     }
 </style>
+@if ($config['avatar_cropper'] ?? false)
+    <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"></script>
+@endif
 <script>
     $(function () {
         const endpoints = {
@@ -468,11 +539,16 @@
         const statusEditable = @json($config['status_editable'] ?? false);
         const fieldOptions = @json($fieldOptions);
         const detailLabels = @json($detailLabels);
+        const userModes = @json($config['user_modes'] ?? null);
+        const partnerRoleId = @json((string) ($config['partner_role_id'] ?? ''));
+        const hasAvatarCropper = @json($config['avatar_cropper'] ?? false);
         const perPage = 20;
         let allItems = [];
         let currentPage = 1;
         let descriptionIndex = 0;
         let titleIndex = 0;
+        let avatarCropper = null;
+        let avatarModal = null;
 
         $.ajaxSetup({
             headers: {'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')}
@@ -555,7 +631,14 @@
                 }
                 if (column === 'is_shared' && shareable) {
                     const shared = item[column] === 1 || item[column] === true || item[column] === '1';
-                    return `<td><button class="btn btn-sm ${shared ? 'btn-success' : 'btn-danger'} toggle-shared" data-id="${item.id}" type="button">${shared ? @json(__('admin.yes')) : @json(__('admin.no'))}</button></td>`;
+                    return `<td>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input toggle-shared" data-id="${item.id}" type="checkbox" ${shared ? 'checked' : ''}>
+                            </div>
+                            <span class="fw-semibold ${shared ? 'text-success' : 'text-danger'}">${shared ? @json(__('admin.yes')) : @json(__('admin.no'))}</span>
+                        </div>
+                    </td>`;
                 }
                 if (column === 'message' && item.url) {
                     return `<td${textCellClass(value)}><a href="${item.url}" class="fw-semibold">${display(value, column)}</a></td>`;
@@ -693,6 +776,33 @@
             });
         }
 
+        function applyUserMode(mode) {
+            if (!userModes) return;
+
+            const hiddenFields = userModes[mode]?.hidden || [];
+            $('.user-mode-switch').each(function () {
+                const active = $(this).data('user-mode') === mode;
+                $(this).toggleClass('active btn-primary', active).toggleClass('btn-outline-primary', !active);
+            });
+            $('[data-field-wrapper]').each(function () {
+                const name = String($(this).data('field-wrapper'));
+                const hidden = hiddenFields.includes(name);
+                $(this).toggleClass('d-none', hidden);
+                $(this).find(':input').prop('disabled', hidden);
+            });
+            $('#partner_role_id').prop('disabled', mode !== 'partner');
+        }
+
+        function avatarPlaceholder() {
+            return 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160"><rect width="160" height="160" rx="80" fill="#eef3f8"/><circle cx="80" cy="58" r="30" fill="#9aa8b8"/><path d="M28 138c8-34 28-52 52-52s44 18 52 52" fill="#9aa8b8"/></svg>`);
+        }
+
+        function setAvatarPreview(url) {
+            if (!hasAvatarCropper) return;
+
+            $('#admin-user-avatar-preview').attr('src', url || avatarPlaceholder());
+        }
+
         function resetForm() {
             $('#resource-form')[0]?.reset();
             $('#item-id').val('');
@@ -702,6 +812,9 @@
             });
             $('#descriptions-fields, #titles-fields').empty();
             refreshFilePreviews();
+            setAvatarPreview('');
+            $('#avatar_base64').val('');
+            applyUserMode('user');
             descriptionIndex = 0;
             titleIndex = 0;
         }
@@ -850,6 +963,7 @@
                 resetForm();
                 $('#item-id').val(item.id);
                 $('#resource-form .file-url-input').prop('required', false);
+                applyUserMode(String(item.role_id || '') === String(partnerRoleId) ? 'partner' : 'user');
                 Object.keys(item).forEach(function (key) {
                     const value = item[key];
                     const translated = parseTranslated(value);
@@ -862,6 +976,7 @@
                     }
                 });
                 refreshFilePreviews(item);
+                setAvatarPreview(item.avatar_url || '');
                 (item.descriptions || []).forEach(addDescription);
                 (item.titles || []).forEach(addTitle);
             });
@@ -874,7 +989,7 @@
             });
         });
 
-        $(document).on('click', '.toggle-shared', function () {
+        $(document).on('change', '.toggle-shared', function () {
             $.ajax({url: endpoints.show($(this).data('id')) + '/shared', method: 'PATCH'})
                 .done(function (response) {
                     alertBox(response.message || @json(__('admin.saved')));
@@ -928,6 +1043,58 @@
             renderFilePreview(this.name, file ? URL.createObjectURL(file) : '');
         });
 
+        $(document).on('click', '.toggle-password', function () {
+            const $input = $('#' + $(this).data('target'));
+            const hidden = $input.attr('type') === 'password';
+            $input.attr('type', hidden ? 'text' : 'password');
+            $(this).find('i').toggleClass('bi-eye', !hidden).toggleClass('bi-eye-slash', hidden);
+        });
+
+        $(document).on('click', '.user-mode-switch', function () {
+            applyUserMode($(this).data('user-mode'));
+        });
+
+        $('#admin-user-avatar-input').on('change', function () {
+            const file = this.files?.[0];
+            if (!file || !hasAvatarCropper) return;
+
+            const reader = new FileReader();
+            reader.onload = function (event) {
+                $('#admin-user-avatar-crop-image').attr('src', event.target.result);
+                avatarModal = avatarModal || new bootstrap.Modal('#admin-user-avatar-modal');
+                avatarModal.show();
+            };
+            reader.readAsDataURL(file);
+        });
+
+        $('#admin-user-avatar-modal').on('shown.bs.modal', function () {
+            if (avatarCropper) {
+                avatarCropper.destroy();
+            }
+
+            avatarCropper = new Cropper(document.getElementById('admin-user-avatar-crop-image'), {
+                aspectRatio: 1,
+                viewMode: 1,
+                autoCropArea: 1,
+                responsive: true,
+                background: false,
+            });
+        }).on('hidden.bs.modal', function () {
+            if (avatarCropper) {
+                avatarCropper.destroy();
+                avatarCropper = null;
+            }
+        });
+
+        $('#admin-user-avatar-crop-save').on('click', function () {
+            if (!avatarCropper) return;
+
+            const dataUrl = avatarCropper.getCroppedCanvas({width: 512, height: 512}).toDataURL('image/png');
+            $('#avatar_base64').val(dataUrl);
+            setAvatarPreview(dataUrl);
+            avatarModal?.hide();
+        });
+
         $('#refresh-table').on('click', loadRows);
         $('#table-search, #group-filter, #role-filter').on('input change', function () {
             currentPage = 1;
@@ -944,6 +1111,8 @@
         $(document).on('click', '.add-content', function () { addContent($(this).closest('.child-block')); });
         $(document).on('click', '.add-dash', function () { addDash($(this).closest('.content-block')); });
         $(document).on('click', '.remove-child', function () { $(this).closest('.child-block, .content-block, .dash-block').remove(); });
+        applyUserMode('user');
+        setAvatarPreview('');
         loadRows();
     });
 </script>

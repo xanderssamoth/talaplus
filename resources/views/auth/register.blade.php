@@ -1,14 +1,14 @@
 <x-guest-layout>
     <div class="pt-4 pb-2">
-        <h5 class="card-title text-center pb-0 fs-4">Creation du compte administrateur</h5>
-        <p class="text-center small">Le compte recevra automatiquement le role Administrateur.</p>
+        <h5 class="card-title text-center pb-0 fs-4">Création du compte administrateur</h5>
+        <p class="text-center small">Le compte recevra automatiquement le rôle Administrateur.</p>
     </div>
 
     <form class="row g-3" method="POST" action="{{ route('register') }}">
         @csrf
 
         <div class="col-md-6">
-            <label class="form-label" for="firstname">Prenom</label>
+            <label class="form-label" for="firstname">Prénom</label>
             <input class="form-control @error('firstname') is-invalid @enderror" id="firstname" name="firstname" type="text" value="{{ old('firstname') }}" required autofocus autocomplete="given-name">
             @error('firstname')
                 <div class="invalid-feedback">{{ $message }}</div>
@@ -32,7 +32,7 @@
         </div>
 
         <div class="col-md-6">
-            <label class="form-label" for="username">Nom d utilisateur</label>
+            <label class="form-label" for="username">Nom d’utilisateur</label>
             <input class="form-control @error('username') is-invalid @enderror" id="username" name="username" type="text" value="{{ old('username') }}" autocomplete="username">
             @error('username')
                 <div class="invalid-feedback">{{ $message }}</div>
@@ -48,7 +48,7 @@
         </div>
 
         <div class="col-md-6">
-            <label class="form-label" for="phone">Telephone</label>
+            <label class="form-label" for="phone">Téléphone</label>
             <input class="form-control @error('phone') is-invalid @enderror" id="phone" name="phone" type="text" value="{{ old('phone') }}" autocomplete="tel">
             @error('phone')
                 <div class="invalid-feedback">{{ $message }}</div>
@@ -69,11 +69,11 @@
         </div>
 
         <div class="col-12">
-            <button class="btn btn-primary w-100" type="submit">Creer le compte</button>
+            <button class="btn btn-primary w-100" type="submit">Créer le compte</button>
         </div>
 
         <div class="col-12">
-            <p class="small mb-0">Vous avez deja un compte ? <a href="{{ route('login') }}">Se connecter</a></p>
+            <p class="small mb-0">Vous avez déjà un compte ? <a href="{{ route('login') }}">Se connecter</a></p>
         </div>
     </form>
 </x-guest-layout>

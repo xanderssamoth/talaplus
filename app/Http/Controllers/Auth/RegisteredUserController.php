@@ -23,6 +23,8 @@ class RegisteredUserController extends Controller
      */
     public function create(): View
     {
+        abort_if($this->administratorExists(), 403);
+
         return view('auth.register');
     }
 
@@ -33,6 +35,8 @@ class RegisteredUserController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+        abort_if($this->administratorExists(), 403);
+
         $request->validate([
             'firstname' => ['required', 'string', 'max:255'],
             'lastname' => ['nullable', 'string', 'max:255'],
@@ -66,9 +70,9 @@ class RegisteredUserController extends Controller
                     'ln' => 'Mokambi',
                 ],
                 'role_description' => [
-                    'fr' => 'Gestion des donnees de fonctionnement de la plateforme',
+                    'fr' => 'Gestion des données de fonctionnement de la plateforme',
                     'en' => 'Management of platform operating data',
-                    'ln' => 'Bokambami ya ba donnees ya mosala ya plateforme',
+                    'ln' => 'Bokambami ya ba données ya mosala ya plateforme',
                 ],
             ]);
 
@@ -83,5 +87,17 @@ class RegisteredUserController extends Controller
         Auth::login($user);
 
         return redirect(route('dashboard', absolute: false));
+    }
+
+    private function administratorExists(): bool
+    {
+        if (! Schema::hasTable('roles') || ! Schema::hasTable('role_user')) {
+            return false;
+        }
+
+        return Role::query()
+            ->where('role_name->fr', 'Administrateur')
+            ->whereHas('users', fn ($query) => $query->where('role_user.is_selected', true))
+            ->exists();
     }
 }

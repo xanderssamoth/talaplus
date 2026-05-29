@@ -4,6 +4,16 @@
 
 @push('styles')
 <link href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css" rel="stylesheet">
+<style>
+    .avatar-crop-frame {
+        max-height: min(62vh, 460px);
+        overflow: hidden;
+    }
+
+    .avatar-crop-frame img {
+        max-width: 100%;
+    }
+</style>
 @endpush
 
 @section('content')
@@ -164,14 +174,16 @@
 </section>
 
 <div class="modal fade" id="avatar-modal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Recadrer l’avatar</h5>
                 <button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="Fermer"></button>
             </div>
             <div class="modal-body">
-                <img class="img-fluid" id="avatar-crop-image" alt="Avatar à recadrer">
+                <div class="avatar-crop-frame border rounded bg-light p-2">
+                    <img class="img-fluid d-block mx-auto" id="avatar-crop-image" alt="Avatar à recadrer">
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Annuler</button>
