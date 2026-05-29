@@ -28,11 +28,10 @@
 
 @section('content')
 @php
-    $paymentChartLabels = ['Paiement en cours', 'Paiement réussi', 'Paiement échoué'];
-    $paymentChartValues = [
-        $paymentStats['pending'] ?? 0,
-        $paymentStats['successful'] ?? 0,
-        $paymentStats['failed'] ?? 0,
+    $paymentLegend = [
+        ['label' => 'Paiement en cours', 'value' => $paymentStats['pending'] ?? 0, 'color' => '#ffc107'],
+        ['label' => 'Paiement réussi', 'value' => $paymentStats['successful'] ?? 0, 'color' => '#198754'],
+        ['label' => 'Paiement échoué', 'value' => $paymentStats['failed'] ?? 0, 'color' => '#dc3545'],
     ];
 @endphp
 
@@ -41,8 +40,8 @@
 
     <div class="row g-3">
         @foreach ($stats as $stat)
-            <div class="col-xxl-2 col-md-4 col-sm-6">
-                <div class="card info-card h-100">
+            <div class="col-xxl-4 col-md-4 col-sm-6">
+                <a class="card info-card h-100 text-decoration-none text-reset" href="{{ $stat['url'] }}">
                     <div class="card-body">
                         <h5 class="card-title mb-2">{{ $stat['label'] }}</h5>
                         <div class="d-flex align-items-center">
@@ -50,11 +49,11 @@
                                 <i class="bi {{ $stat['icon'] }} fs-4"></i>
                             </div>
                             <div class="ps-3">
-                                <h6 class="mb-0">{{ number_format($stat['value'], 0, ',', ' ') }}</h6>
+                                <h6 class="mb-0">{{ $stat['display_value'] }}</h6>
                             </div>
                         </div>
                     </div>
-                </div>
+                </a>
             </div>
         @endforeach
     </div>
@@ -67,13 +66,24 @@
                     <div style="min-height: 280px;">
                         <canvas id="payments-chart" height="120"></canvas>
                     </div>
+                    <div class="row g-2 mt-3">
+                        @foreach ($paymentLegend as $item)
+                            <div class="col-md-4">
+                                <div class="d-flex align-items-center gap-2 small">
+                                    <span class="rounded-circle d-inline-block" style="background: {{ $item['color'] }}; height: 10px; width: 10px;"></span>
+                                    <span class="fw-semibold">{{ number_format($item['value'], 0, ',', ' ') }}</span>
+                                    <span class="text-muted">{{ $item['label'] }}</span>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
     <div class="row g-4 mt-1">
-        <div class="col-xl-4">
+        <div class="col-12">
             <div class="card h-100">
                 <div class="card-body">
                     <h5 class="card-title">5 utilisateurs les plus récents</h5>
@@ -118,7 +128,7 @@
             </div>
         </div>
 
-        <div class="col-xl-4">
+        <div class="col-12">
             <div class="card h-100">
                 <div class="card-body">
                     <h5 class="card-title">5 vidéos les plus récentes</h5>
@@ -161,7 +171,7 @@
             </div>
         </div>
 
-        <div class="col-xl-4">
+        <div class="col-12">
             <div class="card h-100">
                 <div class="card-body">
                     <h5 class="card-title">5 produits les plus récents</h5>
@@ -237,15 +247,35 @@
         }
 
         new Chart(document.getElementById('payments-chart'), {
-            type: 'bar',
+            type: 'line',
             data: {
-                labels: @json($paymentChartLabels),
-                datasets: [{
-                    label: 'Paiements',
-                    data: @json($paymentChartValues),
-                    backgroundColor: ['#ffc107', '#198754', '#dc3545'],
-                    borderRadius: 6,
-                }],
+                labels: @json($paymentTrend['labels'] ?? []),
+                datasets: [
+                    {
+                        label: 'Paiement en cours',
+                        data: @json($paymentTrend['pending'] ?? []),
+                        borderColor: '#ffc107',
+                        backgroundColor: 'rgba(255, 193, 7, .12)',
+                        tension: .35,
+                        fill: false,
+                    },
+                    {
+                        label: 'Paiement réussi',
+                        data: @json($paymentTrend['successful'] ?? []),
+                        borderColor: '#198754',
+                        backgroundColor: 'rgba(25, 135, 84, .12)',
+                        tension: .35,
+                        fill: false,
+                    },
+                    {
+                        label: 'Paiement échoué',
+                        data: @json($paymentTrend['failed'] ?? []),
+                        borderColor: '#dc3545',
+                        backgroundColor: 'rgba(220, 53, 69, .12)',
+                        tension: .35,
+                        fill: false,
+                    },
+                ],
             },
             options: {
                 responsive: true,

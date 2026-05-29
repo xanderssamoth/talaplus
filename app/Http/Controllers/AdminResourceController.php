@@ -264,6 +264,7 @@ class AdminResourceController extends Controller
         return view('admin.dashboard', [
             'stats' => $this->dashboardStats(),
             'paymentStats' => $this->paymentStats(),
+            'paymentTrend' => $this->paymentTrend(),
             'recentUsers' => $this->recentMemberUsers(),
             'recentVideos' => $this->recentItems(Media::class, ['user']),
             'recentProducts' => $this->recentItems(Product::class, ['user']),
@@ -418,48 +419,58 @@ class AdminResourceController extends Controller
     }
 
     /**
-     * @return array<int, array{label: string, value: int, icon: string, color: string}>
+     * @return array<int, array{label: string, value: int, display_value: string, icon: string, color: string, url: string}>
      */
     private function dashboardStats(): array
     {
-        return [
+        $stats = [
             [
                 'label' => 'Vidéos publiées',
                 'value' => $this->countByShared(Media::class, true),
                 'icon' => 'bi-play-circle',
                 'color' => 'primary',
+                'url' => route('videos.index'),
             ],
             [
                 'label' => 'Vidéos non publiées',
                 'value' => $this->countByShared(Media::class, false),
                 'icon' => 'bi-play-btn',
                 'color' => 'warning',
+                'url' => route('videos.index'),
             ],
             [
                 'label' => 'Produits publiés',
                 'value' => $this->countByShared(Product::class, true),
                 'icon' => 'bi-bag-check',
                 'color' => 'success',
+                'url' => route('products.index'),
             ],
             [
                 'label' => 'Produits non publiés',
                 'value' => $this->countByShared(Product::class, false),
                 'icon' => 'bi-bag-x',
                 'color' => 'danger',
+                'url' => route('products.index'),
             ],
             [
                 'label' => 'Utilisateurs',
                 'value' => Schema::hasTable('users') ? User::count() : 0,
                 'icon' => 'bi-people',
                 'color' => 'info',
+                'url' => route('users.index'),
             ],
             [
                 'label' => 'Catégories',
                 'value' => Schema::hasTable('categories') ? Category::count() : 0,
                 'icon' => 'bi-tags',
                 'color' => 'secondary',
+                'url' => route('categories.index'),
             ],
         ];
+
+        return collect($stats)
+            ->map(fn (array $stat): array => $stat + ['display_value' => $this->compactDashboardNumber($stat['value'])])
+            ->all();
     }
 
     /**
@@ -480,6 +491,65 @@ class AdminResourceController extends Controller
             'successful' => Payment::query()->where('status', 0)->count(),
             'failed' => Payment::query()->where('status', 2)->count(),
         ];
+    }
+
+    /**
+     * @return array{labels: array<int, string>, pending: array<int, int>, successful: array<int, int>, failed: array<int, int>}
+     */
+    private function paymentTrend(): array
+    {
+        $fallback = [
+            'labels' => collect(range(6, 0))->map(fn (int $days): string => now()->subDays($days)->format('d/m'))->all(),
+            'pending' => array_fill(0, 7, 0),
+            'successful' => array_fill(0, 7, 0),
+            'failed' => array_fill(0, 7, 0),
+        ];
+
+        if (! Schema::hasTable('payments')) {
+            return $fallback;
+        }
+
+        $dates = collect(range(6, 0))
+            ->map(fn (int $days) => now()->subDays($days)->toDateString());
+        $rows = Payment::query()
+            ->selectRaw('DATE(created_at) as payment_date, status, COUNT(*) as total')
+            ->whereDate('created_at', '>=', now()->subDays(6)->toDateString())
+            ->whereIn('status', [0, 1, 2])
+            ->groupBy('payment_date', 'status')
+            ->get()
+            ->groupBy(fn ($row): string => $row->payment_date.'-'.$row->status);
+
+        return [
+            'labels' => $dates->map(fn (string $date): string => Carbon::parse($date)->format('d/m'))->all(),
+            'pending' => $dates->map(fn (string $date): int => (int) ($rows->get($date.'-1')?->first()?->total ?? 0))->all(),
+            'successful' => $dates->map(fn (string $date): int => (int) ($rows->get($date.'-0')?->first()?->total ?? 0))->all(),
+            'failed' => $dates->map(fn (string $date): int => (int) ($rows->get($date.'-2')?->first()?->total ?? 0))->all(),
+        ];
+    }
+
+    private function compactDashboardNumber(int $value): string
+    {
+        if ($value < 1000) {
+            return number_format($value, 0, ',', ' ');
+        }
+
+        $units = [
+            1000000000 => 'B',
+            1000000 => 'M',
+            1000 => 'k',
+        ];
+
+        foreach ($units as $unitValue => $suffix) {
+            if ($value < $unitValue) {
+                continue;
+            }
+
+            $compact = min(100, 10 ** (int) floor(log10((int) floor($value / $unitValue))));
+
+            return 'Plus de '.$compact.$suffix;
+        }
+
+        return (string) $value;
     }
 
     private function recentMemberUsers(): Collection

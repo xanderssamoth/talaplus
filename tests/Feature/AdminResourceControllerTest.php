@@ -272,11 +272,32 @@ class AdminResourceControllerTest extends TestCase
             ->assertSee('Vidéos publiées')
             ->assertSee('Statistiques des paiements')
             ->assertSee('5 utilisateurs les plus récents')
+            ->assertSee('col-xxl-4', false)
+            ->assertSee(route('videos.index'))
+            ->assertSee(route('products.index'))
+            ->assertSee(route('users.index'))
+            ->assertSee(route('categories.index'))
+            ->assertSee("type: 'line'", false)
+            ->assertSee('Paiement réussi')
             ->assertSee('dashboard-toggle-shared', false)
             ->assertSee('dashboard-change-status', false);
 
         $this->assertSame([1, 2, 1], array_values($response->viewData('paymentStats')));
         $this->assertSame(5, $response->viewData('recentUsers')->count());
+    }
+
+    public function test_dashboard_compact_numbers_are_human_readable(): void
+    {
+        $controller = app(AdminResourceController::class);
+        $method = new \ReflectionMethod($controller, 'compactDashboardNumber');
+        $method->setAccessible(true);
+
+        $this->assertSame('999', $method->invoke($controller, 999));
+        $this->assertSame('Plus de 1k', $method->invoke($controller, 1000));
+        $this->assertSame('Plus de 10k', $method->invoke($controller, 10000));
+        $this->assertSame('Plus de 100k', $method->invoke($controller, 100000));
+        $this->assertSame('Plus de 1M', $method->invoke($controller, 1000000));
+        $this->assertSame('Plus de 100M', $method->invoke($controller, 999999999));
     }
 
     public function test_category_page_uses_short_table_columns_and_full_form_labels(): void
