@@ -77,6 +77,8 @@ Route::prefix('v1')->group(function (): void {
     Route::get('message/conversation/users', [MessageController::class, 'userConversation']);
     Route::get('message/conversation/group', [MessageController::class, 'groupConversation']);
 
+    Route::get('category/for-type/{forType}', [CategoryController::class, 'findByForType']);
+
     Route::apiResource('user', UserController::class);
     Route::apiResource('role', RoleController::class);
     Route::apiResource('category', CategoryController::class);

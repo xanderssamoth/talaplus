@@ -48,6 +48,37 @@ class CategoryApiTest extends TestCase
         $response->assertJsonPath('data.0.category_name.fr', 'Culture');
     }
 
+    public function test_find_by_for_type_returns_matching_active_categories(): void
+    {
+        Category::create([
+            'category_name' => ['fr' => 'Cours', 'en' => 'Courses'],
+            'category_description' => ['fr' => 'Categorie education', 'en' => 'Education category'],
+            'for_type' => 'education',
+        ]);
+
+        Category::create([
+            'category_name' => ['fr' => 'Musique', 'en' => 'Music'],
+            'category_description' => ['fr' => 'Categorie musique', 'en' => 'Music category'],
+            'for_type' => 'music',
+        ]);
+
+        $deletedCategory = Category::create([
+            'category_name' => ['fr' => 'Archive', 'en' => 'Archive'],
+            'category_description' => ['fr' => 'Categorie archivee', 'en' => 'Archived category'],
+            'for_type' => 'education',
+        ]);
+
+        $deletedCategory->delete();
+
+        $response = $this->getJson('/api/v1/category/for-type/education');
+
+        $response->assertOk();
+        $response->assertJsonCount(1, 'data');
+        $response->assertJsonPath('data.0.category_name.fr', 'Cours');
+        $response->assertJsonPath('data.0.for_type', 'education');
+        $response->assertJsonPath('count', 1);
+    }
+
     public function test_show_missing_category_returns_uniform_api_error(): void
     {
         $response = $this->getJson('/api/v1/category/999?lang=en');
