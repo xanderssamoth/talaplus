@@ -33,4 +33,25 @@ class ApiStoreColumnsExtensionTest extends TestCase
         $this->assertSame('object', $schema['properties']['role_name']['type']);
         $this->assertContains('role_name', $schema['required']);
     }
+
+    public function test_it_documents_update_columns_without_requiring_a_full_payload(): void
+    {
+        $route = new Route(['PUT'], 'api/v1/role/{role}', [
+            'uses' => RoleController::class.'@update',
+        ]);
+
+        $operation = Operation::make('put');
+
+        (new ReflectionClass(ApiStoreColumnsExtension::class))->newInstanceWithoutConstructor()->handle(
+            $operation,
+            new RouteInfo($route, 'put')
+        );
+
+        $requestBody = $operation->toArray()['requestBody'];
+        $schema = $requestBody['content']['application/json']['schema'];
+
+        $this->assertArrayHasKey('role_name', $schema['properties']);
+        $this->assertArrayHasKey('role_description', $schema['properties']);
+        $this->assertArrayNotHasKey('required', $schema);
+    }
 }

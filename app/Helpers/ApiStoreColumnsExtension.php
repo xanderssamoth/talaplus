@@ -27,7 +27,7 @@ final class ApiStoreColumnsExtension extends OperationExtension
 
     public function handle(Operation $operation, RouteInfo $routeInfo): void
     {
-        if (strtolower($routeInfo->method) !== 'post' || $routeInfo->methodName() !== 'store') {
+        if (! $this->documentsResourcePayload($routeInfo)) {
             return;
         }
 
@@ -57,19 +57,29 @@ final class ApiStoreColumnsExtension extends OperationExtension
         }
 
         $requiredColumns = $type->required;
+        $documentsCreatePayload = $routeInfo->methodName() === 'store';
 
         foreach ($columns as $column) {
             if (! $type->hasProperty($column['name'])) {
                 $type->addProperty($column['name'], $this->typeFromSql($column['sql'], $column['nullable']));
             }
 
-            if ($column['required'] && ! in_array($column['name'], $requiredColumns, true)) {
+            if ($documentsCreatePayload && $column['required'] && ! in_array($column['name'], $requiredColumns, true)) {
                 $requiredColumns[] = $column['name'];
             }
         }
 
         $type->setRequired($requiredColumns);
         $operation->requestBodyObject?->required($requiredColumns !== []);
+    }
+
+    private function documentsResourcePayload(RouteInfo $routeInfo): bool
+    {
+        return match ($routeInfo->methodName()) {
+            'store' => strtolower($routeInfo->method) === 'post',
+            'update' => in_array(strtolower($routeInfo->method), ['put', 'patch'], true),
+            default => false,
+        };
     }
 
     /**
