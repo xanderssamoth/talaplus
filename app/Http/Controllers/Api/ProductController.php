@@ -132,6 +132,19 @@ final class ProductController extends ApiResourceController
         return $this->handleResponse(ProductResource::collection($products), $this->apiMessage('find_all_success'), $products->lastPage(), $products->total());
     }
 
+    public function promotedProducts(): JsonResponse
+    {
+        $products = Product::query()
+            ->with(['category', 'files', 'user', 'specifications'])
+            ->whereNotNull('price_reduction_end')
+            ->where('price_reduction_end', '>', now())
+            ->latest('id')
+            ->paginate(20)
+            ->withQueryString();
+
+        return $this->handleResponse(ProductResource::collection($products), $this->apiMessage('find_all_success'), $products->lastPage(), $products->total());
+    }
+
     public function filterProducts(Request $request): JsonResponse
     {
         $validated = $request->validate([

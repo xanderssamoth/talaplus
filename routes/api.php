@@ -57,6 +57,7 @@ Route::prefix('v1')->group(function (): void {
     Route::post('media/{media}/report/{user}', [MediaController::class, 'report']);
 
     Route::get('product/popular/list', [ProductController::class, 'popularProducts']);
+    Route::get('product/promoted/list', [ProductController::class, 'promotedProducts']);
     Route::get('product/filter/list', [ProductController::class, 'filterProducts']);
     Route::patch('product/{product}/publish', [ProductController::class, 'publishProduct']);
     Route::get('product/{product}/view', [ProductController::class, 'productViews']);

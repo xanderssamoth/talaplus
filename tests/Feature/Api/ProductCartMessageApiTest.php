@@ -389,6 +389,40 @@ class ProductCartMessageApiTest extends TestCase
             ->assertJsonPath('data.0.product_name', 'Blue Book');
     }
 
+    public function test_promoted_products_returns_products_with_active_price_reduction(): void
+    {
+        Product::create([
+            'product_name' => 'Active promotion',
+            'price' => 100,
+            'currency' => 'USD',
+            'price_reduction_end' => now()->addDay(),
+            'reduction_rate' => 0.25,
+        ]);
+
+        Product::create([
+            'product_name' => 'Expired promotion',
+            'price' => 100,
+            'currency' => 'USD',
+            'price_reduction_end' => now()->subMinute(),
+            'reduction_rate' => 0.25,
+        ]);
+
+        Product::create([
+            'product_name' => 'No promotion',
+            'price' => 100,
+            'currency' => 'USD',
+            'price_reduction_end' => null,
+        ]);
+
+        $response = $this->getJson('/api/v1/product/promoted/list');
+
+        $response->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.product_name', 'Active promotion')
+            ->assertJsonPath('data.0.promotion.reduced_price', 75)
+            ->assertJsonPath('count', 1);
+    }
+
     public function test_product_comment_creates_notification_and_history(): void
     {
         $owner = User::create(['email' => 'owner@example.com', 'password' => 'password']);
