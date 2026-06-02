@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\GroupController;
 use App\Http\Controllers\Api\HashtagController;
 use App\Http\Controllers\Api\HistoryController;
 use App\Http\Controllers\Api\MediaController;
+use App\Http\Controllers\Api\MediaProgressController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\MoneyTransferController;
 use App\Http\Controllers\Api\NotificationController;
@@ -36,6 +37,10 @@ Route::prefix('v1')->group(function (): void {
     Route::post('user/login', [UserController::class, 'login']);
     Route::get('user/username/{username}', [UserController::class, 'findByUsername']);
     Route::get('user/search/by-word', [UserController::class, 'search']);
+    Route::get('user/{user}/belongs-to', [UserController::class, 'hasBelongsTo']);
+    Route::patch('user/{user}/child-lock-code', [UserController::class, 'switchChildLockCode']);
+    Route::get('user/{user}/watchlist', [UserController::class, 'userWatchlist']);
+    Route::post('user/{user}/watchlist/{media}', [UserController::class, 'addToWatchlist']);
     Route::patch('user/{user}/status', [UserController::class, 'updateStatus']);
     Route::patch('user/{user}/password', [UserController::class, 'updatePassword']);
     Route::patch('user/{user}/type', [UserController::class, 'updateType']);
@@ -48,8 +53,10 @@ Route::prefix('v1')->group(function (): void {
 
     Route::get('media/popular/list', [MediaController::class, 'popularMedias']);
     Route::get('media/filter/list', [MediaController::class, 'filterMedias']);
+    Route::post('media/progress', [MediaController::class, 'mediaProgress']);
     Route::patch('media/{media}/publish', [MediaController::class, 'publishMedia']);
     Route::get('media/{media}/view', [MediaController::class, 'mediaViews']);
+    Route::get('media/{media}/play', [MediaController::class, 'mediaPlays']);
     Route::get('media/{media}/like', [MediaController::class, 'mediaLikes']);
     Route::get('media/{media}/gift', [MediaController::class, 'mediaGifts']);
     Route::post('media/{media}/like', [MediaController::class, 'like']);
@@ -87,6 +94,7 @@ Route::prefix('v1')->group(function (): void {
     Route::apiResource('pricing', PricingController::class);
     Route::apiResource('pricing-description', PricingDescriptionController::class);
     Route::apiResource('media', MediaController::class);
+    Route::apiResource('media-progress', MediaProgressController::class);
     Route::apiResource('product', ProductController::class);
     Route::apiResource('group', GroupController::class);
     Route::apiResource('message', MessageController::class);

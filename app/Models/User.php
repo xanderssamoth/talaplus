@@ -5,6 +5,7 @@ namespace App\Models;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -56,6 +57,8 @@ class User extends Authenticatable
         'tips_at_every_login',
         'is_online',
         'christian_preference',
+        'belongs_to',
+        'child_lock_code',
         'status',
         'type',
     ];
@@ -76,6 +79,7 @@ class User extends Authenticatable
             'tips_at_every_login' => 'boolean',
             'is_online' => 'boolean',
             'christian_preference' => 'boolean',
+            'belongs_to' => 'integer',
             'password' => 'hashed',
         ];
     }
@@ -88,6 +92,16 @@ class User extends Authenticatable
     public function medias(): HasMany
     {
         return $this->hasMany(Media::class);
+    }
+
+    public function belongsToUser(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'belongs_to');
+    }
+
+    public function watchlist(): BelongsToMany
+    {
+        return $this->belongsToMany(Media::class, 'media_user')->withTimestamps();
     }
 
     public function messagesSent(): HasMany

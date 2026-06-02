@@ -3,15 +3,20 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Resources\Api\ApiResource;
+use App\Http\Resources\Api\MediaResource;
 use App\Http\Resources\Api\UserResource;
 use App\Models\AdminNotification;
 use App\Models\File;
 use App\Models\History;
+use App\Models\Media;
+use App\Models\MediaProgress;
 use App\Models\PasswordReset;
 use App\Models\Role;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -43,6 +48,7 @@ final class UserController extends ApiResourceController
             'avatar_url' => ['nullable', 'string'],
             'cover_url' => ['nullable', 'string'],
             'christian_preference' => ['nullable', 'boolean'],
+            'belongs_to' => ['nullable', 'integer', 'exists:users,id'],
             'status' => ['nullable', Rule::in(['created', 'activated', 'disabled', 'blocked', 'deleted'])],
             'type' => ['nullable', Rule::in(['uncertified', 'certified'])],
         ]);
@@ -154,6 +160,56 @@ final class UserController extends ApiResourceController
             UserResource::make(User::query()->where('username', $username)->firstOrFail()),
             $this->apiMessage('find_success')
         );
+    }
+
+    public function hasBelongsTo(int $id): JsonResponse
+    {
+        $user = User::query()->findOrFail($id);
+        $belongsTo = $user->belongs_to !== null ? User::query()->find($user->belongs_to) : null;
+
+        if ($belongsTo === null) {
+            return response()->json([
+                'success' => false,
+                'message' => $this->apiMessage('find_success'),
+                'data' => null,
+            ]);
+        }
+
+        return $this->handleResponse(UserResource::make($belongsTo), $this->apiMessage('find_success'));
+    }
+
+    public function switchChildLockCode(int $id): JsonResponse
+    {
+        $user = User::query()->findOrFail($id);
+        $user->child_lock_code = filled($user->child_lock_code) ? null : $this->childLockCode();
+        $user->save();
+
+        return $this->handleResponse(UserResource::make($user->refresh()), $this->apiMessage('updated'));
+    }
+
+    public function userWatchlist(int $id): JsonResponse
+    {
+        $user = User::query()->findOrFail($id);
+        $medias = $user->watchlist()
+            ->with(['files', 'user'])
+            ->latest('media_user.id')
+            ->paginate(20)
+            ->withQueryString();
+
+        $items = $medias->getCollection();
+        /** @var EloquentCollection<int, Media> $items */
+        $medias->setCollection($items->map(fn (Media $media): array|JsonResource => $this->mediaPayload($media, $user->id)));
+
+        return $this->handleResponse($medias->items(), $this->apiMessage('find_all_success', 'media'), $medias->lastPage(), $medias->total());
+    }
+
+    public function addToWatchlist(int $id, int $mediaId): JsonResponse
+    {
+        $user = User::query()->findOrFail($id);
+        $media = Media::query()->with(['files', 'user'])->findOrFail($mediaId);
+        $user->watchlist()->syncWithoutDetaching([$media->id]);
+
+        return $this->handleResponse($this->mediaPayload($media, $user->id), $this->apiMessage('created', 'media'));
     }
 
     public function search(Request $request): JsonResponse
@@ -286,6 +342,52 @@ final class UserController extends ApiResourceController
     private function issuePlainTextToken(User $user): string
     {
         return $user->createToken('auth_token')->plainTextToken;
+    }
+
+    private function childLockCode(): string
+    {
+        $characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        $code = '';
+
+        for ($position = 0; $position < 8; $position++) {
+            $code .= $characters[random_int(0, strlen($characters) - 1)];
+        }
+
+        return $code;
+    }
+
+    private function mediaPayload(Media $media, int $userId): array|JsonResource
+    {
+        $progress = $this->latestPlayedProgress($media->id, $userId);
+
+        if ($progress === null) {
+            return MediaResource::make($media);
+        }
+
+        return [
+            'media' => MediaResource::make($media),
+            'progress' => ApiResource::make($progress),
+        ];
+    }
+
+    private function latestPlayedProgress(int $mediaId, int $userId): ?MediaProgress
+    {
+        $hasPlayed = History::query()
+            ->where('entity', 'media')
+            ->where('entity_id', $mediaId)
+            ->where('action', 'play')
+            ->where('user_id', $userId)
+            ->exists();
+
+        if (! $hasPlayed) {
+            return null;
+        }
+
+        return MediaProgress::query()
+            ->where('media_id', $mediaId)
+            ->where('user_id', $userId)
+            ->latest('id')
+            ->first();
     }
 
     private function memberRole(): Role

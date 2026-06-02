@@ -9,13 +9,16 @@ use App\Models\File;
 use App\Models\Hashtag;
 use App\Models\History;
 use App\Models\Media;
+use App\Models\MediaProgress;
 use App\Models\Reaction;
 use App\Models\Report;
 use App\Models\Role;
 use App\Models\Subscription;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
@@ -131,7 +134,11 @@ final class MediaController extends ApiResourceController
             ]);
         }
 
-        return $this->handleResponse(MediaResource::make($media), $this->apiMessage('find_success'));
+        $payload = request()->filled('user_id')
+            ? $this->mediaPayload($media, request()->integer('user_id'))
+            : MediaResource::make($media);
+
+        return $this->handleResponse($payload, $this->apiMessage('find_success'));
     }
 
     public function publishMedia(int $id): JsonResponse
@@ -205,7 +212,11 @@ final class MediaController extends ApiResourceController
             ->paginate(20)
             ->withQueryString();
 
-        return $this->handleResponse(MediaResource::collection($medias), $this->apiMessage('find_all_success'), $medias->lastPage(), $medias->total());
+        $items = $medias->getCollection();
+        /** @var EloquentCollection<int, Media> $items */
+        $medias->setCollection($items->map(fn (Media $media): array|JsonResource => $this->mediaPayload($media, $user->id)));
+
+        return $this->handleResponse($medias->items(), $this->apiMessage('find_all_success'), $medias->lastPage(), $medias->total());
     }
 
     public function filterMedias(Request $request): JsonResponse
@@ -217,6 +228,7 @@ final class MediaController extends ApiResourceController
             'hashtag_ids' => ['nullable', 'array'],
             'hashtag_ids.*' => ['integer', 'exists:hashtags,id'],
             'word' => ['nullable', 'string'],
+            'user_id' => ['nullable', 'integer', 'exists:users,id'],
         ]);
 
         $medias = Media::query()
@@ -241,6 +253,14 @@ final class MediaController extends ApiResourceController
             ->paginate(20)
             ->withQueryString();
 
+        if (isset($validated['user_id'])) {
+            $items = $medias->getCollection();
+            /** @var EloquentCollection<int, Media> $items */
+            $medias->setCollection($items->map(fn (Media $media): array|JsonResource => $this->mediaPayload($media, $validated['user_id'])));
+
+            return $this->handleResponse($medias->items(), $this->apiMessage('find_all_success'), $medias->lastPage(), $medias->total());
+        }
+
         return $this->handleResponse(MediaResource::collection($medias), $this->apiMessage('find_all_success'), $medias->lastPage(), $medias->total());
     }
 
@@ -255,6 +275,51 @@ final class MediaController extends ApiResourceController
             ->withQueryString();
 
         return $this->handleResponse(ApiResource::collection($views), $this->apiMessage('find_all_success'), $views->lastPage(), $views->total());
+    }
+
+    public function mediaPlays(int $id): JsonResponse
+    {
+        $plays = History::query()
+            ->where('entity', 'media')
+            ->where('entity_id', $id)
+            ->where('action', 'play')
+            ->with('user')
+            ->paginate(20)
+            ->withQueryString();
+
+        return $this->handleResponse(ApiResource::collection($plays), $this->apiMessage('find_all_success'), $plays->lastPage(), $plays->total());
+    }
+
+    public function mediaProgress(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'media_id' => ['required', 'integer', 'exists:medias,id'],
+            'watched_seconds' => ['required', 'integer', 'min:0'],
+            'percentage' => ['required', 'numeric', 'min:0', 'max:100'],
+            'user_id' => ['required', 'integer', 'exists:users,id'],
+        ]);
+
+        if ((float) $validated['percentage'] > 20.0) {
+            History::create([
+                'entity' => 'media',
+                'entity_id' => $validated['media_id'],
+                'action' => 'play',
+                'user_id' => $validated['user_id'],
+            ]);
+        }
+
+        $progress = MediaProgress::query()->updateOrCreate(
+            [
+                'media_id' => $validated['media_id'],
+                'user_id' => $validated['user_id'],
+            ],
+            [
+                'watched_seconds' => $validated['watched_seconds'],
+                'percentage' => $validated['percentage'],
+            ]
+        );
+
+        return $this->handleResponse(ApiResource::make($progress->refresh()->load(['media', 'user'])), $this->apiMessage('created', 'media_progress'));
     }
 
     public function mediaLikes(int $id): JsonResponse
@@ -329,6 +394,40 @@ final class MediaController extends ApiResourceController
             ->withQueryString();
 
         return $this->handleResponse(ApiResource::collection($reactions), $this->apiMessage('find_all_success', 'reaction'), $reactions->lastPage(), $reactions->total());
+    }
+
+    private function mediaPayload(Media $media, int $userId): array|JsonResource
+    {
+        $progress = $this->latestPlayedProgress($media->id, $userId);
+
+        if ($progress === null) {
+            return MediaResource::make($media);
+        }
+
+        return [
+            'media' => MediaResource::make($media),
+            'progress' => ApiResource::make($progress),
+        ];
+    }
+
+    private function latestPlayedProgress(int $mediaId, int $userId): ?MediaProgress
+    {
+        $hasPlayed = History::query()
+            ->where('entity', 'media')
+            ->where('entity_id', $mediaId)
+            ->where('action', 'play')
+            ->where('user_id', $userId)
+            ->exists();
+
+        if (! $hasPlayed) {
+            return null;
+        }
+
+        return MediaProgress::query()
+            ->where('media_id', $mediaId)
+            ->where('user_id', $userId)
+            ->latest('id')
+            ->first();
     }
 
     private function handleReaction(int $mediaId, int $userId, string $type, string $action, ?int $pricingId = null): JsonResponse

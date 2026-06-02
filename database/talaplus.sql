@@ -41,6 +41,8 @@ CREATE TABLE IF NOT EXISTS `users` (
   `tips_at_every_login` TINYINT NOT NULL DEFAULT 1,
   `is_online` TINYINT NOT NULL DEFAULT 1,
   `christian_preference` TINYINT NOT NULL DEFAULT 0,
+  `belongs_to` BIGINT NULL,
+  `child_lock_code` VARCHAR(45) NULL,
   `status` ENUM('created', 'activated', 'disabled', 'blocked', 'deleted') NOT NULL DEFAULT 'created',
   `type` ENUM('uncertified', 'certified') NOT NULL DEFAULT 'uncertified',
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -198,6 +200,7 @@ CREATE TABLE IF NOT EXISTS `medias` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
   `media_title` TEXT NULL,
   `media_description` LONGTEXT NULL,
+  `media_length` INT NULL,
   `media_url` TEXT NULL,
   `cover_url` TEXT NULL,
   `author_names` VARCHAR(255) NULL,
@@ -654,7 +657,7 @@ CREATE TABLE IF NOT EXISTS `histories` (
   `word` TEXT NULL COMMENT 'This refers to a search history of a user',
   `entity` ENUM('media', 'product', 'comment', 'user') NULL,
   `entity_id` BIGINT NULL,
-  `action` ENUM('search', 'view', 'like', 'gift', 'star', 'post', 'comment', 'order', 'report') NULL,
+  `action` ENUM('search', 'view', 'play', 'like', 'gift', 'star', 'post', 'comment', 'order', 'report') NULL,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `deleted_at` TIMESTAMP NULL,
@@ -1101,6 +1104,60 @@ CREATE TABLE IF NOT EXISTS `hashtag_comment` (
   CONSTRAINT `fk_hashtagcomment_comments`
     FOREIGN KEY (`comment_id`)
     REFERENCES `comments` (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE)
+ENGINE = InnoDB;
+
+
+-- -----------------------------------------------------
+-- Table `media_progresses`
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `media_progresses` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `watched_seconds` BIGINT NOT NULL DEFAULT 0,
+  `percentage` DECIMAL(5,2) NOT NULL DEFAULT 0,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `media_id` BIGINT NOT NULL,
+  `user_id` BIGINT NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `id_mediaprogresses_UNIQUE` (`id` ASC),
+  INDEX `fk_mediaprogresses_medias_idx` (`media_id` ASC),
+  INDEX `fk_mediaprogresses_users_idx` (`user_id` ASC),
+  CONSTRAINT `fk_mediaprogresses_medias`
+    FOREIGN KEY (`media_id`)
+    REFERENCES `medias` (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_mediaprogresses_users`
+    FOREIGN KEY (`user_id`)
+    REFERENCES `users` (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE)
+ENGINE = InnoDB;
+
+
+-- -----------------------------------------------------
+-- Table `media_user`
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `media_user` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `media_id` BIGINT NOT NULL,
+  `user_id` BIGINT NOT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `id_mediauser_UNIQUE` (`id` ASC),
+  INDEX `fk_mediauser_medias_idx` (`media_id` ASC),
+  INDEX `fk_mediauser_users_idx` (`user_id` ASC),
+  CONSTRAINT `fk_mediauser_medias`
+    FOREIGN KEY (`media_id`)
+    REFERENCES `medias` (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_mediauser_users`
+    FOREIGN KEY (`user_id`)
+    REFERENCES `users` (`id`)
     ON DELETE CASCADE
     ON UPDATE CASCADE)
 ENGINE = InnoDB;

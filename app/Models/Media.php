@@ -23,6 +23,7 @@ class Media extends SqlModel
     protected function castsAttributes(): array
     {
         return [
+            'media_length' => 'integer',
             'is_free' => 'boolean',
             'price' => 'decimal:2',
             'for_youth' => 'boolean',
@@ -58,5 +59,15 @@ class Media extends SqlModel
     public function reactions(): HasMany
     {
         return $this->hasMany(Reaction::class);
+    }
+
+    public function progresses(): HasMany
+    {
+        return $this->hasMany(MediaProgress::class);
+    }
+
+    public function watchlistedByUsers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'media_user')->withTimestamps();
     }
 }
