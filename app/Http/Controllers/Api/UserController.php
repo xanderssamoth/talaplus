@@ -212,6 +212,15 @@ final class UserController extends ApiResourceController
         return $this->handleResponse($this->mediaPayload($media, $user->id), $this->apiMessage('created', 'media'));
     }
 
+    public function removeFromWatchlist(int $id, int $mediaId): JsonResponse
+    {
+        $user = User::query()->findOrFail($id);
+        $media = Media::query()->with(['files', 'user'])->findOrFail($mediaId);
+        $user->watchlist()->detach($media->id);
+
+        return $this->handleResponse($this->mediaPayload($media, $user->id), $this->apiMessage('deleted', 'media'));
+    }
+
     public function search(Request $request): JsonResponse
     {
         $validated = $request->validate([

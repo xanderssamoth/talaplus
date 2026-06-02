@@ -41,6 +41,7 @@ Route::prefix('v1')->group(function (): void {
     Route::patch('user/{user}/child-lock-code', [UserController::class, 'switchChildLockCode']);
     Route::get('user/{user}/watchlist', [UserController::class, 'userWatchlist']);
     Route::post('user/{user}/watchlist/{media}', [UserController::class, 'addToWatchlist']);
+    Route::delete('user/{user}/watchlist/{media}', [UserController::class, 'removeFromWatchlist']);
     Route::patch('user/{user}/status', [UserController::class, 'updateStatus']);
     Route::patch('user/{user}/password', [UserController::class, 'updatePassword']);
     Route::patch('user/{user}/type', [UserController::class, 'updateType']);
