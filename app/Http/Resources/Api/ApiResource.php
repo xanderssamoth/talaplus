@@ -20,6 +20,11 @@ class ApiResource extends JsonResource
                 : null;
         }
 
+        if ($this->resource instanceof Model && array_key_exists('created_at', $data)) {
+            $createdAt = $this->resource->getAttribute('created_at');
+            $data['created_at_explicit'] = $createdAt !== null ? explicitDate($createdAt) : null;
+        }
+
         if ($this->resource instanceof Model && method_exists($this->resource, 'files')) {
             $relation = $this->resource->files();
 

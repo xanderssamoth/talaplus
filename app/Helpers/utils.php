@@ -133,7 +133,7 @@ if (! function_exists('explicitDate')) {
     {
         setlocale(LC_ALL, app()->getLocale());
 
-        return utf8_encode(Carbon::parse($date)->formatLocalized('%A %d %B %Y'));
+        return Carbon::parse($date)->locale(app()->getLocale())->translatedFormat('l d F Y');
     }
 }
 

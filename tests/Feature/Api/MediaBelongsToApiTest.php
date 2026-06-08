@@ -147,6 +147,7 @@ class MediaBelongsToApiTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.id', $media->id)
-            ->assertJsonPath('data.user.id', $owner->id);
+            ->assertJsonPath('data.user.id', $owner->id)
+            ->assertJsonPath('data.created_at_explicit', explicitDate($media->created_at));
     }
 }
