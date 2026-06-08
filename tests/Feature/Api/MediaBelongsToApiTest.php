@@ -25,6 +25,7 @@ class MediaBelongsToApiTest extends TestCase
         Schema::disableForeignKeyConstraints();
 
         foreach ([
+            'histories',
             'hashtag_media',
             'category_media',
             'hashtags',
@@ -116,6 +117,17 @@ class MediaBelongsToApiTest extends TestCase
             $table->softDeletes();
         });
 
+        Schema::create('histories', function (Blueprint $table): void {
+            $table->id();
+            $table->text('word')->nullable();
+            $table->string('entity')->nullable();
+            $table->unsignedBigInteger('entity_id')->nullable();
+            $table->string('action')->nullable();
+            $table->foreignId('user_id');
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
         Schema::enableForeignKeyConstraints();
     }
 
@@ -149,5 +161,23 @@ class MediaBelongsToApiTest extends TestCase
             ->assertJsonPath('data.id', $media->id)
             ->assertJsonPath('data.user.id', $owner->id)
             ->assertJsonPath('data.created_at_explicit', explicitDate($media->created_at));
+    }
+
+    public function test_show_does_not_create_duplicate_view_history_for_same_user(): void
+    {
+        $owner = User::create(['email' => 'owner@example.com', 'username' => 'owner', 'password' => 'password']);
+        $viewer = User::create(['email' => 'viewer@example.com', 'username' => 'viewer', 'password' => 'password']);
+        $media = Media::create(['media_title' => ['fr' => 'Episode'], 'user_id' => $owner->id]);
+
+        $this->getJson("/api/v1/media/{$media->id}?user_id={$viewer->id}")->assertOk();
+        $this->getJson("/api/v1/media/{$media->id}?user_id={$viewer->id}")->assertOk();
+
+        $this->assertDatabaseCount('histories', 1);
+        $this->assertDatabaseHas('histories', [
+            'entity' => 'media',
+            'entity_id' => $media->id,
+            'action' => 'view',
+            'user_id' => $viewer->id,
+        ]);
     }
 }

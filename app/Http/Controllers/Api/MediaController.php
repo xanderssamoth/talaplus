@@ -158,7 +158,7 @@ final class MediaController extends ApiResourceController
         $media = Media::query()->with($this->mediaRelations())->findOrFail($id);
 
         if (request()->filled('user_id')) {
-            History::create([
+            History::query()->firstOrCreate([
                 'entity' => 'media',
                 'entity_id' => $media->id,
                 'action' => 'view',
