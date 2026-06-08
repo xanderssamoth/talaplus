@@ -347,6 +347,8 @@ CREATE TABLE IF NOT EXISTS `messages` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
   `message_content` LONGTEXT NULL,
   `answered_for` BIGINT NULL,
+  `type` ENUM('text', 'voice_note', 'file', 'call_audio', 'call_video') NOT NULL DEFAULT 'text',
+  `call_type` ENUM('outgoing', 'incoming', 'missed') NULL COMMENT 'Useful for \"call_audio\" or \"call_video\" type messages',
   `status` ENUM('read', 'unread') NOT NULL DEFAULT 'unread',
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

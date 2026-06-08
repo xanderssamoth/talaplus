@@ -31,15 +31,23 @@ final class MediaController extends ApiResourceController
     public function store(Request $request): JsonResponse
     {
         $request->validate([
-            'media_url' => ['required', 'file', 'mimes:mp4,mov,avi,mkv,webm', 'max:512000'],
-            'cover_url' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,gif', 'max:10240'],
+            'media_url' => ['nullable', 'string'],
+            'cover_url' => ['nullable', 'string'],
+            'media_file' => ['nullable', 'file', 'mimes:mp4,mov,avi,mkv,webm', 'max:512000'],
+            'cover_file' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,gif', 'max:10240'],
             'files' => ['nullable', 'array'],
             'files.*' => ['file', 'max:512000'],
         ]);
 
         $payload = $this->payload($request);
-        $payload['media_url'] = Storage::disk('s3')->url($request->file('media_url')->store('medias/videos', 's3'));
-        $payload['cover_url'] = Storage::disk('s3')->url($request->file('cover_url')->store('medias/covers', 's3'));
+
+        if ($request->hasFile('media_file')) {
+            $payload['media_url'] = Storage::disk('s3')->url($request->file('media_file')->store('medias/videos', 's3'));
+        }
+
+        if ($request->hasFile('cover_file')) {
+            $payload['cover_url'] = Storage::disk('s3')->url($request->file('cover_file')->store('medias/covers', 's3'));
+        }
 
         $media = Media::create($payload);
 
