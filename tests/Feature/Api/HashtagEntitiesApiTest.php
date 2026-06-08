@@ -162,7 +162,8 @@ class HashtagEntitiesApiTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.hashtag.keyword', 'gospel')
             ->assertJsonCount(2, 'data.medias')
-            ->assertJsonCount(2, 'data.comments');
+            ->assertJsonCount(2, 'data.comments')
+            ->assertJsonPath('data.comments.0.user.id', $user->id);
 
         $mediaIds = collect($response->json('data.medias'))->pluck('id')->all();
         $commentIds = collect($response->json('data.comments'))->pluck('id')->all();

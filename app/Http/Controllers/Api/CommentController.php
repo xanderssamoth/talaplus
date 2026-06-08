@@ -64,7 +64,7 @@ final class CommentController extends ApiResourceController
                 'user_id' => $comment->user_id,
             ]);
 
-            return $this->handleResponse(CommentResource::make($comment->refresh()->load('files')), $this->apiMessage('created'));
+            return $this->handleResponse(CommentResource::make($comment->refresh()->load(['files', 'user'])), $this->apiMessage('created'));
         }
 
         if ($comment->media_id !== null && $comment->media?->user_id !== null) {
@@ -105,7 +105,7 @@ final class CommentController extends ApiResourceController
             ]);
         }
 
-        return $this->handleResponse(CommentResource::make($comment->refresh()->load('files')), $this->apiMessage('created'));
+        return $this->handleResponse(CommentResource::make($comment->refresh()->load(['files', 'user'])), $this->apiMessage('created'));
     }
 
     public function update(Request $request, int $id): JsonResponse
@@ -135,7 +135,7 @@ final class CommentController extends ApiResourceController
 
         $this->storeFiles($request, $comment);
 
-        return $this->handleResponse(CommentResource::make($comment->refresh()->load('files')), $this->apiMessage('updated'));
+        return $this->handleResponse(CommentResource::make($comment->refresh()->load(['files', 'user'])), $this->apiMessage('updated'));
     }
 
     public function commentLikes(int $id): JsonResponse
