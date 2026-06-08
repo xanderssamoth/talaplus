@@ -87,6 +87,7 @@ Route::prefix('v1')->group(function (): void {
     Route::get('message/conversation/group', [MessageController::class, 'groupConversation']);
 
     Route::get('category/for-type/{forType}', [CategoryController::class, 'findByForType']);
+    Route::get('hashtag/{hashtag}/entities', [HashtagController::class, 'entities']);
 
     Route::apiResource('user', UserController::class);
     Route::apiResource('role', RoleController::class);
