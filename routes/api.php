@@ -54,6 +54,7 @@ Route::prefix('v1')->group(function (): void {
 
     Route::get('media/popular/list', [MediaController::class, 'popularMedias']);
     Route::get('media/filter/list', [MediaController::class, 'filterMedias']);
+    Route::get('media/belongs-to/{belongsTo}', [MediaController::class, 'findByBelongsTo']);
     Route::post('media/progress', [MediaController::class, 'mediaProgress']);
     Route::patch('media/{media}/publish', [MediaController::class, 'publishMedia']);
     Route::get('media/{media}/view', [MediaController::class, 'mediaViews']);

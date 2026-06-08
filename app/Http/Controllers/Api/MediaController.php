@@ -293,6 +293,18 @@ final class MediaController extends ApiResourceController
         return $this->handleResponse(MediaResource::collection($medias), $this->apiMessage('find_all_success'), $medias->lastPage(), $medias->total());
     }
 
+    public function findByBelongsTo(int $belongsTo): JsonResponse
+    {
+        $medias = Media::query()
+            ->with(['categories', 'hashtags', 'files', 'user'])
+            ->where('belongs_to', $belongsTo)
+            ->latest('id')
+            ->paginate(20)
+            ->withQueryString();
+
+        return $this->handleResponse(MediaResource::collection($medias), $this->apiMessage('find_all_success'), $medias->lastPage(), $medias->total());
+    }
+
     public function mediaViews(int $id): JsonResponse
     {
         $views = History::query()
