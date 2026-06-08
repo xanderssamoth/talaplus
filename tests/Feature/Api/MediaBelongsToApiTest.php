@@ -97,8 +97,11 @@ class MediaBelongsToApiTest extends TestCase
         Schema::create('files', function (Blueprint $table): void {
             $table->id();
             $table->string('file_name')->nullable();
+            $table->string('file_type')->nullable();
             $table->text('file_url');
-            $table->foreignId('media_id')->nullable();
+            $table->foreignId('comment_id')->nullable();
+            $table->foreignId('product_id')->nullable();
+            $table->foreignId('message_id')->nullable();
             $table->foreignId('user_id')->nullable();
             $table->timestamps();
             $table->softDeletes();
@@ -132,5 +135,17 @@ class MediaBelongsToApiTest extends TestCase
             ->assertJsonPath('data.0.id', $episode->id)
             ->assertJsonPath('data.0.belongs_to', $series->id)
             ->assertJsonPath('count', 1);
+    }
+
+    public function test_show_returns_media_when_files_table_has_no_media_id_column(): void
+    {
+        $owner = User::create(['email' => 'owner@example.com', 'username' => 'owner', 'password' => 'password']);
+        $media = Media::create(['media_title' => ['fr' => 'Episode'], 'user_id' => $owner->id]);
+
+        $response = $this->getJson("/api/v1/media/{$media->id}");
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.id', $media->id);
     }
 }

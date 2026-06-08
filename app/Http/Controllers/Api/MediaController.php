@@ -152,7 +152,7 @@ final class MediaController extends ApiResourceController
 
     public function show(int $id): JsonResponse
     {
-        $media = Media::query()->with(['categories', 'hashtags', 'files'])->findOrFail($id);
+        $media = Media::query()->with($this->mediaRelations())->findOrFail($id);
 
         if (request()->filled('user_id')) {
             History::create([
@@ -296,7 +296,7 @@ final class MediaController extends ApiResourceController
     public function findByBelongsTo(int $belongsTo): JsonResponse
     {
         $medias = Media::query()
-            ->with(['categories', 'hashtags', 'files', 'user'])
+            ->with($this->mediaRelations(includeUser: true))
             ->where('belongs_to', $belongsTo)
             ->latest('id')
             ->paginate(20)
@@ -471,6 +471,24 @@ final class MediaController extends ApiResourceController
             'media' => MediaResource::make($media),
             'progress' => ApiResource::make($progress),
         ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function mediaRelations(bool $includeUser = false): array
+    {
+        $relations = ['categories', 'hashtags'];
+
+        if ($includeUser) {
+            $relations[] = 'user';
+        }
+
+        if (Schema::hasColumn('files', 'media_id')) {
+            $relations[] = 'files';
+        }
+
+        return $relations;
     }
 
     private function latestPlayedProgress(int $mediaId, int $userId): ?MediaProgress
