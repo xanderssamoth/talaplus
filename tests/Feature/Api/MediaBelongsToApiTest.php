@@ -146,6 +146,7 @@ class MediaBelongsToApiTest extends TestCase
 
         $response->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('data.id', $media->id);
+            ->assertJsonPath('data.id', $media->id)
+            ->assertJsonPath('data.user.id', $owner->id);
     }
 }
