@@ -3,6 +3,7 @@
 namespace Tests\Feature\Api;
 
 use App\Models\Comment;
+use App\Models\File;
 use App\Models\Hashtag;
 use App\Models\Media;
 use App\Models\User;
@@ -155,6 +156,13 @@ class HashtagEntitiesApiTest extends TestCase
         $textComment = Comment::create(['comment_content' => 'Post #gospel', 'user_id' => $user->id]);
         Comment::create(['comment_content' => 'Post #sport', 'user_id' => $user->id]);
         $pivotComment->hashtags()->attach($hashtag->id);
+        File::create([
+            'file_name' => 'comment.jpg',
+            'file_type' => 'photo',
+            'file_url' => 'https://example.test/comment.jpg',
+            'comment_id' => $pivotComment->id,
+            'user_id' => $user->id,
+        ]);
 
         $response = $this->getJson('/api/v1/hashtag/gospel/entities');
 
@@ -166,11 +174,32 @@ class HashtagEntitiesApiTest extends TestCase
             ->assertJsonPath('data.comments.0.user.id', $user->id);
 
         $mediaIds = collect($response->json('data.medias'))->pluck('id')->all();
-        $commentIds = collect($response->json('data.comments'))->pluck('id')->all();
+        $comments = collect($response->json('data.comments'));
+        $commentIds = $comments->pluck('id')->all();
+        $commentWithFile = $comments->firstWhere('id', $pivotComment->id);
 
         $this->assertContains($pivotMedia->id, $mediaIds);
         $this->assertContains($textMedia->id, $mediaIds);
         $this->assertContains($pivotComment->id, $commentIds);
         $this->assertContains($textComment->id, $commentIds);
+        $this->assertCount(1, $commentWithFile['files']);
+        $this->assertSame('comment.jpg', $commentWithFile['files'][0]['file_name']);
+    }
+
+    public function test_user_resource_returns_files_branch(): void
+    {
+        $user = User::create(['email' => 'owner@example.com', 'username' => 'owner', 'password' => 'password']);
+        File::create([
+            'file_name' => 'avatar-proof.jpg',
+            'file_type' => 'photo',
+            'file_url' => 'https://example.test/avatar-proof.jpg',
+            'user_id' => $user->id,
+        ]);
+
+        $response = $this->getJson("/api/v1/user/{$user->id}");
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.files.0.file_name', 'avatar-proof.jpg');
     }
 }

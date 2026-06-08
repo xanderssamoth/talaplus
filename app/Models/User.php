@@ -94,6 +94,11 @@ class User extends Authenticatable
         return $this->hasMany(Media::class);
     }
 
+    public function files(): HasMany
+    {
+        return $this->hasMany(File::class);
+    }
+
     public function belongsToUser(): BelongsTo
     {
         return $this->belongsTo(self::class, 'belongs_to');
