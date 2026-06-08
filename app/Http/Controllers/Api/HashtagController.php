@@ -9,6 +9,7 @@ use App\Models\Comment;
 use App\Models\Hashtag;
 use App\Models\Media;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Schema;
 
 final class HashtagController extends ApiResourceController
 {
@@ -24,8 +25,14 @@ final class HashtagController extends ApiResourceController
             ->orWhere('keyword', $keyword)
             ->firstOrFail();
 
+        $mediaRelations = ['categories', 'hashtags', 'user'];
+
+        if (Schema::hasColumn('files', 'media_id')) {
+            $mediaRelations[] = 'files';
+        }
+
         $medias = Media::query()
-            ->with(['categories', 'hashtags', 'files', 'user'])
+            ->with($mediaRelations)
             ->where(function ($query) use ($record, $keyword): void {
                 $query->whereHas('hashtags', fn ($query) => $query->where('hashtags.id', $record->id))
                     ->orWhere('media_description', 'like', "%#{$keyword}%");
