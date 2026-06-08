@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -220,6 +221,32 @@ class MediaUploadApiTest extends TestCase
         $this->assertNull($media->media_url);
         $this->assertNull($media->cover_url);
         $this->assertSame('0.00', (string) $media->price);
+    }
+
+    public function test_store_selects_content_creator_role_for_media_owner(): void
+    {
+        $owner = User::create(['email' => 'owner@example.com', 'username' => 'owner', 'password' => 'password']);
+        $memberRole = Role::create([
+            'role_name' => ['fr' => 'Membre', 'en' => 'Member', 'ln' => 'Mosangani'],
+            'role_description' => ['fr' => 'Ancien role'],
+        ]);
+        $owner->roles()->attach($memberRole->id, ['is_selected' => true]);
+
+        $response = $this->postJson('/api/v1/media', [
+            'media_title' => 'Draft',
+            'type' => 'music',
+            'user_id' => $owner->id,
+        ]);
+
+        $response->assertOk()->assertJsonPath('success', true);
+
+        $creatorRole = Role::query()->where('role_name->fr', 'Créateur de contenu')->firstOrFail();
+
+        $this->assertSame('Content creator', $creatorRole->getTranslation('role_name', 'en'));
+        $this->assertSame('Mokeli ya makambo', $creatorRole->getTranslation('role_name', 'ln'));
+        $this->assertSame('Person who sends videos to publish on the platform.', $creatorRole->getTranslation('role_description', 'en'));
+        $this->assertSame(0, (int) DB::table('role_user')->where('user_id', $owner->id)->where('role_id', $memberRole->id)->value('is_selected'));
+        $this->assertSame(1, (int) DB::table('role_user')->where('user_id', $owner->id)->where('role_id', $creatorRole->id)->value('is_selected'));
     }
 
     public function test_store_validates_category_ids_before_syncing(): void

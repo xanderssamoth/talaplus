@@ -19,6 +19,7 @@ use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -64,6 +65,8 @@ final class MediaController extends ApiResourceController
         }
 
         $media = Media::create($payload);
+
+        $this->selectContentCreatorRole($media->user_id);
 
         $categoryIds = collect($request->input('category_ids', []))->filter()->values();
         if ($categoryIds->isNotEmpty()) {
@@ -489,6 +492,49 @@ final class MediaController extends ApiResourceController
         }
 
         return $relations;
+    }
+
+    private function selectContentCreatorRole(null|int|string $userId): void
+    {
+        if (blank($userId) || ! Schema::hasTable('roles') || ! Schema::hasTable('role_user')) {
+            return;
+        }
+
+        $user = User::query()->find($userId);
+
+        if ($user === null) {
+            return;
+        }
+
+        $role = $this->contentCreatorRole();
+
+        DB::table('role_user')
+            ->where('user_id', $user->id)
+            ->update([
+                'is_selected' => false,
+                'updated_at' => now(),
+            ]);
+
+        $user->roles()->syncWithoutDetaching([
+            $role->id => ['is_selected' => true],
+        ]);
+    }
+
+    private function contentCreatorRole(): Role
+    {
+        return Role::query()->where('role_name->fr', 'Créateur de contenu')->first()
+            ?? Role::create([
+                'role_name' => [
+                    'fr' => 'Créateur de contenu',
+                    'en' => 'Content creator',
+                    'ln' => 'Mokeli ya makambo',
+                ],
+                'role_description' => [
+                    'fr' => 'Personne qui envoie des vidéos à publier sur la plateforme',
+                    'en' => 'Person who sends videos to publish on the platform.',
+                    'ln' => 'Moto oyo atindaka bavideo mpo ebimisama na plateforme.',
+                ],
+            ]);
     }
 
     private function latestPlayedProgress(int $mediaId, int $userId): ?MediaProgress
