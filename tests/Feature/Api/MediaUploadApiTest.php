@@ -80,7 +80,7 @@ class MediaUploadApiTest extends TestCase
             $table->text('cover_url')->nullable();
             $table->string('author_names')->nullable();
             $table->boolean('is_free')->default(true);
-            $table->decimal('price', 12, 2)->default(0);
+            $table->decimal('price', 12, 2);
             $table->boolean('for_youth')->default(false);
             $table->unsignedBigInteger('belongs_to')->nullable();
             $table->string('type')->default('music');
@@ -173,14 +173,20 @@ class MediaUploadApiTest extends TestCase
         $admin = User::create(['email' => 'admin@example.com', 'username' => 'admin', 'password' => 'password']);
         $role = Role::create(['role_name' => ['fr' => 'Administrateur', 'en' => 'Administrator']]);
         $role->users()->attach($admin->id);
+        $categoryId = \DB::table('categories')->insertGetId([
+            'category_name' => json_encode(['fr' => 'Films']),
+            'for_type' => 'film_series',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
         $response = $this->post('/api/v1/media', [
             'media_title' => 'Song',
             'media_description' => 'A new song',
             'media_file' => UploadedFile::fake()->create('song.mp4', 100, 'video/mp4'),
             'cover_file' => UploadedFile::fake()->image('cover.jpg'),
+            'category_ids' => [$categoryId],
             'type' => 'music',
-            'price' => 0,
             'user_id' => $owner->id,
         ], ['Accept' => 'application/json']);
 
@@ -192,6 +198,8 @@ class MediaUploadApiTest extends TestCase
         $this->assertStringContainsString('medias/covers/', (string) $media->cover_url);
         Storage::disk('s3')->assertExists('medias/videos/'.basename((string) $media->media_url));
         Storage::disk('s3')->assertExists('medias/covers/'.basename((string) $media->cover_url));
+        $this->assertSame('0.00', (string) $media->price);
+        $this->assertDatabaseHas('category_media', ['category_id' => $categoryId, 'media_id' => $media->id]);
         $this->assertTrue(AdminNotification::query()->where('type', 'media_created')->where('to_user_id', $admin->id)->exists());
     }
 
@@ -202,7 +210,6 @@ class MediaUploadApiTest extends TestCase
         $response = $this->postJson('/api/v1/media', [
             'media_title' => 'Draft',
             'type' => 'music',
-            'price' => 0,
             'user_id' => $owner->id,
         ]);
 
@@ -212,5 +219,21 @@ class MediaUploadApiTest extends TestCase
 
         $this->assertNull($media->media_url);
         $this->assertNull($media->cover_url);
+        $this->assertSame('0.00', (string) $media->price);
+    }
+
+    public function test_store_validates_category_ids_before_syncing(): void
+    {
+        $owner = User::create(['email' => 'owner@example.com', 'username' => 'owner', 'password' => 'password']);
+
+        $response = $this->postJson('/api/v1/media', [
+            'media_title' => 'Invalid category',
+            'type' => 'music',
+            'category_ids' => [999],
+            'user_id' => $owner->id,
+        ]);
+
+        $response->assertUnprocessable()
+            ->assertJsonValidationErrors('category_ids.0');
     }
 }

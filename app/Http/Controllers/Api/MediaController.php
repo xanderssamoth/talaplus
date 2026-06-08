@@ -19,6 +19,7 @@ use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
@@ -30,16 +31,29 @@ final class MediaController extends ApiResourceController
 
     public function store(Request $request): JsonResponse
     {
+        if (! $request->has('category_ids') && $request->has('categories')) {
+            $request->merge(['category_ids' => $request->input('categories')]);
+        }
+
+        Log::info('media.store.request', [
+            'fields' => $request->except(['media_file', 'cover_file', 'files']),
+            'files' => $this->uploadedFileSummary($request),
+        ]);
+
         $request->validate([
             'media_url' => ['nullable', 'string'],
             'cover_url' => ['nullable', 'string'],
             'media_file' => ['nullable', 'file', 'mimes:mp4,mov,avi,mkv,webm', 'max:512000'],
             'cover_file' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,gif', 'max:10240'],
+            'price' => ['nullable', 'numeric'],
+            'category_ids' => ['nullable', 'array'],
+            'category_ids.*' => ['integer', 'exists:categories,id'],
             'files' => ['nullable', 'array'],
             'files.*' => ['file', 'max:512000'],
         ]);
 
         $payload = $this->payload($request);
+        $payload['price'] ??= 0;
 
         if ($request->hasFile('media_file')) {
             $payload['media_url'] = Storage::disk('s3')->url($request->file('media_file')->store('medias/videos', 's3'));
@@ -93,7 +107,14 @@ final class MediaController extends ApiResourceController
             'media_id' => $media->id,
         ]));
 
-        return $this->handleResponse(MediaResource::make($media->refresh()), $this->apiMessage('created'));
+        $response = MediaResource::make($media->refresh());
+
+        Log::info('media.store.response', [
+            'success' => true,
+            'data' => $response->resolve($request),
+        ]);
+
+        return $this->handleResponse($response, $this->apiMessage('created'));
     }
 
     public function update(Request $request, int $id): JsonResponse
@@ -402,6 +423,28 @@ final class MediaController extends ApiResourceController
             ->withQueryString();
 
         return $this->handleResponse(ApiResource::collection($reactions), $this->apiMessage('find_all_success', 'reaction'), $reactions->lastPage(), $reactions->total());
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function uploadedFileSummary(Request $request): array
+    {
+        return collect(['media_file', 'cover_file', 'files'])
+            ->filter(fn (string $key): bool => $request->hasFile($key))
+            ->mapWithKeys(function (string $key) use ($request): array {
+                $files = collect(is_array($request->file($key)) ? $request->file($key) : [$request->file($key)])
+                    ->filter()
+                    ->map(fn ($file): array => [
+                        'name' => $file->getClientOriginalName(),
+                        'mime_type' => $file->getMimeType(),
+                        'size' => $file->getSize(),
+                    ])
+                    ->values();
+
+                return [$key => $key === 'files' ? $files->all() : $files->first()];
+            })
+            ->all();
     }
 
     private function mediaPayload(Media $media, int $userId): array|JsonResource
