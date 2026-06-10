@@ -1298,11 +1298,11 @@ class AdminResourceController extends Controller
     private function notificationUrl(AdminNotification $notification): ?string
     {
         if ($notification->media_id) {
-            return route('videos.show', $notification->media_id);
+            return route('videos.index');
         }
 
         if ($notification->product_id) {
-            return route('products.show', $notification->product_id);
+            return route('products.index');
         }
 
         return null;

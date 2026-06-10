@@ -137,6 +137,25 @@ if (! function_exists('explicitDate')) {
     }
 }
 
+if (! function_exists('formatSocialCount')) {
+    function formatSocialCount(int $count): string
+    {
+        if ($count < 1000) {
+            return (string) $count;
+        }
+
+        foreach ([1000000000 => 'B', 1000000 => 'M', 1000 => 'k'] as $threshold => $suffix) {
+            if ($count >= $threshold) {
+                $value = intdiv($count, $threshold);
+
+                return $value.$suffix.($count > ($value * $threshold) ? '+' : '');
+            }
+        }
+
+        return (string) $count;
+    }
+}
+
 // Relative admin date display for TIMESTAMP and DATETIME columns
 if (! function_exists('formatAdminDateTime')) {
     function formatAdminDateTime($date): ?string

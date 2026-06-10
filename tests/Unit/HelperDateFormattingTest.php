@@ -39,4 +39,18 @@ class HelperDateFormattingTest extends TestCase
 
         $this->assertSame('Le 25/05/2026 a 07:30', formatAdminDateTime('2026-05-25 07:30:00'));
     }
+
+    public function test_social_count_format_uses_network_style_abbreviations(): void
+    {
+        $this->assertSame('0', formatSocialCount(0));
+        $this->assertSame('999', formatSocialCount(999));
+        $this->assertSame('1k', formatSocialCount(1000));
+        $this->assertSame('1k+', formatSocialCount(1500));
+        $this->assertSame('10k', formatSocialCount(10000));
+        $this->assertSame('10k+', formatSocialCount(10999));
+        $this->assertSame('1M', formatSocialCount(1000000));
+        $this->assertSame('1M+', formatSocialCount(1200000));
+        $this->assertSame('1B', formatSocialCount(1000000000));
+        $this->assertSame('1B+', formatSocialCount(1500000000));
+    }
 }

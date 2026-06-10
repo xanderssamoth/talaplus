@@ -60,7 +60,7 @@
                     <i class="bi bi-bell fs-5"></i>
                     @if ($unreadNotifications > 0)
                         <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger notification-nav-badge">
-                            {{ $unreadNotifications > 99 ? '99+' : $unreadNotifications }}
+                            {{ formatSocialCount($unreadNotifications) }}
                         </span>
                     @endif
                 </a>

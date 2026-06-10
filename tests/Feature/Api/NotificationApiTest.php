@@ -68,6 +68,8 @@ class NotificationApiTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.id', $visible->id)
+            ->assertJsonPath('data.0.from_user.id', $sender->id)
+            ->assertJsonPath('data.0.to_user.id', $recipient->id)
             ->assertJsonPath('count', 1);
     }
 

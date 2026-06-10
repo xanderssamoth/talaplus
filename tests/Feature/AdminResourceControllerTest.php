@@ -250,7 +250,7 @@ class AdminResourceControllerTest extends TestCase
             ->assertJsonPath('items.1.message_display', 'Sarah Mbala a envoyé une nouvelle vidéo')
             ->assertJsonPath('items.0.url', null);
 
-        $this->assertSame(route('videos.show', $mediaId), $response->json('items.1.url'));
+        $this->assertSame(route('videos.index'), $response->json('items.1.url'));
 
         $this->actingAs($recipient)
             ->patchJson("/notifications/{$visibleNotificationId}/read")
