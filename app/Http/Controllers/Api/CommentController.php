@@ -186,7 +186,6 @@ final class CommentController extends ApiResourceController
                         FROM subscriptions
                         WHERE subscriptions.user_id = comments.user_id
                             AND subscriptions.follower_id = ?
-                            AND subscriptions.deleted_at IS NULL
                     )
                     THEN 1
                     ELSE 2
