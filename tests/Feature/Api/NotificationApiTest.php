@@ -3,6 +3,9 @@
 namespace Tests\Feature\Api;
 
 use App\Models\AdminNotification;
+use App\Models\Comment;
+use App\Models\Media;
+use App\Models\Product;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
@@ -25,7 +28,13 @@ class NotificationApiTest extends TestCase
         Schema::disableForeignKeyConstraints();
 
         foreach ([
+            'files',
+            'reactions',
             'notifications',
+            'comments',
+            'specifications',
+            'products',
+            'medias',
             'users',
         ] as $table) {
             Schema::dropIfExists($table);
@@ -36,6 +45,43 @@ class NotificationApiTest extends TestCase
             $table->string('email')->nullable();
             $table->string('username')->nullable();
             $table->text('password')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('medias', function (Blueprint $table): void {
+            $table->id();
+            $table->json('media_title')->nullable();
+            $table->longText('media_description')->nullable();
+            $table->foreignId('user_id')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('products', function (Blueprint $table): void {
+            $table->id();
+            $table->string('product_name')->nullable();
+            $table->decimal('price', 12, 2)->nullable();
+            $table->decimal('reduction_rate', 3, 2)->nullable();
+            $table->dateTime('price_reduction_end')->nullable();
+            $table->foreignId('user_id')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('comments', function (Blueprint $table): void {
+            $table->id();
+            $table->longText('comment_content')->nullable();
+            $table->string('type')->nullable();
+            $table->foreignId('user_id')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('specifications', function (Blueprint $table): void {
+            $table->id();
+            $table->text('spec_content')->nullable();
+            $table->foreignId('product_id')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
@@ -53,13 +99,47 @@ class NotificationApiTest extends TestCase
             $table->softDeletes();
         });
 
+        Schema::create('reactions', function (Blueprint $table): void {
+            $table->id();
+            $table->string('type');
+            $table->smallInteger('number_of_stars')->nullable();
+            $table->foreignId('media_id')->nullable();
+            $table->foreignId('product_id')->nullable();
+            $table->foreignId('comment_id')->nullable();
+            $table->foreignId('user_id')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('files', function (Blueprint $table): void {
+            $table->id();
+            $table->string('file_name')->nullable();
+            $table->text('file_url');
+            $table->foreignId('user_id')->nullable();
+            $table->foreignId('comment_id')->nullable();
+            $table->foreignId('product_id')->nullable();
+            $table->foreignId('message_id')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
         Schema::enableForeignKeyConstraints();
     }
 
     public function test_user_notifications_returns_notifications_received_by_user(): void
     {
         [$sender, $recipient, $otherUser] = $this->users();
-        $visible = AdminNotification::create(['type' => 'visible', 'from_user_id' => $sender->id, 'to_user_id' => $recipient->id]);
+        $media = Media::create(['media_title' => ['fr' => 'Video'], 'user_id' => $sender->id]);
+        $product = Product::create(['product_name' => 'Livre', 'user_id' => $sender->id]);
+        $comment = Comment::create(['comment_content' => 'Bonjour', 'type' => 'post', 'user_id' => $sender->id]);
+        $visible = AdminNotification::create([
+            'type' => 'visible',
+            'from_user_id' => $sender->id,
+            'to_user_id' => $recipient->id,
+            'media_id' => $media->id,
+            'product_id' => $product->id,
+            'comment_id' => $comment->id,
+        ]);
         AdminNotification::create(['type' => 'hidden', 'from_user_id' => $sender->id, 'to_user_id' => $otherUser->id]);
 
         $response = $this->getJson("/api/v1/notification/user/{$recipient->id}");
@@ -70,6 +150,9 @@ class NotificationApiTest extends TestCase
             ->assertJsonPath('data.0.id', $visible->id)
             ->assertJsonPath('data.0.from_user.id', $sender->id)
             ->assertJsonPath('data.0.to_user.id', $recipient->id)
+            ->assertJsonPath('data.0.media.id', $media->id)
+            ->assertJsonPath('data.0.product.id', $product->id)
+            ->assertJsonPath('data.0.comment.id', $comment->id)
             ->assertJsonPath('count', 1);
     }
 
