@@ -89,6 +89,9 @@ Route::prefix('v1')->group(function (): void {
 
     Route::get('category/for-type/{forType}', [CategoryController::class, 'findByForType']);
     Route::get('hashtag/{hashtag}/entities', [HashtagController::class, 'entities']);
+    Route::get('notification/user/{user}', [NotificationController::class, 'userNotifications']);
+    Route::patch('notification/{notification}/read', [NotificationController::class, 'markAsRead']);
+    Route::patch('notification/user/{user}/read', [NotificationController::class, 'markAllAsRead']);
 
     Route::apiResource('user', UserController::class);
     Route::apiResource('role', RoleController::class);
