@@ -233,12 +233,24 @@ class AdminResourceControllerTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $this->actingAs($recipient)
+        \DB::table('notifications')->insert([
+            'type' => 'comment_sent',
+            'is_read' => 0,
+            'from_user_id' => $sender->id,
+            'to_user_id' => $recipient->id,
+            'comment_id' => 123,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this->actingAs($recipient)
             ->getJson('/notifications/data')
             ->assertOk()
-            ->assertJsonCount(1, 'items')
-            ->assertJsonPath('items.0.message_display', 'Sarah Mbala a envoyé une nouvelle vidéo')
-            ->assertJsonPath('items.0.url', "https://tempor.silasmas.com/videos/{$mediaId}");
+            ->assertJsonCount(2, 'items')
+            ->assertJsonPath('items.1.message_display', 'Sarah Mbala a envoyé une nouvelle vidéo')
+            ->assertJsonPath('items.0.url', null);
+
+        $this->assertSame(route('videos.show', $mediaId), $response->json('items.1.url'));
 
         $this->actingAs($recipient)
             ->patchJson("/notifications/{$visibleNotificationId}/read")
@@ -609,6 +621,19 @@ class AdminResourceControllerTest extends TestCase
             $table->id();
             $table->string('product_name');
             $table->boolean('is_shared')->default(false);
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('comments', function (Blueprint $table): void {
+            $table->id();
+            $table->longText('comment_content')->nullable();
+            $table->unsignedBigInteger('answered_for')->nullable();
+            $table->string('type')->default('post');
+            $table->string('for_entity')->nullable();
+            $table->foreignId('media_id')->nullable();
+            $table->foreignId('product_id')->nullable();
+            $table->foreignId('user_id')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });

@@ -1071,7 +1071,9 @@
                 });
         });
 
-        $(document).on('click', '.mark-read', function () {
+        $(document).on('click', '.mark-read', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
             $.ajax({url: endpoints.read($(this).data('id')), method: 'PATCH'})
                 .done(function (response) {
                     alertBox(response.message || @json(__('admin.notification_read')));

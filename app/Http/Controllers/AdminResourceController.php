@@ -1298,15 +1298,11 @@ class AdminResourceController extends Controller
     private function notificationUrl(AdminNotification $notification): ?string
     {
         if ($notification->media_id) {
-            return 'https://tempor.silasmas.com/videos/'.$notification->media_id;
+            return route('videos.show', $notification->media_id);
         }
 
         if ($notification->product_id) {
-            return 'https://tempor.silasmas.com/products/'.$notification->product_id;
-        }
-
-        if ($notification->comment_id) {
-            return 'https://tempor.silasmas.com/comments/'.$notification->comment_id;
+            return route('products.show', $notification->product_id);
         }
 
         return null;
