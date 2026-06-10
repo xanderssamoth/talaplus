@@ -518,6 +518,28 @@ class ProductCartMessageApiTest extends TestCase
             ->exists());
     }
 
+    public function test_comment_resource_returns_answered_for_comment(): void
+    {
+        $owner = User::create(['email' => 'poster@example.com', 'password' => 'password']);
+        $parentComment = Comment::create([
+            'comment_content' => 'Parent comment',
+            'type' => 'comment',
+            'user_id' => $owner->id,
+        ]);
+        $reply = Comment::create([
+            'comment_content' => 'Reply comment',
+            'type' => 'comment',
+            'answered_for' => $parentComment->id,
+            'user_id' => $owner->id,
+        ]);
+
+        $this->getJson("/api/v1/comment/{$reply->id}")
+            ->assertOk()
+            ->assertJsonPath('data.answered_for', $parentComment->id)
+            ->assertJsonPath('data.answered_for_comment.id', $parentComment->id)
+            ->assertJsonPath('data.answered_for_comment.comment_content', 'Parent comment');
+    }
+
     public function test_comment_store_and_update_sync_hashtags_and_mentions(): void
     {
         $owner = User::create(['email' => 'poster@example.com', 'username' => 'poster', 'password' => 'password']);
