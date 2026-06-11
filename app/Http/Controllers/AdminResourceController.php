@@ -289,10 +289,17 @@ class AdminResourceController extends Controller
             ->when(! empty($config['current_user_only']), fn ($query) => $query->where('to_user_id', request()->user()?->id))
             ->latest('id');
 
-        return response()->json([
+        $response = [
             'items' => $query->limit(200)->get()->map(fn (Model $item) => $this->present($item, $config))->values(),
             'group_by' => $config['group_by'] ?? null,
-        ]);
+        ];
+
+        if ($resource === 'notifications') {
+            $response['unread_count'] = $this->unreadNotificationsCount();
+            $response['unread_count_display'] = formatSocialCount($response['unread_count']);
+        }
+
+        return response()->json($response);
     }
 
     public function show(string|int $resource, string|int|null $id = null)
@@ -385,7 +392,22 @@ class AdminResourceController extends Controller
         $notification->is_read = true;
         $notification->save();
 
-        return response()->json(['message' => __('admin.notification_read'), 'item' => $this->present($notification->load(['fromUser', 'toUser', 'media', 'product', 'comment']), $this->config('notifications'))]);
+        $unreadCount = $this->unreadNotificationsCount();
+
+        return response()->json([
+            'message' => __('admin.notification_read'),
+            'item' => $this->present($notification->load(['fromUser', 'toUser', 'media', 'product', 'comment']), $this->config('notifications')),
+            'unread_count' => $unreadCount,
+            'unread_count_display' => formatSocialCount($unreadCount),
+        ]);
+    }
+
+    private function unreadNotificationsCount(): int
+    {
+        return AdminNotification::query()
+            ->where('to_user_id', request()->user()?->id)
+            ->where('is_read', false)
+            ->count();
     }
 
     public function updateUserStatus(Request $request, int $id)

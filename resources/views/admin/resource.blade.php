@@ -806,9 +806,29 @@
             renderPagination(items.length);
         }
 
+        function updateNotificationBadge(count, displayCount) {
+            if (resourceName !== 'notifications' || count === undefined) return;
+
+            const link = $('.nav-link.nav-icon[href="{{ route('notifications.index') }}"]');
+            const badge = $('#notification-nav-badge');
+
+            if (Number(count) <= 0) {
+                badge.remove();
+                return;
+            }
+
+            if (badge.length) {
+                badge.text(displayCount || count);
+                return;
+            }
+
+            link.append(`<span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger notification-nav-badge" id="notification-nav-badge">${displayCount || count}</span>`);
+        }
+
         function loadRows() {
             $.getJSON(endpoints.list, function (response) {
                 allItems = response.items || [];
+                updateNotificationBadge(response.unread_count, response.unread_count_display);
                 currentPage = 1;
                 renderRows();
             });
@@ -1077,6 +1097,7 @@
             $.ajax({url: endpoints.read($(this).data('id')), method: 'PATCH'})
                 .done(function (response) {
                     alertBox(response.message || @json(__('admin.notification_read')));
+                    updateNotificationBadge(response.unread_count, response.unread_count_display);
                     loadRows();
                 })
                 .fail(function (xhr) {

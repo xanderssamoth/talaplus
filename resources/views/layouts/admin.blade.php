@@ -59,7 +59,7 @@
                 <a class="nav-link nav-icon position-relative" href="{{ route('notifications.index') }}" aria-label="{{ __('admin.notifications') }}">
                     <i class="bi bi-bell fs-5"></i>
                     @if ($unreadNotifications > 0)
-                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger notification-nav-badge">
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger notification-nav-badge" id="notification-nav-badge">
                             {{ formatSocialCount($unreadNotifications) }}
                         </span>
                     @endif
