@@ -233,7 +233,7 @@ class AdminResourceControllerTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        \DB::table('notifications')->insert([
+        $commentNotificationId = (int) \DB::table('notifications')->insertGetId([
             'type' => 'comment_sent',
             'is_read' => 0,
             'from_user_id' => $sender->id,
@@ -243,18 +243,37 @@ class AdminResourceControllerTest extends TestCase
             'updated_at' => now(),
         ]);
 
+        \DB::table('notifications')->insert([
+            'type' => 'media_created',
+            'is_read' => 1,
+            'from_user_id' => $sender->id,
+            'to_user_id' => $recipient->id,
+            'media_id' => $mediaId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
         $response = $this->actingAs($recipient)
             ->getJson('/notifications/data')
             ->assertOk()
-            ->assertJsonCount(2, 'items')
-            ->assertJsonPath('items.1.message_display', 'Sarah Mbala a envoyé une nouvelle vidéo')
-            ->assertJsonPath('items.0.url', null);
+            ->assertJsonCount(3, 'items')
+            ->assertJsonPath('unread_count', 2)
+            ->assertJsonPath('unread_count_display', '2');
 
-        $this->assertSame(route('videos.index'), $response->json('items.1.url'));
+        $items = collect($response->json('items'));
+        $this->assertSame(route('videos.index'), $items->firstWhere('id', $visibleNotificationId)['url']);
+        $this->assertNull($items->firstWhere('id', $commentNotificationId)['url']);
 
         $this->actingAs($recipient)
             ->patchJson("/notifications/{$visibleNotificationId}/read")
-            ->assertOk();
+            ->assertOk()
+            ->assertJsonPath('unread_count', 1);
+
+        $this->actingAs($recipient)
+            ->patchJson("/notifications/{$commentNotificationId}/read")
+            ->assertOk()
+            ->assertJsonPath('unread_count', 0)
+            ->assertJsonPath('unread_count_display', '0');
 
         $this->assertDatabaseHas('notifications', [
             'id' => $visibleNotificationId,
