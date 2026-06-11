@@ -193,7 +193,7 @@ final class UserController extends ApiResourceController
         $medias = $user->watchlist()
             ->with(['files', 'user'])
             ->latest('media_user.id')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         $items = $medias->getCollection();
@@ -240,7 +240,7 @@ final class UserController extends ApiResourceController
             ->orWhere('lastname', 'like', "%{$validated['word']}%")
             ->orWhere('surname', 'like', "%{$validated['word']}%")
             ->latest('id')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         return $this->handleResponse(UserResource::collection($users), $this->apiMessage('find_all_success'), $users->lastPage(), $users->total());

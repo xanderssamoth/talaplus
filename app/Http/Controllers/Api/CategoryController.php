@@ -17,7 +17,7 @@ final class CategoryController extends ApiResourceController
         $categories = Category::query()
             ->where('for_type', $forType)
             ->latest('id')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         return $this->handleResponse(

@@ -26,7 +26,7 @@ abstract class ApiResourceController extends BaseController
 
     public function index(Request $request): JsonResponse
     {
-        $records = ($this->modelClass)::query()->latest('id')->paginate(20)->withQueryString();
+        $records = ($this->modelClass)::query()->latest('id')->paginate(10)->withQueryString();
 
         return $this->handleResponse(
             ($this->resourceClass)::collection($records),

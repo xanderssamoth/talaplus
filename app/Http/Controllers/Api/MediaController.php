@@ -241,7 +241,7 @@ final class MediaController extends ApiResourceController
                 ->where('histories.entity', 'media')
                 ->where('histories.action', 'view'))
             ->latest('id')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         $items = $medias->getCollection();
@@ -282,7 +282,7 @@ final class MediaController extends ApiResourceController
                 });
             })
             ->latest('id')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         if (isset($validated['user_id'])) {
@@ -302,7 +302,7 @@ final class MediaController extends ApiResourceController
             ->with($this->mediaRelations(includeUser: true))
             ->where('belongs_to', $belongsTo)
             ->latest('id')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         return $this->handleResponse(MediaResource::collection($medias), $this->apiMessage('find_all_success'), $medias->lastPage(), $medias->total());
@@ -315,7 +315,7 @@ final class MediaController extends ApiResourceController
             ->where('entity_id', $id)
             ->where('action', 'view')
             ->with('user')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         return $this->handleResponse(ApiResource::collection($views), $this->apiMessage('find_all_success'), $views->lastPage(), $views->total());
@@ -328,7 +328,7 @@ final class MediaController extends ApiResourceController
             ->where('entity_id', $id)
             ->where('action', 'play')
             ->with('user')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         return $this->handleResponse(ApiResource::collection($plays), $this->apiMessage('find_all_success'), $plays->lastPage(), $plays->total());
@@ -434,7 +434,7 @@ final class MediaController extends ApiResourceController
             ->where('media_id', $mediaId)
             ->where('type', $type)
             ->with(['user', 'pricing'])
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         return $this->handleResponse(ApiResource::collection($reactions), $this->apiMessage('find_all_success', 'reaction'), $reactions->lastPage(), $reactions->total());

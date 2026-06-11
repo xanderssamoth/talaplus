@@ -18,7 +18,7 @@ final class NotificationController extends ApiResourceController
             ->where('to_user_id', $userId)
             ->with(['fromUser', 'toUser', 'media', 'product', 'comment'])
             ->latest('id')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         return $this->handleResponse(NotificationResource::collection($notifications), $this->apiMessage('find_all_success'), $notifications->lastPage(), $notifications->total());
@@ -44,7 +44,7 @@ final class NotificationController extends ApiResourceController
             ->where('to_user_id', $userId)
             ->with(['fromUser', 'toUser', 'media', 'product', 'comment'])
             ->latest('id')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         return $this->handleResponse(NotificationResource::collection($notifications), $this->apiMessage('updated'), $notifications->lastPage(), $notifications->total());

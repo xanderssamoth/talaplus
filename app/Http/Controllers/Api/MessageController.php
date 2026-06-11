@@ -30,7 +30,7 @@ final class MessageController extends ApiResourceController
             ->where('message_content', 'like', "%{$validated['word']}%")
             ->with(['user', 'addresseeUser', 'addresseeGroup', 'files'])
             ->latest('id')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         return $this->handleResponse(MessageResource::collection($messages), $this->apiMessage('find_all_success'), $messages->lastPage(), $messages->total());
@@ -81,7 +81,7 @@ final class MessageController extends ApiResourceController
             })
             ->with(['user', 'addresseeUser', 'files'])
             ->oldest('id')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         return $this->handleResponse(MessageResource::collection($messages), $this->apiMessage('find_all_success'), $messages->lastPage(), $messages->total());
@@ -99,7 +99,7 @@ final class MessageController extends ApiResourceController
             ->where('addressee_group_id', $group->id)
             ->with(['user', 'addresseeGroup', 'files'])
             ->oldest('id')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         return $this->handleResponse([

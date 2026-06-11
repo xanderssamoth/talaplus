@@ -26,7 +26,7 @@ final class ProductController extends ApiResourceController
         $products = Product::query()
             ->with(['category', 'files', 'user', 'specifications'])
             ->latest('id')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         return $this->handleResponse(ProductResource::collection($products), $this->apiMessage('find_all_success'), $products->lastPage(), $products->total());
@@ -126,7 +126,7 @@ final class ProductController extends ApiResourceController
                 ->where('histories.entity', 'product')
                 ->where('histories.action', 'view'))
             ->latest('id')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         return $this->handleResponse(ProductResource::collection($products), $this->apiMessage('find_all_success'), $products->lastPage(), $products->total());
@@ -139,7 +139,7 @@ final class ProductController extends ApiResourceController
             ->whereNotNull('price_reduction_end')
             ->where('price_reduction_end', '>', now())
             ->latest('id')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         return $this->handleResponse(ProductResource::collection($products), $this->apiMessage('find_all_success'), $products->lastPage(), $products->total());
@@ -165,7 +165,7 @@ final class ProductController extends ApiResourceController
                 });
             })
             ->latest('id')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         return $this->handleResponse(ProductResource::collection($products), $this->apiMessage('find_all_success'), $products->lastPage(), $products->total());
@@ -178,7 +178,7 @@ final class ProductController extends ApiResourceController
             ->where('entity_id', $id)
             ->where('action', 'view')
             ->with('user')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         return $this->handleResponse(ApiResource::collection($views), $this->apiMessage('find_all_success', 'history'), $views->lastPage(), $views->total());
@@ -190,7 +190,7 @@ final class ProductController extends ApiResourceController
             ->where('product_id', $id)
             ->where('type', 'star')
             ->with('user')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         return $this->handleResponse(ApiResource::collection($stars), $this->apiMessage('find_all_success', 'reaction'), $stars->lastPage(), $stars->total());

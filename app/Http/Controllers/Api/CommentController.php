@@ -145,7 +145,7 @@ final class CommentController extends ApiResourceController
             ->where('comment_id', $comment->id)
             ->where('type', 'like')
             ->with('user')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         return $this->handleResponse(ApiResource::collection($likes), $this->apiMessage('find_all_success', 'reaction'), $likes->lastPage(), $likes->total());
@@ -194,7 +194,7 @@ final class CommentController extends ApiResourceController
                 [$userId, $userId, $userId]
             )
             ->latest('id')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         return $this->handleResponse(CommentResource::collection($posts), $this->apiMessage('find_all_success'), $posts->lastPage(), $posts->total());
