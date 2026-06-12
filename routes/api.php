@@ -96,6 +96,7 @@ Route::prefix('v1')->group(function (): void {
     Route::get('notification/user/{user}/unread', [NotificationController::class, 'unreadUserNotifications']);
     Route::patch('notification/{notification}/read', [NotificationController::class, 'markAsRead']);
     Route::patch('notification/user/{user}/read', [NotificationController::class, 'markAllAsRead']);
+    Route::get('subscription/is-follower', [SubscriptionController::class, 'isFollower']);
 
     Route::apiResource('user', UserController::class);
     Route::apiResource('role', RoleController::class);

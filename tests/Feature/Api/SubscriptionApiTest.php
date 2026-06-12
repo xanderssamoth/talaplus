@@ -3,6 +3,7 @@
 namespace Tests\Feature\Api;
 
 use App\Models\AdminNotification;
+use App\Models\Subscription;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -64,5 +65,29 @@ class SubscriptionApiTest extends TestCase
             ->where('from_user_id', $follower->id)
             ->where('to_user_id', $followed->id)
             ->exists());
+    }
+
+    public function test_is_follower_checks_existing_subscription_between_users(): void
+    {
+        $followed = User::create(['email' => 'followed@example.com', 'password' => 'password']);
+        $follower = User::create(['email' => 'follower@example.com', 'password' => 'password']);
+        $otherUser = User::create(['email' => 'other@example.com', 'password' => 'password']);
+        $subscription = Subscription::create([
+            'user_id' => $followed->id,
+            'follower_id' => $follower->id,
+            'granted' => true,
+        ]);
+
+        $this->getJson("/api/v1/subscription/is-follower?user_id={$followed->id}&follower_id={$follower->id}")
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.is_follower', true)
+            ->assertJsonPath('data.subscription.id', $subscription->id);
+
+        $this->getJson("/api/v1/subscription/is-follower?user_id={$followed->id}&follower_id={$otherUser->id}")
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.is_follower', false)
+            ->assertJsonPath('data.subscription', null);
     }
 }

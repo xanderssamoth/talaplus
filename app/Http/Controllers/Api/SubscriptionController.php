@@ -26,4 +26,22 @@ final class SubscriptionController extends ApiResourceController
 
         return $this->handleResponse(SubscriptionResource::make($subscription->refresh()), $this->apiMessage('created'));
     }
+
+    public function isFollower(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'user_id' => ['required', 'integer', 'exists:users,id'],
+            'follower_id' => ['required', 'integer', 'exists:users,id'],
+        ]);
+
+        $subscription = Subscription::query()
+            ->where('user_id', $validated['user_id'])
+            ->where('follower_id', $validated['follower_id'])
+            ->first();
+
+        return $this->handleResponse([
+            'is_follower' => $subscription !== null,
+            'subscription' => $subscription !== null ? SubscriptionResource::make($subscription) : null,
+        ], $this->apiMessage('find_success'));
+    }
 }
