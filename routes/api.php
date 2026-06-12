@@ -57,6 +57,7 @@ Route::prefix('v1')->group(function (): void {
     Route::get('media/belongs-to/{belongsTo}', [MediaController::class, 'findByBelongsTo']);
     Route::post('media/progress', [MediaController::class, 'mediaProgress']);
     Route::patch('media/{media}/publish', [MediaController::class, 'publishMedia']);
+    Route::post('media/{media}/share', [MediaController::class, 'share']);
     Route::get('media/{media}/view', [MediaController::class, 'mediaViews']);
     Route::get('media/{media}/play', [MediaController::class, 'mediaPlays']);
     Route::get('media/{media}/like', [MediaController::class, 'mediaLikes']);
@@ -69,6 +70,7 @@ Route::prefix('v1')->group(function (): void {
     Route::get('product/promoted/list', [ProductController::class, 'promotedProducts']);
     Route::get('product/filter/list', [ProductController::class, 'filterProducts']);
     Route::patch('product/{product}/publish', [ProductController::class, 'publishProduct']);
+    Route::post('product/{product}/share', [ProductController::class, 'share']);
     Route::get('product/{product}/view', [ProductController::class, 'productViews']);
     Route::get('product/{product}/star', [ProductController::class, 'productStars']);
     Route::post('product/{product}/rate', [ProductController::class, 'rate']);
@@ -79,6 +81,7 @@ Route::prefix('v1')->group(function (): void {
     Route::get('cart/is-in-cart', [CartController::class, 'isInCart']);
 
     Route::get('comment/news-feed', [CommentController::class, 'newsFeed']);
+    Route::post('comment/{comment}/share', [CommentController::class, 'share']);
     Route::get('comment/{comment}/like', [CommentController::class, 'commentLikes']);
     Route::post('comment/{comment}/like', [CommentController::class, 'like']);
 
@@ -90,6 +93,7 @@ Route::prefix('v1')->group(function (): void {
     Route::get('category/for-type/{forType}', [CategoryController::class, 'findByForType']);
     Route::get('hashtag/{hashtag}/entities', [HashtagController::class, 'entities']);
     Route::get('notification/user/{user}', [NotificationController::class, 'userNotifications']);
+    Route::get('notification/user/{user}/unread', [NotificationController::class, 'unreadUserNotifications']);
     Route::patch('notification/{notification}/read', [NotificationController::class, 'markAsRead']);
     Route::patch('notification/user/{user}/read', [NotificationController::class, 'markAllAsRead']);
 

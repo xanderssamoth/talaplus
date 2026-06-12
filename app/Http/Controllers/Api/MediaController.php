@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Resources\Api\ApiResource;
+use App\Http\Resources\Api\CommentResource;
 use App\Http\Resources\Api\MediaResource;
 use App\Models\AdminNotification;
+use App\Models\Comment;
 use App\Models\File;
 use App\Models\Hashtag;
 use App\Models\History;
@@ -190,6 +192,37 @@ final class MediaController extends ApiResourceController
             ]));
 
         return $this->handleResponse(MediaResource::make($media->refresh()), $this->apiMessage('published'));
+    }
+
+    public function share(int $mediaId): JsonResponse
+    {
+        $media = Media::query()->findOrFail($mediaId);
+        $description = (string) ($media->getTranslation('media_description', app()->getLocale(), false)
+            ?: $media->getTranslation('media_description', 'fr', false)
+            ?: $media->media_description);
+
+        $post = Comment::create([
+            'comment_content' => $description,
+            'type' => 'post',
+            'user_id' => $media->user_id,
+        ]);
+
+        $hashtagIds = collect(getHashtags($description))
+            ->unique()
+            ->map(fn (string $keyword): int => Hashtag::query()->firstOrCreate(['keyword' => $keyword])->id);
+        $post->hashtags()->sync($hashtagIds);
+
+        if (filled($media->cover_url)) {
+            File::create([
+                'file_name' => basename(parse_url((string) $media->cover_url, PHP_URL_PATH) ?: (string) $media->cover_url),
+                'file_url' => $media->cover_url,
+                'file_type' => 'photo',
+                'user_id' => $media->user_id,
+                'comment_id' => $post->id,
+            ]);
+        }
+
+        return $this->handleResponse(CommentResource::make($post->refresh()->load(['files', 'user', 'hashtags'])), $this->apiMessage('created', 'comment'));
     }
 
     public function popularMedias(Request $request): JsonResponse

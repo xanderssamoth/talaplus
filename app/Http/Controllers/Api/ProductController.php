@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Resources\Api\ApiResource;
+use App\Http\Resources\Api\CommentResource;
 use App\Http\Resources\Api\ProductResource;
 use App\Models\AdminNotification;
+use App\Models\Comment;
 use App\Models\File;
 use App\Models\History;
 use App\Models\Product;
@@ -101,6 +103,35 @@ final class ProductController extends ApiResourceController
         ]);
 
         return $this->handleResponse(ProductResource::make($product->refresh()), $this->apiMessage('published'));
+    }
+
+    public function share(int $productId): JsonResponse
+    {
+        $product = Product::query()->with('files')->findOrFail($productId);
+        $post = Comment::create([
+            'comment_content' => $product->product_description,
+            'type' => 'post',
+            'user_id' => $product->user_id,
+        ]);
+
+        $product->files->each(function (File $file) use ($post, $product): void {
+            $fileType = $this->sharedProductFileType($file);
+
+            if (! in_array($fileType, ['photo', 'video'], true)) {
+                return;
+            }
+
+            File::create([
+                'file_name' => $file->file_name,
+                'file_url' => $file->file_url,
+                'file_description' => $file->file_description,
+                'file_type' => $fileType,
+                'user_id' => $product->user_id,
+                'comment_id' => $post->id,
+            ]);
+        });
+
+        return $this->handleResponse(CommentResource::make($post->refresh()->load(['files', 'user'])), $this->apiMessage('created', 'comment'));
     }
 
     public function popularProducts(Request $request): JsonResponse
@@ -269,5 +300,20 @@ final class ProductController extends ApiResourceController
         ]);
 
         return $this->handleResponse(ApiResource::make($report), $this->apiMessage('created', 'report'));
+    }
+
+    private function sharedProductFileType(File $file): string
+    {
+        if (in_array($file->file_type, ['photo', 'video'], true)) {
+            return $file->file_type;
+        }
+
+        $path = strtolower((string) parse_url((string) $file->file_url, PHP_URL_PATH));
+
+        return match (true) {
+            preg_match('/\.(jpg|jpeg|png|webp|gif|bmp|svg)$/', $path) === 1 => 'photo',
+            preg_match('/\.(mp4|mov|avi|mkv|webm|m4v)$/', $path) === 1 => 'video',
+            default => (string) $file->file_type,
+        };
     }
 }

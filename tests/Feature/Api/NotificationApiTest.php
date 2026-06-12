@@ -156,6 +156,38 @@ class NotificationApiTest extends TestCase
             ->assertJsonPath('count', 1);
     }
 
+    public function test_unread_user_notifications_returns_only_unread_notifications_received_by_user(): void
+    {
+        [$sender, $recipient, $otherUser] = $this->users();
+        $unread = AdminNotification::create([
+            'type' => 'unread',
+            'from_user_id' => $sender->id,
+            'to_user_id' => $recipient->id,
+            'is_read' => false,
+        ]);
+        AdminNotification::create([
+            'type' => 'read',
+            'from_user_id' => $sender->id,
+            'to_user_id' => $recipient->id,
+            'is_read' => true,
+        ]);
+        AdminNotification::create([
+            'type' => 'other',
+            'from_user_id' => $sender->id,
+            'to_user_id' => $otherUser->id,
+            'is_read' => false,
+        ]);
+
+        $response = $this->getJson("/api/v1/notification/user/{$recipient->id}/unread");
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $unread->id)
+            ->assertJsonPath('data.0.is_read', false)
+            ->assertJsonPath('count', 1);
+    }
+
     public function test_mark_as_read_marks_one_notification_as_read(): void
     {
         [$sender, $recipient] = $this->users();

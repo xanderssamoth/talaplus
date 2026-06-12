@@ -151,6 +151,18 @@ final class CommentController extends ApiResourceController
         return $this->handleResponse(ApiResource::collection($likes), $this->apiMessage('find_all_success', 'reaction'), $likes->lastPage(), $likes->total());
     }
 
+    public function share(int $commentId): JsonResponse
+    {
+        $comment = Comment::query()->findOrFail($commentId);
+        $post = Comment::create([
+            'comment_content' => "-shared-{$comment->id}",
+            'type' => 'post',
+            'user_id' => $comment->user_id,
+        ]);
+
+        return $this->handleResponse(CommentResource::make($post->refresh()->load('user')), $this->apiMessage('created'));
+    }
+
     public function newsFeed(Request $request): JsonResponse
     {
         $userId = $request->integer('user_id');

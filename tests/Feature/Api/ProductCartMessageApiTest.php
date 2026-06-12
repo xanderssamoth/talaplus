@@ -7,7 +7,9 @@ use App\Models\Comment;
 use App\Models\CustomerOrder;
 use App\Models\File;
 use App\Models\Group;
+use App\Models\Hashtag;
 use App\Models\History;
+use App\Models\Media;
 use App\Models\Message;
 use App\Models\Product;
 use App\Models\Reaction;
@@ -91,6 +93,17 @@ class ProductCartMessageApiTest extends TestCase
             $table->json('category_name');
             $table->json('category_description')->nullable();
             $table->string('for_type');
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('medias', function (Blueprint $table): void {
+            $table->id();
+            $table->json('media_title')->nullable();
+            $table->json('media_description')->nullable();
+            $table->text('media_url')->nullable();
+            $table->text('cover_url')->nullable();
+            $table->foreignId('user_id')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
@@ -538,6 +551,67 @@ class ProductCartMessageApiTest extends TestCase
             ->assertJsonPath('data.answered_for', $parentComment->id)
             ->assertJsonPath('data.answered_for_comment.id', $parentComment->id)
             ->assertJsonPath('data.answered_for_comment.comment_content', 'Parent comment');
+    }
+
+    public function test_media_product_and_comment_can_be_shared_as_posts(): void
+    {
+        $owner = User::create(['email' => 'poster@example.com', 'password' => 'password']);
+        $media = Media::create([
+            'media_title' => ['fr' => 'Video'],
+            'media_description' => ['fr' => 'Description #gospel'],
+            'cover_url' => 'https://example.test/cover.jpg',
+            'user_id' => $owner->id,
+        ]);
+
+        $mediaResponse = $this->postJson("/api/v1/media/{$media->id}/share");
+        $mediaResponse->assertOk()
+            ->assertJsonPath('data.comment_content', 'Description #gospel')
+            ->assertJsonPath('data.type', 'post')
+            ->assertJsonPath('data.files.0.file_url', 'https://example.test/cover.jpg')
+            ->assertJsonPath('data.files.0.file_type', 'photo');
+
+        $this->assertTrue(Hashtag::query()->where('keyword', 'gospel')->exists());
+        $mediaPostId = (int) $mediaResponse->json('data.id');
+        $this->assertTrue(Comment::query()->findOrFail($mediaPostId)->hashtags()->where('keyword', 'gospel')->exists());
+
+        $product = Product::create([
+            'product_name' => 'Book',
+            'product_description' => 'Product description',
+            'user_id' => $owner->id,
+        ]);
+        File::create([
+            'file_name' => 'photo.jpg',
+            'file_url' => 'https://example.test/photo.jpg',
+            'file_type' => 'photo',
+            'user_id' => $owner->id,
+            'product_id' => $product->id,
+        ]);
+        File::create([
+            'file_name' => 'video.mp4',
+            'file_url' => 'https://example.test/video.mp4',
+            'file_type' => 'document',
+            'user_id' => $owner->id,
+            'product_id' => $product->id,
+        ]);
+
+        $productResponse = $this->postJson("/api/v1/product/{$product->id}/share");
+        $productResponse->assertOk()
+            ->assertJsonPath('data.comment_content', 'Product description')
+            ->assertJsonPath('data.type', 'post');
+
+        $productPostFiles = File::query()
+            ->where('comment_id', $productResponse->json('data.id'))
+            ->orderBy('id')
+            ->pluck('file_type')
+            ->all();
+        $this->assertSame(['photo', 'video'], $productPostFiles);
+
+        $sharedResponse = $this->postJson("/api/v1/comment/{$mediaPostId}/share");
+        $sharedResponse->assertOk()
+            ->assertJsonPath('data.comment_content', "-shared-{$mediaPostId}")
+            ->assertJsonPath('data.type', 'post')
+            ->assertJsonPath('data.shared_comment.id', $mediaPostId)
+            ->assertJsonPath('data.shared_comment.comment_content', 'Description #gospel');
     }
 
     public function test_comment_store_and_update_sync_hashtags_and_mentions(): void

@@ -24,6 +24,19 @@ final class NotificationController extends ApiResourceController
         return $this->handleResponse(NotificationResource::collection($notifications), $this->apiMessage('find_all_success'), $notifications->lastPage(), $notifications->total());
     }
 
+    public function unreadUserNotifications(int $userId): JsonResponse
+    {
+        $notifications = AdminNotification::query()
+            ->where('to_user_id', $userId)
+            ->where('is_read', false)
+            ->with(['fromUser', 'toUser', 'media', 'product', 'comment'])
+            ->latest('id')
+            ->paginate(10)
+            ->withQueryString();
+
+        return $this->handleResponse(NotificationResource::collection($notifications), $this->apiMessage('find_all_success'), $notifications->lastPage(), $notifications->total());
+    }
+
     public function markAsRead(int $id): JsonResponse
     {
         $notification = AdminNotification::query()->findOrFail($id);
