@@ -139,4 +139,53 @@ class SubscriptionApiTest extends TestCase
             ->exists());
         $this->assertDatabaseHas('notifications', ['id' => $otherNotification->id]);
     }
+
+    public function test_user_subscription_lists_return_subscriptions_followers_and_connections(): void
+    {
+        $currentUser = User::create(['email' => 'current@example.com', 'password' => 'password']);
+        $followedUser = User::create(['email' => 'followed@example.com', 'password' => 'password']);
+        $followerUser = User::create(['email' => 'follower@example.com', 'password' => 'password']);
+        $unrelatedUser = User::create(['email' => 'unrelated@example.com', 'password' => 'password']);
+
+        $currentFollows = Subscription::create([
+            'user_id' => $followedUser->id,
+            'follower_id' => $currentUser->id,
+            'granted' => true,
+        ]);
+        $currentIsFollowed = Subscription::create([
+            'user_id' => $currentUser->id,
+            'follower_id' => $followerUser->id,
+            'granted' => true,
+        ]);
+        Subscription::create([
+            'user_id' => $unrelatedUser->id,
+            'follower_id' => $followedUser->id,
+            'granted' => true,
+        ]);
+
+        $this->getJson("/api/v1/subscription/user/{$currentUser->id}/subscriptions")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $currentFollows->id)
+            ->assertJsonPath('data.0.user.id', $followedUser->id)
+            ->assertJsonPath('data.0.follower.id', $currentUser->id)
+            ->assertJsonPath('count', 1);
+
+        $this->getJson("/api/v1/subscription/user/{$currentUser->id}/followers")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $currentIsFollowed->id)
+            ->assertJsonPath('data.0.user.id', $currentUser->id)
+            ->assertJsonPath('data.0.follower.id', $followerUser->id)
+            ->assertJsonPath('count', 1);
+
+        $connections = $this->getJson("/api/v1/subscription/user/{$currentUser->id}/connections")
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('count', 2);
+
+        $connectionIds = collect($connections->json('data'))->pluck('id')->all();
+        $this->assertContains($currentFollows->id, $connectionIds);
+        $this->assertContains($currentIsFollowed->id, $connectionIds);
+    }
 }

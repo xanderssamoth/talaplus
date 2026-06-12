@@ -65,4 +65,43 @@ final class SubscriptionController extends ApiResourceController
 
         return $this->handleResponse(null, $this->apiMessage('deleted'));
     }
+
+    public function userSubscriptions(int $userId): JsonResponse
+    {
+        $subscriptions = Subscription::query()
+            ->where('follower_id', $userId)
+            ->with(['user', 'follower'])
+            ->latest('id')
+            ->paginate(10)
+            ->withQueryString();
+
+        return $this->handleResponse(SubscriptionResource::collection($subscriptions), $this->apiMessage('find_all_success'), $subscriptions->lastPage(), $subscriptions->total());
+    }
+
+    public function userFollowers(int $userId): JsonResponse
+    {
+        $followers = Subscription::query()
+            ->where('user_id', $userId)
+            ->with(['user', 'follower'])
+            ->latest('id')
+            ->paginate(10)
+            ->withQueryString();
+
+        return $this->handleResponse(SubscriptionResource::collection($followers), $this->apiMessage('find_all_success'), $followers->lastPage(), $followers->total());
+    }
+
+    public function userConnections(int $userId): JsonResponse
+    {
+        $connections = Subscription::query()
+            ->where(function ($query) use ($userId): void {
+                $query->where('user_id', $userId)
+                    ->orWhere('follower_id', $userId);
+            })
+            ->with(['user', 'follower'])
+            ->latest('id')
+            ->paginate(10)
+            ->withQueryString();
+
+        return $this->handleResponse(SubscriptionResource::collection($connections), $this->apiMessage('find_all_success'), $connections->lastPage(), $connections->total());
+    }
 }
