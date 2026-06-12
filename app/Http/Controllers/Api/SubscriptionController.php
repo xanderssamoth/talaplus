@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Resources\Api\SubscriptionResource;
+use App\Http\Resources\Api\UserResource;
 use App\Models\AdminNotification;
 use App\Models\Subscription;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -68,40 +70,49 @@ final class SubscriptionController extends ApiResourceController
 
     public function userSubscriptions(int $userId): JsonResponse
     {
-        $subscriptions = Subscription::query()
+        $followedUserIds = Subscription::query()
             ->where('follower_id', $userId)
-            ->with(['user', 'follower'])
+            ->pluck('user_id');
+
+        $users = User::query()
+            ->whereIn('id', $followedUserIds)
             ->latest('id')
             ->paginate(10)
             ->withQueryString();
 
-        return $this->handleResponse(SubscriptionResource::collection($subscriptions), $this->apiMessage('find_all_success'), $subscriptions->lastPage(), $subscriptions->total());
+        return $this->handleResponse(UserResource::collection($users), $this->apiMessage('find_all_success'), $users->lastPage(), $users->total());
     }
 
     public function userFollowers(int $userId): JsonResponse
     {
-        $followers = Subscription::query()
+        $followerIds = Subscription::query()
             ->where('user_id', $userId)
-            ->with(['user', 'follower'])
+            ->pluck('follower_id');
+
+        $users = User::query()
+            ->whereIn('id', $followerIds)
             ->latest('id')
             ->paginate(10)
             ->withQueryString();
 
-        return $this->handleResponse(SubscriptionResource::collection($followers), $this->apiMessage('find_all_success'), $followers->lastPage(), $followers->total());
+        return $this->handleResponse(UserResource::collection($users), $this->apiMessage('find_all_success'), $users->lastPage(), $users->total());
     }
 
     public function userConnections(int $userId): JsonResponse
     {
-        $connections = Subscription::query()
-            ->where(function ($query) use ($userId): void {
-                $query->where('user_id', $userId)
-                    ->orWhere('follower_id', $userId);
-            })
-            ->with(['user', 'follower'])
+        $followedUserIds = Subscription::query()
+            ->where('follower_id', $userId)
+            ->pluck('user_id');
+        $followerIds = Subscription::query()
+            ->where('user_id', $userId)
+            ->pluck('follower_id');
+
+        $users = User::query()
+            ->whereIn('id', $followedUserIds->merge($followerIds)->unique()->values())
             ->latest('id')
             ->paginate(10)
             ->withQueryString();
 
-        return $this->handleResponse(SubscriptionResource::collection($connections), $this->apiMessage('find_all_success'), $connections->lastPage(), $connections->total());
+        return $this->handleResponse(UserResource::collection($users), $this->apiMessage('find_all_success'), $users->lastPage(), $users->total());
     }
 }
