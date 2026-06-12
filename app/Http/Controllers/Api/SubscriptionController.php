@@ -44,4 +44,25 @@ final class SubscriptionController extends ApiResourceController
             'subscription' => $subscription !== null ? SubscriptionResource::make($subscription) : null,
         ], $this->apiMessage('find_success'));
     }
+
+    public function unfollow(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'user_id' => ['required', 'integer', 'exists:users,id'],
+            'follower_id' => ['required', 'integer', 'exists:users,id'],
+        ]);
+
+        Subscription::query()
+            ->where('user_id', $validated['user_id'])
+            ->where('follower_id', $validated['follower_id'])
+            ->delete();
+
+        AdminNotification::query()
+            ->where('type', 'new_follower')
+            ->where('from_user_id', $validated['follower_id'])
+            ->where('to_user_id', $validated['user_id'])
+            ->delete();
+
+        return $this->handleResponse(null, $this->apiMessage('deleted'));
+    }
 }

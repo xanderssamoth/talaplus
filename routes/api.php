@@ -97,6 +97,7 @@ Route::prefix('v1')->group(function (): void {
     Route::patch('notification/{notification}/read', [NotificationController::class, 'markAsRead']);
     Route::patch('notification/user/{user}/read', [NotificationController::class, 'markAllAsRead']);
     Route::get('subscription/is-follower', [SubscriptionController::class, 'isFollower']);
+    Route::delete('subscription/unfollow', [SubscriptionController::class, 'unfollow']);
 
     Route::apiResource('user', UserController::class);
     Route::apiResource('role', RoleController::class);

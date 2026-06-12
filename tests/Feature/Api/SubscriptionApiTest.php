@@ -90,4 +90,53 @@ class SubscriptionApiTest extends TestCase
             ->assertJsonPath('data.is_follower', false)
             ->assertJsonPath('data.subscription', null);
     }
+
+    public function test_unfollow_deletes_subscription_and_new_follower_notification(): void
+    {
+        $followed = User::create(['email' => 'followed@example.com', 'password' => 'password']);
+        $follower = User::create(['email' => 'follower@example.com', 'password' => 'password']);
+        $otherUser = User::create(['email' => 'other@example.com', 'password' => 'password']);
+        Subscription::create([
+            'user_id' => $followed->id,
+            'follower_id' => $follower->id,
+            'granted' => true,
+        ]);
+        Subscription::create([
+            'user_id' => $followed->id,
+            'follower_id' => $otherUser->id,
+            'granted' => true,
+        ]);
+        AdminNotification::create([
+            'type' => 'new_follower',
+            'from_user_id' => $follower->id,
+            'to_user_id' => $followed->id,
+        ]);
+        $otherNotification = AdminNotification::create([
+            'type' => 'new_follower',
+            'from_user_id' => $otherUser->id,
+            'to_user_id' => $followed->id,
+        ]);
+
+        $this->deleteJson('/api/v1/subscription/unfollow', [
+            'user_id' => $followed->id,
+            'follower_id' => $follower->id,
+        ])->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data', null);
+
+        $this->assertFalse(Subscription::query()
+            ->where('user_id', $followed->id)
+            ->where('follower_id', $follower->id)
+            ->exists());
+        $this->assertFalse(AdminNotification::query()
+            ->where('type', 'new_follower')
+            ->where('from_user_id', $follower->id)
+            ->where('to_user_id', $followed->id)
+            ->exists());
+        $this->assertTrue(Subscription::query()
+            ->where('user_id', $followed->id)
+            ->where('follower_id', $otherUser->id)
+            ->exists());
+        $this->assertDatabaseHas('notifications', ['id' => $otherNotification->id]);
+    }
 }
