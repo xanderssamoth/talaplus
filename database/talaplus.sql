@@ -3,7 +3,7 @@
 --
 -- Datamodel for the "TALA+" platform.
 -- == Copyright (c) 2026
--- == Designed by Xanders Samoth (https://xanderssamoth.xsamtech.com)
+-- == Designed by Xanders Samoth (https://team.xsamtech.com/xanderssamoth)
 -- -----------------------------------------------------
 -- -----------------------------------------------------
 -- Table `users`
