@@ -35,4 +35,11 @@ return [
         ],
     ],
 
+    'openai' => [
+        'key' => env('OPENAI_API_KEY'),
+        'model' => env('OPENAI_MODEL'),
+        'max_tokens' => env('OPENAI_MAX_TOKENS'),
+        'temperature' => env('OPENAI_TEMPERATURE'),
+    ],
+
 ];
