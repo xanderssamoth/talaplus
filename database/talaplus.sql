@@ -659,7 +659,7 @@ CREATE TABLE IF NOT EXISTS `histories` (
   `word` TEXT NULL COMMENT 'This refers to a search history of a user',
   `entity` ENUM('media', 'product', 'comment', 'user') NULL,
   `entity_id` BIGINT NULL,
-  `action` ENUM('search', 'view', 'play', 'like', 'gift', 'star', 'post', 'comment', 'order', 'report') NULL,
+  `action` ENUM('search', 'view', 'play', 'like', 'gift', 'star', 'post', 'comment', 'order', 'report', 'ask_ai') NULL,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `deleted_at` TIMESTAMP NULL,
@@ -886,32 +886,6 @@ CREATE TABLE IF NOT EXISTS `reactions` (
     FOREIGN KEY (`user_id`)
     REFERENCES `users` (`id`)
     ON DELETE SET NULL
-    ON UPDATE CASCADE)
-ENGINE = InnoDB;
-
-
--- -----------------------------------------------------
--- Table `bank_cards`
--- -----------------------------------------------------
-CREATE TABLE IF NOT EXISTS `bank_cards` (
-  `id` BIGINT NOT NULL AUTO_INCREMENT,
-  `card_name` VARCHAR(255) NULL,
-  `card_number` VARCHAR(45) NULL,
-  `expiration_date` VARCHAR(45) NULL,
-  `cvv_code` VARCHAR(45) NULL,
-  `provider` VARCHAR(45) NULL,
-  `is_main` TINYINT NOT NULL DEFAULT 0,
-  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `deleted_at` TIMESTAMP NULL,
-  `user_id` BIGINT NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE INDEX `id_bankcards_UNIQUE` (`id` ASC),
-  INDEX `fk_bankcards_users_idx` (`user_id` ASC),
-  CONSTRAINT `fk_bankcards_users`
-    FOREIGN KEY (`user_id`)
-    REFERENCES `users` (`id`)
-    ON DELETE CASCADE
     ON UPDATE CASCADE)
 ENGINE = InnoDB;
 
@@ -1162,4 +1136,123 @@ CREATE TABLE IF NOT EXISTS `media_user` (
     REFERENCES `users` (`id`)
     ON DELETE CASCADE
     ON UPDATE CASCADE)
+ENGINE = InnoDB;
+
+
+-- -----------------------------------------------------
+-- Table `ai_conversations`
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `ai_conversations` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `title` VARCHAR(255) NOT NULL,
+  `assistant` VARCHAR(50) NOT NULL,
+  `system_prompt` LONGTEXT NULL,
+  `last_message_at` TIMESTAMP NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `deleted_at` TIMESTAMP NULL,
+  `archived_at` TIMESTAMP NULL,
+  `user_id` BIGINT NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `id_aiconversations_UNIQUE` (`id` ASC),
+  INDEX `fk_aiconversations_users_idx` (`user_id` ASC),
+  CONSTRAINT `fk_aiconversations_users`
+    FOREIGN KEY (`user_id`)
+    REFERENCES `users` (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE)
+ENGINE = InnoDB;
+
+
+-- -----------------------------------------------------
+-- Table `ai_messages`
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `ai_messages` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `role` ENUM('system', 'user', 'assistant', 'tool') NOT NULL,
+  `content` LONGTEXT NOT NULL,
+  `model` VARCHAR(100) NULL,
+  `prompt_tokens` INT UNSIGNED NULL,
+  `completion_tokens` INT UNSIGNED NULL,
+  `total_tokens` INT UNSIGNED NULL,
+  `response_time_ms` INT UNSIGNED NULL,
+  `error_message` TEXT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `conversation_id` BIGINT NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `id_aimessages_UNIQUE` (`id` ASC),
+  INDEX `fk_aimessages_aiconversations_idx` (`conversation_id` ASC),
+  CONSTRAINT `fk_aimessages_aiconversations`
+    FOREIGN KEY (`conversation_id`)
+    REFERENCES `ai_conversations` (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE)
+ENGINE = InnoDB;
+
+
+-- -----------------------------------------------------
+-- Table `ai_message_files`
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `ai_message_files` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `ai_message_id` BIGINT NOT NULL,
+  `file_id` BIGINT NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `id_aimessagefiles_UNIQUE` (`id` ASC),
+  INDEX `fk_aimessagefiles_aimessages_idx` (`ai_message_id` ASC),
+  INDEX `fk_aimessagefiles_files_idx` (`file_id` ASC),
+  CONSTRAINT `fk_aimessagefiles_aimessages`
+    FOREIGN KEY (`ai_message_id`)
+    REFERENCES `ai_messages` (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_aimessagefiles_files`
+    FOREIGN KEY (`file_id`)
+    REFERENCES `files` (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE)
+ENGINE = InnoDB;
+
+
+-- -----------------------------------------------------
+-- Table `ai_tool_calls`
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `ai_tool_calls` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `tool_name` VARCHAR(100) NOT NULL,
+  `arguments` JSON NULL,
+  `response` JSON NULL,
+  `status` ENUM('pending', 'success', 'failed') NOT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `ai_message_id` BIGINT NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `id_aitoolcalls_UNIQUE` (`id` ASC),
+  INDEX `fk_aitoolcalls_aimessages_idx` (`ai_message_id` ASC),
+  CONSTRAINT `fk_aitoolcalls_aimessages`
+    FOREIGN KEY (`ai_message_id`)
+    REFERENCES `ai_messages` (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE)
+ENGINE = InnoDB;
+
+
+-- -----------------------------------------------------
+-- Table `ai_settings`
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `ai_settings` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `provider` VARCHAR(50) NOT NULL,
+  `model` VARCHAR(100) NOT NULL,
+  `temperature` DECIMAL(3,2) NOT NULL,
+  `max_tokens` INT UNSIGNED NOT NULL,
+  `stream` TINYINT NOT NULL,
+  `enabled` TINYINT NOT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `idai_settings_UNIQUE` (`id` ASC))
 ENGINE = InnoDB;
