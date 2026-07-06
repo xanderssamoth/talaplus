@@ -7,6 +7,7 @@ use App\Models\AboutDash;
 use App\Models\AboutSubject;
 use App\Models\AboutTitle;
 use App\Models\AdminNotification;
+use App\Models\AI\AiConversation;
 use App\Models\BankCard;
 use App\Models\Cart;
 use App\Models\Category;
@@ -42,6 +43,7 @@ class ApiModelsTest extends TestCase
             Media::class,
             Message::class,
             AdminNotification::class,
+            AiConversation::class,
             AboutSubject::class,
             AboutTitle::class,
             AboutContent::class,

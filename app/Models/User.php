@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\AI\AiConversation;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -112,6 +113,11 @@ class User extends Authenticatable
     public function messagesSent(): HasMany
     {
         return $this->hasMany(Message::class);
+    }
+
+    public function aiConversations(): HasMany
+    {
+        return $this->hasMany(AiConversation::class);
     }
 
     public function promoCodes(): HasMany

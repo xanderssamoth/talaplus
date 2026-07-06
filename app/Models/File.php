@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Models\AI\AiMessage;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class File extends SqlModel
@@ -51,5 +53,10 @@ class File extends SqlModel
     public function message(): BelongsTo
     {
         return $this->belongsTo(Message::class);
+    }
+
+    public function aiMessages(): BelongsToMany
+    {
+        return $this->belongsToMany(AiMessage::class, 'ai_message_files', 'file_id', 'ai_message_id')->withTimestamps();
     }
 }
