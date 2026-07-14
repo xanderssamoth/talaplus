@@ -2,12 +2,14 @@
 
 namespace App\Services\AI;
 
+use App\Contracts\AI\AIProvider;
+use App\Data\AI\AIMessageData;
 use App\Data\AI\AIResponse;
 use App\Mappers\AI\OpenAIMessageMapper;
 use OpenAI\Laravel\Facades\OpenAI;
 use Throwable;
 
-class OpenAIService
+class OpenAIService implements AIProvider
 {
     public function __construct(
         private AISettingService $settingService,
@@ -16,13 +18,15 @@ class OpenAIService
     ) {}
 
     /**
-     * @param  array<int, array<string, mixed>>  $messages
+     * @param  array<int, AIMessageData>  $messages
      * @param  array<string, mixed>  $options
-     * @return \App\Data\AI\AIResponse
      */
     public function chat(array $messages, array $options = []): AIResponse
     {
         $configuration = $this->settingService->getConfiguration();
+        $model = $options['model']
+            ?? $configuration['model']
+            ?? 'gpt-5.5';
 
         $payload = [
             'model' => $options['model']
@@ -32,8 +36,8 @@ class OpenAIService
             'input' => $this->messageMapper->toOpenAI($messages),
         ];
 
-        if (! empty($configuration['temperature'])) {
-            $payload['temperature'] = $configuration['temperature'];
+        if (! str_starts_with($model, 'gpt-5')) {
+            $payload['temperature'] = $configuration['temperature'] ?? 1;
         }
 
         if (! empty($configuration['max_tokens'])) {
@@ -52,7 +56,7 @@ class OpenAIService
     }
 
     /**
-     * @param  array<int, array<string, mixed>>  $messages
+     * @param  array<int, AIMessageData>  $messages
      * @param  array<string, mixed>  $options
      * @return iterable<int, mixed>
      */

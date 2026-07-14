@@ -56,4 +56,14 @@ class MessageService
     {
         throw new RuntimeException('Not implemented.');
     }
+
+    /**
+     * Retourne les messages d'une conversation dans leur ordre chronologique.
+     *
+     * @return \Illuminate\Support\Collection<int, AiMessage>
+     */
+    public function history(AiConversation $conversation): Collection
+    {
+        return $conversation->messages()->orderBy('id')->get();
+    }
 }

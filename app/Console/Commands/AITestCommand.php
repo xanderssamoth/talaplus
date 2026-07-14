@@ -2,22 +2,21 @@
 
 namespace App\Console\Commands;
 
+use App\Contracts\AI\AIProvider;
 use App\Data\AI\AIMessageData;
-use App\Services\AI\OpenAIService;
 use Illuminate\Console\Command;
 use Throwable;
 
 class AITestCommand extends Command
 {
     protected $signature = 'ai:test';
+    protected $description = 'Teste la connexion avec le fournisseur IA configuré';
 
-    protected $description = 'Teste la connexion OpenAI';
-
-    public function handle(OpenAIService $openAI): int
+    public function handle(AIProvider $aIProvider): int
     {
-        $this->info('Connexion à OpenAI...');
+        $this->info('Connexion au fournisseur IA...');
 
-        $status = $openAI->isAvailable();
+        $status = $aIProvider->isAvailable();
 
         if (! $status['success']) {
             $this->error($status['message']);
@@ -28,24 +27,20 @@ class AITestCommand extends Command
         $this->info('Connexion réussie.');
 
         try {
-
-            $response = $openAI->chat([
+            $appName = config('app.name');
+            $response = $aIProvider->chat([
                 new AIMessageData(
                     role: 'user',
-                    content: 'Dis simplement : Bonjour TALA+'
+                    content: "Dis simplement : Bonjour {$appName}"
                 ),
             ]);
 
             $this->newLine();
-
-            $this->info('Réponse :');
-
+            $this->info('Réponse du modèle :');
             $this->line($response->content);
 
             return self::SUCCESS;
-
         } catch (Throwable $exception) {
-
             $this->error($exception->getMessage());
 
             return self::FAILURE;

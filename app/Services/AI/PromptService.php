@@ -3,8 +3,10 @@
 namespace App\Services\AI;
 
 use App\Data\AI\AIMessageData;
+use App\Data\AI\ToolResultData;
 use App\Models\AI\AiConversation;
 use App\Models\User;
+use Illuminate\Support\Collection;
 
 class PromptService
 {
@@ -25,10 +27,36 @@ class PromptService
     }
 
     /**
+     * @param array<int, ToolResultData> $results
+     * @return array<int, AIMessageData>
+     */
+    public function buildToolMessages(array $results): array
+    {
+        return array_map(
+            function (ToolResultData $result): AIMessageData {
+
+                return new AIMessageData(
+                    role: 'tool',
+                    content: json_encode(
+                        [
+                            'success' => $result->success,
+                            'result' => $result->result,
+                            'error' => $result->error,
+                        ],
+                        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+                    ),
+                    toolCallId: $result->toolCallId,
+                );
+            },
+            $results
+        );
+    }
+
+    /**
      * @param  array<string, mixed>  $context
      * @return array<int, AIMessageData>
      */
-    public function buildMessages(AiConversation $conversation, ?string $newUserMessage = null, array $context = []): array
+    public function buildMessages(AiConversation $conversation, Collection $messages, array $context = []): array
     {
         return [];
     }

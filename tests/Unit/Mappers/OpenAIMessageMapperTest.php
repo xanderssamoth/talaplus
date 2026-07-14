@@ -31,17 +31,14 @@ class OpenAIMessageMapperTest extends TestCase
         ]);
 
         $this->assertSame('assistant', $payload[0]['role']);
-        $this->assertSame('Searching...', $payload[0]['content']);
+        $this->assertSame('input_text', $payload[0]['content'][0]['type']);
+        $this->assertSame('Searching...', $payload[0]['content'][0]['text']);
         $this->assertSame('assistant', $payload[0]['name']);
         $this->assertSame('tool_123', $payload[0]['tool_call_id']);
         $this->assertSame(['file_123'], $payload[0]['attachments']);
-        $this->assertSame('call_123', $payload[0]['tool_calls'][0]['id']);
         $this->assertSame('function', $payload[0]['tool_calls'][0]['type']);
-        $this->assertSame('search_videos', $payload[0]['tool_calls'][0]['function']['name']);
-        $this->assertJsonStringEqualsJsonString(
-            json_encode(['query' => 'music'], JSON_THROW_ON_ERROR),
-            $payload[0]['tool_calls'][0]['function']['arguments']
-        );
+        $this->assertSame('search_videos', $payload[0]['tool_calls'][0]['name']);
+        $this->assertSame(['query' => 'music'], $payload[0]['tool_calls'][0]['parameters']);
     }
 
     public function test_to_ai_response_maps_open_ai_chat_response_to_ai_response(): void

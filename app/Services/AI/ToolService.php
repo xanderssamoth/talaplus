@@ -2,15 +2,35 @@
 
 namespace App\Services\AI;
 
+use App\Data\AI\ToolCallData;
+use App\Data\AI\ToolResultData;
+use App\Models\AI\AiConversation;
+
 class ToolService
 {
     /**
-     * @param  array<string, mixed>  $arguments
-     * @return array<string, mixed>|null
+     * @param  \App\Data\AI\ToolCallData  $toolCall
+     * @param  \App\Models\AI\AiConversation  $conversation
+     * @return \App\Data\AI\ToolResultData
      */
-    public function execute(string $toolName, array $arguments = []): ?array
+    public function execute(ToolCallData $toolCall, AiConversation $conversation): ToolResultData
     {
-        return null;
+        return match ($toolCall->name) {
+            'ping' => new ToolResultData(
+                toolCallId: $toolCall->id,
+                toolName: 'ping',
+                result: [
+                    'message' => 'pong',
+                ],
+            ),
+
+            default => new ToolResultData(
+                toolCallId: $toolCall->id,
+                toolName: $toolCall->name,
+                success: false,
+                error: 'Unknown tool.',
+            ),
+        };
     }
 
     public function hasTool(string $toolName): bool

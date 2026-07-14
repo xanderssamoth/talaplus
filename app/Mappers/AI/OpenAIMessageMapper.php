@@ -9,7 +9,7 @@ use App\Data\AI\ToolCallData;
 class OpenAIMessageMapper
 {
     /**
-     * @param array<int, AIMessageData> $messages
+     * @param  array<int, AIMessageData>  $messages
      * @return array<int, array<string, mixed>>
      */
     public function toOpenAI(array $messages): array
@@ -54,27 +54,39 @@ class OpenAIMessageMapper
     {
         return new AIResponse(
 
-            content: $response->outputText ?? '',
+            content: (string) ($this->value($response, 'outputText')
+                ?? $this->value($response, 'output_text')
+                ?? $this->value($response, 'choices.0.message.content')
+                ?? ''),
 
-            model: $response->model ?? '',
+            model: (string) ($this->value($response, 'model') ?? ''),
 
-            promptTokens: $response->usage->inputTokens ?? 0,
+            promptTokens: (int) ($this->value($response, 'usage.inputTokens')
+                ?? $this->value($response, 'usage.prompt_tokens')
+                ?? $this->value($response, 'usage.input_tokens')
+                ?? 0),
 
-            completionTokens: $response->usage->outputTokens ?? 0,
+            completionTokens: (int) ($this->value($response, 'usage.outputTokens')
+                ?? $this->value($response, 'usage.completion_tokens')
+                ?? $this->value($response, 'usage.output_tokens')
+                ?? 0),
 
-            totalTokens: $response->usage->totalTokens ?? 0,
+            totalTokens: (int) ($this->value($response, 'usage.totalTokens')
+                ?? $this->value($response, 'usage.total_tokens')
+                ?? 0),
 
-            toolCalls: [],
+            toolCalls: $this->toolCallsFromResponse($this->value($response, 'choices.0.message', [])),
 
-            role: 'assistant',
+            role: (string) ($this->value($response, 'choices.0.message.role') ?? 'assistant'),
 
             provider: 'openai',
 
-            responseId: $response->id ?? null,
+            responseId: $this->nullableString($this->value($response, 'id')),
 
-            finishReason: $response->status ?? null,
+            finishReason: $this->nullableString($this->value($response, 'status')
+                ?? $this->value($response, 'choices.0.finish_reason')),
 
-            error: null,
+            error: $this->nullableString($this->value($response, 'error.message')),
         );
     }
 
@@ -99,6 +111,52 @@ class OpenAIMessageMapper
      */
     private function toolCallsFromResponse(mixed $response): array
     {
-        return [];
+        $toolCalls = $this->value($response, 'tool_calls', []);
+
+        if (! is_array($toolCalls)) {
+            return [];
+        }
+
+        return array_map(function (mixed $toolCall): ToolCallData {
+            $arguments = $this->value($toolCall, 'function.arguments', []);
+
+            if (is_string($arguments)) {
+                $decodedArguments = json_decode($arguments, true);
+                $arguments = is_array($decodedArguments) ? $decodedArguments : [];
+            }
+
+            return new ToolCallData(
+                id: (string) ($this->value($toolCall, 'id') ?? ''),
+                name: (string) ($this->value($toolCall, 'function.name') ?? ''),
+                arguments: is_array($arguments) ? $arguments : [],
+                type: (string) ($this->value($toolCall, 'type') ?? 'function'),
+            );
+        }, $toolCalls);
+    }
+
+    private function nullableString(mixed $value): ?string
+    {
+        return is_scalar($value) ? (string) $value : null;
+    }
+
+    private function value(mixed $source, string $path, mixed $default = null): mixed
+    {
+        foreach (explode('.', $path) as $segment) {
+            if (is_array($source) && array_key_exists($segment, $source)) {
+                $source = $source[$segment];
+
+                continue;
+            }
+
+            if (is_object($source) && isset($source->{$segment})) {
+                $source = $source->{$segment};
+
+                continue;
+            }
+
+            return $default;
+        }
+
+        return $source;
     }
 }

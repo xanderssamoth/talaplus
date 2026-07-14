@@ -8,6 +8,7 @@ use App\Models\AI\AiMessageFile;
 use App\Models\AI\AiToolCall;
 use App\Models\File;
 use App\Models\User;
+use App\Services\AI\ConversationService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\Schema;
@@ -207,5 +208,22 @@ class AiConversationApiTest extends TestCase
         $this->assertTrue($message->toolCalls()->where('tool_name', 'search_catalog')->exists());
         $this->assertSame($message->id, AiMessageFile::query()->firstOrFail()->aiMessage->id);
         $this->assertSame($message->id, AiToolCall::query()->firstOrFail()->aiMessage->id);
+    }
+
+    public function test_conversation_service_finds_conversation_for_its_user_only(): void
+    {
+        $owner = User::create(['firstname' => 'Owner', 'email' => 'owner@example.com', 'password' => 'password']);
+        $otherUser = User::create(['firstname' => 'Other', 'email' => 'other@example.com', 'password' => 'password']);
+        $conversation = AiConversation::create([
+            'title' => 'Owner conversation',
+            'assistant' => 'openai',
+            'user_id' => $owner->id,
+        ]);
+
+        $service = new ConversationService;
+
+        $this->assertSame($conversation->id, $service->findForUser($owner, $conversation->id)?->id);
+        $this->assertNull($service->findForUser($otherUser, $conversation->id));
+        $this->assertNull($service->findForUser($owner, 999));
     }
 }

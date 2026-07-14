@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AboutContentController;
 use App\Http\Controllers\Api\AboutDashController;
 use App\Http\Controllers\Api\AboutSubjectController;
 use App\Http\Controllers\Api\AboutTitleController;
+use App\Http\Controllers\Api\AI\AIController;
 use App\Http\Controllers\Api\AI\AiConversationController;
 use App\Http\Controllers\Api\AI\AiMessageController;
 use App\Http\Controllers\Api\AI\AiMessageFileController;
@@ -38,6 +39,8 @@ use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function (): void {
+    Route::post('ai/chat', [AIController::class, 'chat']);
+
     Route::post('user/login', [UserController::class, 'login']);
     Route::get('user/username/{username}', [UserController::class, 'findByUsername']);
     Route::get('user/search/by-word', [UserController::class, 'search']);

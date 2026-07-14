@@ -2,6 +2,7 @@
 
 namespace App\Services\AI;
 
+use App\Data\AI\ChatRequestData;
 use App\Models\AI\AiConversation;
 use App\Models\AI\AiMessage;
 use App\Models\User;
@@ -12,19 +13,16 @@ class AIService
 {
     public function __construct(
         private ConversationService $conversationService,
-        private MessageService $messageService,
-        private PromptService $promptService,
-        private OpenAIService $openAIService,
-        private ToolService $toolService,
-        private AISettingService $settingService,
+        private AIConversationRunner $conversationRunner,
     ) {}
 
     /**
-     * @param  array<string, mixed>  $options
+     * @param  \App\Models\User  $user
+     * @param  \App\Data\AI\ChatRequestData  $request
      */
-    public function sendMessage(User $user, string $content, ?AiConversation $conversation = null, array $options = []): AiMessage
+    public function chat(User $user, ChatRequestData $request): AiMessage
     {
-        throw new RuntimeException('Not implemented.');
+        return $this->conversationRunner->run($user, $request);
     }
 
     /**

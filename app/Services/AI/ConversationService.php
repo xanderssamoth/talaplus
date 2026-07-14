@@ -22,6 +22,14 @@ class ConversationService
         return null;
     }
 
+    public function findForUser(User $user, int $conversationId): ?AiConversation
+    {
+        return AiConversation::query()
+            ->whereBelongsTo($user)
+            ->whereKey($conversationId)
+            ->first();
+    }
+
     public function findOrFail(int $conversationId): AiConversation
     {
         throw new RuntimeException('Not implemented.');

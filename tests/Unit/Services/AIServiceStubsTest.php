@@ -2,11 +2,13 @@
 
 namespace Tests\Unit\Services;
 
+use App\Contracts\AI\AIProvider;
 use App\Data\AI\AIResponse;
 use App\Mappers\AI\OpenAIMessageMapper;
 use App\Models\AI\AiConversation;
 use App\Models\AI\AiMessage;
 use App\Models\User;
+use App\Services\AI\AIConversationRunner;
 use App\Services\AI\AIService;
 use App\Services\AI\AISettingService;
 use App\Services\AI\ConversationService;
@@ -23,13 +25,19 @@ class AIServiceStubsTest extends TestCase
 {
     public function test_ai_service_stub_signatures_are_available(): void
     {
+        $this->assertContains(AIProvider::class, class_implements(OpenAIService::class));
+
         $this->assertConstructorSignature(AIService::class, [
+            ConversationService::class,
+            AIConversationRunner::class,
+        ]);
+
+        $this->assertConstructorSignature(AIConversationRunner::class, [
             ConversationService::class,
             MessageService::class,
             PromptService::class,
-            OpenAIService::class,
+            AIProvider::class,
             ToolService::class,
-            AISettingService::class,
         ]);
 
         $this->assertConstructorSignature(OpenAIService::class, [
@@ -71,6 +79,11 @@ class AIServiceStubsTest extends TestCase
         $this->assertMethodSignature(OpenAIService::class, 'embeddings', 'array', ['array', 'array']);
         $this->assertMethodSignature(OpenAIService::class, 'isAvailable', 'array', []);
 
+        $this->assertMethodSignature(AIProvider::class, 'chat', AIResponse::class, ['array', 'array']);
+        $this->assertMethodSignature(AIProvider::class, 'stream', 'iterable', ['array', 'array']);
+        $this->assertMethodSignature(AIProvider::class, 'embeddings', 'array', ['array', 'array']);
+        $this->assertMethodSignature(AIProvider::class, 'isAvailable', 'array', []);
+
         $this->assertMethodSignature(PromptService::class, 'buildSystemPrompt', 'string', ['?'.User::class, 'array']);
         $this->assertMethodSignature(PromptService::class, 'buildDeveloperPrompt', 'string', ['?'.User::class, 'array']);
         $this->assertMethodSignature(PromptService::class, 'buildMessages', 'array', [
@@ -92,6 +105,10 @@ class AIServiceStubsTest extends TestCase
             'array',
         ]);
         $this->assertMethodSignature(ConversationService::class, 'find', '?'.AiConversation::class, ['int']);
+        $this->assertMethodSignature(ConversationService::class, 'findForUser', '?'.AiConversation::class, [
+            User::class,
+            'int',
+        ]);
         $this->assertMethodSignature(ConversationService::class, 'findOrFail', AiConversation::class, ['int']);
         $this->assertMethodSignature(ConversationService::class, 'getAll', Collection::class, [User::class, 'array']);
         $this->assertMethodSignature(ConversationService::class, 'rename', AiConversation::class, [
@@ -151,10 +168,10 @@ class AIServiceStubsTest extends TestCase
         $configuration = (new AISettingService)->getConfiguration();
 
         $this->assertSame([
-            'provider' => '',
-            'model' => '',
-            'temperature' => 0.0,
-            'max_tokens' => 0,
+            'provider' => 'openai',
+            'model' => env('OPENAI_MODEL', 'gpt-5.5'),
+            'temperature' => 0.7,
+            'max_tokens' => 2000,
             'stream' => false,
         ], $configuration);
     }

@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Contracts\AI\AIProvider;
 use App\Helpers\ApiStoreColumnsExtension;
+use App\Services\AI\OpenAIService;
 use Dedoc\Scramble\Configuration\OperationTransformers;
 use Dedoc\Scramble\Scramble;
 use Illuminate\Support\ServiceProvider;
@@ -14,7 +16,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(AIProvider::class, OpenAIService::class);
     }
 
     /**
