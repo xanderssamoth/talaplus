@@ -74,11 +74,13 @@ class Handler extends ExceptionHandler
      */
     protected function unauthenticated($request, AuthenticationException $exception)
     {
-        if (!$request->is('api/*')) {
-            $admins_exist = User::whereHas('roles', fn($q) => $q->where('roles.role_name', 'Administrateur'))->exists();
+        // $is_api_request = $request->route()->getPrefix() == 'api';
 
-            return response()->view('auth.login', ['admins_exist' => $admins_exist]);
-        }
+        // if ($is_api_request == false) {
+        //     $admins_exist = User::whereHas('roles', fn($q) => $q->where('roles.role_name', 'Administrateur'))->exists();
+
+        //     return response()->view('auth.login', ['admins_exist' => $admins_exist]);
+        // }
 
         return response()->json(['message' => __('notifications.401_description')], 401);
     }
