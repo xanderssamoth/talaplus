@@ -2,13 +2,20 @@
 
 namespace Tests\Feature\Api;
 
+use App\Contracts\AI\AIProvider;
+use App\Data\AI\AIResponse;
+use App\Data\AI\ChatRequestData;
 use App\Models\AI\AiConversation;
 use App\Models\AI\AiMessage;
 use App\Models\AI\AiMessageFile;
 use App\Models\AI\AiToolCall;
 use App\Models\File;
 use App\Models\User;
+use App\Services\AI\AIConversationRunner;
 use App\Services\AI\ConversationService;
+use App\Services\AI\MessageService;
+use App\Services\AI\PromptService;
+use App\Services\AI\ToolService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\Schema;
@@ -225,5 +232,59 @@ class AiConversationApiTest extends TestCase
         $this->assertSame($conversation->id, $service->findForUser($owner, $conversation->id)?->id);
         $this->assertNull($service->findForUser($otherUser, $conversation->id));
         $this->assertNull($service->findForUser($owner, 999));
+    }
+
+    public function test_ai_conversation_runner_creates_conversation_and_messages(): void
+    {
+        $user = User::create(['firstname' => 'Member', 'email' => 'member@example.com', 'password' => 'password']);
+        $provider = new class implements AIProvider
+        {
+            public function chat(array $messages, array $options = []): AIResponse
+            {
+                return new AIResponse(
+                    content: 'Bonjour TALA+',
+                    model: 'fake-model',
+                    promptTokens: 4,
+                    completionTokens: 3,
+                    totalTokens: 7,
+                );
+            }
+
+            public function stream(array $messages, array $options = []): iterable
+            {
+                return [];
+            }
+
+            public function embeddings(array $input, array $options = []): array
+            {
+                return [];
+            }
+
+            public function isAvailable(): array
+            {
+                return ['success' => true, 'message' => 'available'];
+            }
+        };
+
+        $runner = new AIConversationRunner(
+            new ConversationService,
+            new MessageService,
+            new PromptService,
+            $provider,
+            new ToolService,
+        );
+
+        $message = $runner->run($user, new ChatRequestData(message: 'Bonjour'));
+
+        $conversation = AiConversation::query()->firstOrFail();
+
+        $this->assertSame('assistant', $message->role);
+        $this->assertSame('Bonjour TALA+', $message->content);
+        $this->assertSame('fake-model', $message->model);
+        $this->assertSame(7, $message->total_tokens);
+        $this->assertSame($user->id, $conversation->user_id);
+        $this->assertSame('Bonjour', $conversation->title);
+        $this->assertNotNull($conversation->last_message_at);
+        $this->assertSame(['user', 'assistant'], AiMessage::query()->orderBy('id')->pluck('role')->all());
     }
 }

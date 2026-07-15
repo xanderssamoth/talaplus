@@ -105,7 +105,7 @@ class AIConversationRunner
 
     private function handleToolCalls(AIResponse $response, AiConversation $conversation): AIResponse
     {
-        throw new RuntimeException('Not implemented.');
+        return $response;
     }
 
     private function storeAssistantMessage(AiConversation $conversation, AIResponse $response): AiMessage
@@ -126,7 +126,7 @@ class AIConversationRunner
                 ],
 
                 'tool_calls' => array_map(
-                    fn($tool) => [
+                    fn ($tool) => [
                         'id' => $tool->id,
                         'name' => $tool->name,
                         'arguments' => $tool->arguments,

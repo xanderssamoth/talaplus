@@ -16,10 +16,6 @@ class AIService
         private AIConversationRunner $conversationRunner,
     ) {}
 
-    /**
-     * @param  \App\Models\User  $user
-     * @param  \App\Data\AI\ChatRequestData  $request
-     */
     public function chat(User $user, ChatRequestData $request): AiMessage
     {
         return $this->conversationRunner->run($user, $request);
@@ -30,7 +26,13 @@ class AIService
      */
     public function createConversation(User $user, string $title, ?string $assistant = null, ?string $systemPrompt = null, array $attributes = []): AiConversation
     {
-        throw new RuntimeException('Not implemented.');
+        return $this->conversationService->create(
+            user: $user,
+            title: $title,
+            assistant: $assistant ?? 'default',
+            systemPrompt: $systemPrompt,
+            attributes: $attributes
+        );
     }
 
     public function getConversation(int $conversationId): ?AiConversation

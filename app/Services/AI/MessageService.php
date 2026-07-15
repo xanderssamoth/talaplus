@@ -14,7 +14,17 @@ class MessageService
      */
     public function store(AiConversation $conversation, string $role, string $content, array $metadata = []): AiMessage
     {
-        throw new RuntimeException('Not implemented.');
+        return AiMessage::create([
+            'conversation_id' => $conversation->id,
+            'role' => $role,
+            'content' => $content,
+            'model' => $metadata['model'] ?? null,
+            'prompt_tokens' => $metadata['usage']['prompt_tokens'] ?? $metadata['prompt_tokens'] ?? null,
+            'completion_tokens' => $metadata['usage']['completion_tokens'] ?? $metadata['completion_tokens'] ?? null,
+            'total_tokens' => $metadata['usage']['total_tokens'] ?? $metadata['total_tokens'] ?? null,
+            'response_time_ms' => $metadata['response_time_ms'] ?? null,
+            'error_message' => $metadata['error_message'] ?? $metadata['error'] ?? null,
+        ]);
     }
 
     /**
@@ -22,7 +32,7 @@ class MessageService
      */
     public function storeUserMessage(AiConversation $conversation, string $content, array $metadata = []): AiMessage
     {
-        throw new RuntimeException('Not implemented.');
+        return $this->store($conversation, 'user', $content, $metadata);
     }
 
     /**
@@ -30,7 +40,7 @@ class MessageService
      */
     public function storeAssistantMessage(AiConversation $conversation, string $content, array $metadata = []): AiMessage
     {
-        throw new RuntimeException('Not implemented.');
+        return $this->store($conversation, 'assistant', $content, $metadata);
     }
 
     /**
@@ -38,15 +48,23 @@ class MessageService
      */
     public function attachFiles(AiMessage $message, array $files = []): AiMessage
     {
-        throw new RuntimeException('Not implemented.');
+        if ($files !== []) {
+            throw new RuntimeException('File attachment is not implemented.');
+        }
+
+        return $message->refresh();
     }
 
     /**
      * @param  array<string, mixed>  $filters
+     * @return Collection<int, AiMessage>
      */
     public function getConversationMessages(AiConversation $conversation, array $filters = []): Collection
     {
-        return collect();
+        return $conversation->messages()
+            ->when(isset($filters['role']), fn ($query) => $query->where('role', $filters['role']))
+            ->oldest('id')
+            ->get();
     }
 
     /**
@@ -54,16 +72,25 @@ class MessageService
      */
     public function updateMetadata(AiMessage $message, array $metadata = []): AiMessage
     {
-        throw new RuntimeException('Not implemented.');
+        $message->forceFill([
+            'model' => $metadata['model'] ?? $message->model,
+            'prompt_tokens' => $metadata['usage']['prompt_tokens'] ?? $metadata['prompt_tokens'] ?? $message->prompt_tokens,
+            'completion_tokens' => $metadata['usage']['completion_tokens'] ?? $metadata['completion_tokens'] ?? $message->completion_tokens,
+            'total_tokens' => $metadata['usage']['total_tokens'] ?? $metadata['total_tokens'] ?? $message->total_tokens,
+            'response_time_ms' => $metadata['response_time_ms'] ?? $message->response_time_ms,
+            'error_message' => $metadata['error_message'] ?? $metadata['error'] ?? $message->error_message,
+        ])->save();
+
+        return $message->refresh();
     }
 
     /**
      * Retourne les messages d'une conversation dans leur ordre chronologique.
      *
-     * @return \Illuminate\Support\Collection<int, AiMessage>
+     * @return Collection<int, AiMessage>
      */
     public function history(AiConversation $conversation): Collection
     {
-        return $conversation->messages()->orderBy('id')->get();
+        return $this->getConversationMessages($conversation);
     }
 }

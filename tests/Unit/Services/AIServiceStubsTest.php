@@ -4,6 +4,9 @@ namespace Tests\Unit\Services;
 
 use App\Contracts\AI\AIProvider;
 use App\Data\AI\AIResponse;
+use App\Data\AI\ChatRequestData;
+use App\Data\AI\ToolCallData;
+use App\Data\AI\ToolResultData;
 use App\Mappers\AI\OpenAIMessageMapper;
 use App\Models\AI\AiConversation;
 use App\Models\AI\AiMessage;
@@ -46,11 +49,9 @@ class AIServiceStubsTest extends TestCase
             OpenAIMessageMapper::class,
         ]);
 
-        $this->assertMethodSignature(AIService::class, 'sendMessage', AiMessage::class, [
+        $this->assertMethodSignature(AIService::class, 'chat', AiMessage::class, [
             User::class,
-            'string',
-            '?'.AiConversation::class,
-            'array',
+            ChatRequestData::class,
         ]);
         $this->assertMethodSignature(AIService::class, 'createConversation', AiConversation::class, [
             User::class,
@@ -88,12 +89,12 @@ class AIServiceStubsTest extends TestCase
         $this->assertMethodSignature(PromptService::class, 'buildDeveloperPrompt', 'string', ['?'.User::class, 'array']);
         $this->assertMethodSignature(PromptService::class, 'buildMessages', 'array', [
             AiConversation::class,
-            '?string',
+            Collection::class,
             'array',
         ]);
         $this->assertParameterNames(PromptService::class, 'buildMessages', [
             'conversation',
-            'newUserMessage',
+            'messages',
             'context',
         ]);
 
@@ -150,7 +151,10 @@ class AIServiceStubsTest extends TestCase
             'array',
         ]);
 
-        $this->assertMethodSignature(ToolService::class, 'execute', '?array', ['string', 'array']);
+        $this->assertMethodSignature(ToolService::class, 'execute', ToolResultData::class, [
+            ToolCallData::class,
+            AiConversation::class,
+        ]);
         $this->assertMethodSignature(ToolService::class, 'hasTool', 'bool', ['string']);
         $this->assertMethodSignature(ToolService::class, 'listTools', 'array', []);
         $this->assertMethodSignature(ToolService::class, 'getToolDefinitions', 'array', []);

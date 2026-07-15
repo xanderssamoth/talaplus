@@ -15,7 +15,7 @@ class PromptService
      */
     public function buildSystemPrompt(?User $user = null, array $context = []): string
     {
-        return '';
+        return (string) ($context['system_prompt'] ?? 'Tu es l assistant IA de TALA+.');
     }
 
     /**
@@ -23,11 +23,11 @@ class PromptService
      */
     public function buildDeveloperPrompt(?User $user = null, array $context = []): string
     {
-        return '';
+        return (string) ($context['developer_prompt'] ?? 'Reponds de facon claire et concise.');
     }
 
     /**
-     * @param array<int, ToolResultData> $results
+     * @param  array<int, ToolResultData>  $results
      * @return array<int, AIMessageData>
      */
     public function buildToolMessages(array $results): array
@@ -58,6 +58,31 @@ class PromptService
      */
     public function buildMessages(AiConversation $conversation, Collection $messages, array $context = []): array
     {
-        return [];
+        $payload = [];
+
+        if ($conversation->system_prompt !== null && trim((string) $conversation->system_prompt) !== '') {
+            $payload[] = new AIMessageData(
+                role: 'system',
+                content: (string) $conversation->system_prompt,
+            );
+        }
+
+        $developerPrompt = $this->buildDeveloperPrompt(context: $context);
+
+        if (trim($developerPrompt) !== '') {
+            $payload[] = new AIMessageData(
+                role: 'developer',
+                content: $developerPrompt,
+            );
+        }
+
+        foreach ($messages as $message) {
+            $payload[] = new AIMessageData(
+                role: (string) $message->role,
+                content: (string) $message->content,
+            );
+        }
+
+        return $payload;
     }
 }

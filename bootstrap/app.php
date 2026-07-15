@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\BaseController;
 use App\Http\Middleware\Localization;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Application;
@@ -79,5 +80,15 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             return app(BaseController::class)->handleError(null, __('api.errors.query_failed'), 500);
+        });
+
+        $exceptions->render(function (AuthenticationException $exception, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            return response()->json([
+                'message' => __('notifications.401_description'),
+            ], 401);
         });
     })->create();
