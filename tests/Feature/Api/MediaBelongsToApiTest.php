@@ -100,6 +100,11 @@ class MediaBelongsToApiTest extends TestCase
             $table->string('file_name')->nullable();
             $table->string('file_type')->nullable();
             $table->text('file_url');
+            $table->string('mime_type')->nullable();
+            $table->unsignedBigInteger('file_size')->nullable();
+            $table->unsignedInteger('width')->nullable();
+            $table->unsignedInteger('height')->nullable();
+            $table->unsignedInteger('duration')->nullable();
             $table->foreignId('comment_id')->nullable();
             $table->foreignId('product_id')->nullable();
             $table->foreignId('message_id')->nullable();

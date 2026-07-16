@@ -115,6 +115,11 @@ class NotificationApiTest extends TestCase
             $table->id();
             $table->string('file_name')->nullable();
             $table->text('file_url');
+            $table->string('mime_type')->nullable();
+            $table->unsignedBigInteger('file_size')->nullable();
+            $table->unsignedInteger('width')->nullable();
+            $table->unsignedInteger('height')->nullable();
+            $table->unsignedInteger('duration')->nullable();
             $table->foreignId('user_id')->nullable();
             $table->foreignId('comment_id')->nullable();
             $table->foreignId('product_id')->nullable();

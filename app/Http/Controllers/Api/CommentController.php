@@ -24,6 +24,28 @@ final class CommentController extends ApiResourceController
 
     protected string $resourceClass = CommentResource::class;
 
+    public function index(Request $request): JsonResponse
+    {
+        $userId = $request->integer('user_id') ?: null;
+
+        if ($userId !== null && ! User::query()->whereKey($userId)->exists()) {
+            return $this->handleError(null, $this->apiMessage('not_found', 'user'));
+        }
+
+        $comments = Comment::query()
+            ->visibleTo($userId)
+            ->latest('id')
+            ->paginate(10)
+            ->withQueryString();
+
+        return $this->handleResponse(
+            CommentResource::collection($comments),
+            $this->apiMessage('find_all_success'),
+            $comments->lastPage(),
+            $comments->total()
+        );
+    }
+
     public function store(Request $request): JsonResponse
     {
         $payload = $this->payload($request);
@@ -173,6 +195,7 @@ final class CommentController extends ApiResourceController
 
         $posts = Comment::query()
             ->where('type', 'post')
+            ->visibleTo($userId)
             ->orderByRaw(
                 <<<'SQL'
                 CASE
@@ -334,6 +357,7 @@ final class CommentController extends ApiResourceController
                 'file_type' => $request->input('file_type', $this->fileTypeFromMime((string) $uploadedFile->getMimeType())),
                 'user_id' => $comment->user_id,
                 'comment_id' => $comment->id,
+                ...File::metadataFromUploadedFile($uploadedFile),
             ]);
         });
     }

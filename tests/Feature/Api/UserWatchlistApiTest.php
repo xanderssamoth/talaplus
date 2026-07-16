@@ -102,6 +102,11 @@ class UserWatchlistApiTest extends TestCase
             $table->string('file_name')->nullable();
             $table->text('file_url');
             $table->string('file_type')->default('photo');
+            $table->string('mime_type')->nullable();
+            $table->unsignedBigInteger('file_size')->nullable();
+            $table->unsignedInteger('width')->nullable();
+            $table->unsignedInteger('height')->nullable();
+            $table->unsignedInteger('duration')->nullable();
             $table->foreignId('media_id')->nullable();
             $table->foreignId('user_id')->nullable();
             $table->timestamps();

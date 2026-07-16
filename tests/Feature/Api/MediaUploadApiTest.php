@@ -3,6 +3,7 @@
 namespace Tests\Feature\Api;
 
 use App\Models\AdminNotification;
+use App\Models\File;
 use App\Models\Media;
 use App\Models\Role;
 use App\Models\User;
@@ -126,6 +127,11 @@ class MediaUploadApiTest extends TestCase
             $table->text('file_url');
             $table->longText('file_description')->nullable();
             $table->string('file_type')->default('photo');
+            $table->string('mime_type')->nullable();
+            $table->unsignedBigInteger('file_size')->nullable();
+            $table->unsignedInteger('width')->nullable();
+            $table->unsignedInteger('height')->nullable();
+            $table->unsignedInteger('duration')->nullable();
             $table->foreignId('user_id')->nullable();
             $table->foreignId('media_id')->nullable();
             $table->timestamps();
@@ -221,6 +227,33 @@ class MediaUploadApiTest extends TestCase
         $this->assertNull($media->media_url);
         $this->assertNull($media->cover_url);
         $this->assertSame('0.00', (string) $media->price);
+    }
+
+    public function test_store_saves_uploaded_file_metadata(): void
+    {
+        Storage::fake('s3');
+
+        $owner = User::create(['email' => 'owner@example.com', 'username' => 'owner', 'password' => 'password']);
+
+        $response = $this->post('/api/v1/media', [
+            'media_title' => 'With attachment',
+            'type' => 'music',
+            'user_id' => $owner->id,
+            'files' => [
+                UploadedFile::fake()->image('poster.jpg', 640, 480),
+            ],
+        ], ['Accept' => 'application/json']);
+
+        $response->assertOk();
+
+        $file = File::query()->firstOrFail();
+
+        $this->assertSame('poster.jpg', $file->file_name);
+        $this->assertSame('image/jpeg', $file->mime_type);
+        $this->assertNotNull($file->file_size);
+        $this->assertSame(640, $file->width);
+        $this->assertSame(480, $file->height);
+        $this->assertNull($file->duration);
     }
 
     public function test_store_selects_content_creator_role_for_media_owner(): void

@@ -273,6 +273,7 @@ final class UserController extends ApiResourceController
                 'file_url' => $avatarUrl,
                 'file_type' => 'photo',
                 'user_id' => $user->id,
+                ...File::metadataFromUploadedFile($request->file('avatar')),
             ]);
         }
 
@@ -333,6 +334,7 @@ final class UserController extends ApiResourceController
                 'file_description' => $validated['file_description'] ?? null,
                 'file_type' => $validated['file_type'] ?? 'document',
                 'user_id' => $user->id,
+                ...File::metadataFromUploadedFile($uploadedFile),
             ]);
         });
 

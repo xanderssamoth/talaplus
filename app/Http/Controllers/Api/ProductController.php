@@ -45,6 +45,7 @@ final class ProductController extends ApiResourceController
                 'file_type' => str_starts_with((string) $uploadedFile->getMimeType(), 'image/') ? 'photo' : 'document',
                 'user_id' => $product->user_id,
                 'product_id' => $product->id,
+                ...File::metadataFromUploadedFile($uploadedFile),
             ]);
         });
 
@@ -128,6 +129,11 @@ final class ProductController extends ApiResourceController
                 'file_type' => $fileType,
                 'user_id' => $product->user_id,
                 'comment_id' => $post->id,
+                'mime_type' => $file->mime_type,
+                'file_size' => $file->file_size,
+                'width' => $file->width,
+                'height' => $file->height,
+                'duration' => $file->duration,
             ]);
         });
 

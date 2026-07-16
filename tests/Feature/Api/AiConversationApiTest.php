@@ -96,6 +96,11 @@ class AiConversationApiTest extends TestCase
             $table->text('file_url');
             $table->longText('file_description')->nullable();
             $table->string('file_type')->default('photo');
+            $table->string('mime_type')->nullable();
+            $table->unsignedBigInteger('file_size')->nullable();
+            $table->unsignedInteger('width')->nullable();
+            $table->unsignedInteger('height')->nullable();
+            $table->unsignedInteger('duration')->nullable();
             $table->foreignId('user_id')->nullable();
             $table->timestamps();
             $table->softDeletes();

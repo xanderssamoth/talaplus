@@ -88,6 +88,7 @@ final class MediaController extends ApiResourceController
                 'file_url' => Storage::disk('s3')->url($uploadedFile->store('medias/files', 's3')),
                 'file_type' => str_starts_with((string) $uploadedFile->getMimeType(), 'video/') ? 'video' : 'document',
                 'user_id' => $media->user_id,
+                ...File::metadataFromUploadedFile($uploadedFile),
             ];
 
             if (Schema::hasColumn('files', 'media_id')) {

@@ -157,6 +157,11 @@ class ProductCartMessageApiTest extends TestCase
             $table->text('file_url');
             $table->longText('file_description')->nullable();
             $table->string('file_type')->default('photo');
+            $table->string('mime_type')->nullable();
+            $table->unsignedBigInteger('file_size')->nullable();
+            $table->unsignedInteger('width')->nullable();
+            $table->unsignedInteger('height')->nullable();
+            $table->unsignedInteger('duration')->nullable();
             $table->foreignId('user_id')->nullable();
             $table->foreignId('product_id')->nullable();
             $table->foreignId('message_id')->nullable();
@@ -223,6 +228,10 @@ class ProductCartMessageApiTest extends TestCase
             $table->foreignId('media_id')->nullable();
             $table->foreignId('product_id')->nullable();
             $table->foreignId('user_id');
+            $table->boolean('allow_comment')->default(true);
+            $table->boolean('allow_share')->default(true);
+            $table->string('visibility')->default('public');
+            $table->dateTime('publish_at')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
