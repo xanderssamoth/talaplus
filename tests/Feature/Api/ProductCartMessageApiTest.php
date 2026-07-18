@@ -847,16 +847,33 @@ class ProductCartMessageApiTest extends TestCase
 
     public function test_message_search_and_conversation_endpoints(): void
     {
+        Storage::fake('s3');
+
         $sender = User::create(['firstname' => 'Sender', 'email' => 'sender@example.com', 'password' => 'password']);
         $receiver = User::create(['firstname' => 'Receiver', 'email' => 'receiver@example.com', 'password' => 'password']);
         Message::create(['message_content' => 'Hello there', 'user_id' => $sender->id, 'addressee_user_id' => $receiver->id]);
         Message::create(['message_content' => 'Hi back', 'user_id' => $receiver->id, 'addressee_user_id' => $sender->id]);
 
+        $storeResponse = $this->post('/api/v1/message', [
+            'message_content' => 'File attached',
+            'user_id' => $sender->id,
+            'addressee_user_id' => $receiver->id,
+            'files' => [
+                UploadedFile::fake()->create('brief.pdf', 10, 'application/pdf'),
+            ],
+        ], ['Accept' => 'application/json']);
+
+        $storeResponse->assertOk()
+            ->assertJsonPath('data.files.0.file_name', 'brief.pdf')
+            ->assertJsonPath('data.files.0.file_type', 'document');
+
+        Storage::disk('s3')->assertExists('messages/files/'.basename((string) $storeResponse->json('data.files.0.file_url')));
+
         $this->getJson("/api/v1/message/search/by-word?user_id={$sender->id}&word=Hello")->assertOk();
         $this->getJson("/api/v1/message/conversation?user_id={$sender->id}")->assertOk()->assertJsonPath('success', true);
         $this->getJson("/api/v1/message/conversation/users?user_id={$sender->id}&addressee_user_id={$receiver->id}")
             ->assertOk()
-            ->assertJsonCount(2, 'data');
+            ->assertJsonCount(3, 'data');
 
         $group = Group::create(['group_name' => 'Team', 'user_id' => $sender->id]);
         $group->users()->attach($sender->id);

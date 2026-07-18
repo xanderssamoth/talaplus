@@ -7,6 +7,7 @@ use Dedoc\Scramble\Extensions\OperationExtension;
 use Dedoc\Scramble\Support\Generator\Operation;
 use Dedoc\Scramble\Support\Generator\RequestBodyObject;
 use Dedoc\Scramble\Support\Generator\Schema;
+use Dedoc\Scramble\Support\Generator\Types\ArrayType;
 use Dedoc\Scramble\Support\Generator\Types\BooleanType;
 use Dedoc\Scramble\Support\Generator\Types\IntegerType;
 use Dedoc\Scramble\Support\Generator\Types\NumberType;
@@ -49,7 +50,8 @@ final class ApiStoreColumnsExtension extends OperationExtension
             return;
         }
 
-        $schema = $this->requestBodySchema($operation);
+        $documentsFileUploads = $this->documentsFileUploads($routeInfo, $table);
+        $schema = $this->requestBodySchema($operation, $documentsFileUploads ? 'multipart/form-data' : null);
         $type = $schema->type;
 
         if (! $type instanceof ObjectType) {
@@ -69,8 +71,21 @@ final class ApiStoreColumnsExtension extends OperationExtension
             }
         }
 
+        if ($documentsFileUploads && ! $type->hasProperty('files')) {
+            $type->addProperty('files', (new ArrayType)
+                ->setItems((new StringType)->format('binary'))
+                ->setDescription('Fichiers a envoyer avec la requete multipart/form-data.'));
+        }
+
         $type->setRequired($requiredColumns);
         $operation->requestBodyObject?->required($requiredColumns !== []);
+    }
+
+    private function documentsFileUploads(RouteInfo $routeInfo, string $table): bool
+    {
+        return $routeInfo->methodName() === 'store'
+            && strtolower($routeInfo->method) === 'post'
+            && in_array($table, ['comments', 'products', 'messages'], true);
     }
 
     private function documentsResourcePayload(RouteInfo $routeInfo): bool
@@ -126,17 +141,22 @@ final class ApiStoreColumnsExtension extends OperationExtension
             ->all();
     }
 
-    private function requestBodySchema(Operation $operation): Schema
+    private function requestBodySchema(Operation $operation, ?string $preferredContentType = null): Schema
     {
         $operation->requestBodyObject ??= RequestBodyObject::make();
 
         if (! isset($operation->requestBodyObject->content) || $operation->requestBodyObject->content === []) {
-            $operation->requestBodyObject->setContent('application/json', Schema::fromType(new ObjectType));
+            $operation->requestBodyObject->setContent($preferredContentType ?? 'application/json', Schema::fromType(new ObjectType));
         }
 
-        $contentType = array_key_exists('application/json', $operation->requestBodyObject->content)
+        if ($preferredContentType !== null && ! array_key_exists($preferredContentType, $operation->requestBodyObject->content)) {
+            $operation->requestBodyObject->setContent($preferredContentType, Schema::fromType(new ObjectType));
+        }
+
+        $contentType = $preferredContentType
+            ?? (array_key_exists('application/json', $operation->requestBodyObject->content)
             ? 'application/json'
-            : array_key_first($operation->requestBodyObject->content);
+            : array_key_first($operation->requestBodyObject->content));
 
         $schema = $operation->requestBodyObject->content[$contentType];
 
