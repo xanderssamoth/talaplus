@@ -37,6 +37,7 @@ class User extends Authenticatable
         'lastname',
         'surname',
         'partner_name',
+        'about_me',
         'gender',
         'birthdate',
         'country',
@@ -123,6 +124,11 @@ class User extends Authenticatable
     public function promoCodes(): HasMany
     {
         return $this->hasMany(PromoCode::class);
+    }
+
+    public function products(): HasMany
+    {
+        return $this->hasMany(Product::class);
     }
 
     public function followers(): HasMany

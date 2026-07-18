@@ -40,6 +40,7 @@ final class UserController extends ApiResourceController
             'firstname' => ['nullable', 'string', 'max:255'],
             'lastname' => ['nullable', 'string', 'max:255'],
             'surname' => ['nullable', 'string', 'max:255'],
+            'about_me' => ['nullable', 'string'],
             'email' => ['nullable', 'email', 'max:255', 'unique:users,email'],
             'phone' => ['nullable', 'string', 'max:45', 'unique:users,phone'],
             'username' => ['required', 'string', 'max:255', 'unique:users,username'],
@@ -160,6 +161,57 @@ final class UserController extends ApiResourceController
             UserResource::make(User::query()->where('username', $username)->firstOrFail()),
             $this->apiMessage('find_success')
         );
+    }
+
+    public function entrepreneurs(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'category_ids' => ['nullable', 'array'],
+            'category_ids.*' => ['integer', 'exists:categories,id'],
+            'category_id' => ['nullable', 'integer', 'exists:categories,id'],
+            'categories' => ['nullable', 'array'],
+            'categories.*' => ['integer', 'exists:categories,id'],
+            'countries' => ['nullable', 'array'],
+            'countries.*' => ['string'],
+            'country' => ['nullable'],
+            'cities' => ['nullable', 'array'],
+            'cities.*' => ['string'],
+            'city' => ['nullable'],
+        ]);
+
+        $categoryIds = $this->filterValues($validated['category_ids'] ?? $validated['categories'] ?? $validated['category_id'] ?? []);
+        $countries = $this->filterValues($validated['countries'] ?? $validated['country'] ?? []);
+        $cities = $this->filterValues($validated['cities'] ?? $validated['city'] ?? []);
+
+        $users = User::query()
+            ->whereHas('products', function ($query) use ($categoryIds): void {
+                if ($categoryIds !== []) {
+                    $query->whereIn('category_id', $categoryIds);
+                }
+            })
+            ->when($countries !== [], fn ($query) => $query->whereIn('country', $countries))
+            ->when($cities !== [], fn ($query) => $query->whereIn('city', $cities))
+            ->latest('id')
+            ->paginate(10)
+            ->withQueryString();
+
+        return $this->handleResponse(
+            UserResource::collection($users),
+            $this->apiMessage('find_all_success'),
+            $users->lastPage(),
+            $users->total()
+        );
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    private function filterValues(mixed $values): array
+    {
+        return collect(is_array($values) ? $values : [$values])
+            ->filter(fn ($value): bool => filled($value))
+            ->values()
+            ->all();
     }
 
     public function hasBelongsTo(int $id): JsonResponse

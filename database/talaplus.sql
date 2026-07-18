@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS `users` (
   `lastname` VARCHAR(255) NULL,
   `surname` VARCHAR(255) NULL,
   `partner_name` VARCHAR(255) NULL,
+  `about_me` TEXT NULL,
   `gender` VARCHAR(45) NULL,
   `birthdate` DATE NULL,
   `country` VARCHAR(255) NULL,

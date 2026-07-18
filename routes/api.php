@@ -42,6 +42,7 @@ Route::prefix('v1')->group(function (): void {
     Route::middleware('auth:sanctum')->post('ai/chat', [AIController::class, 'chat']);
 
     Route::post('user/login', [UserController::class, 'login']);
+    Route::post('user/entrepreneurs', [UserController::class, 'entrepreneurs']);
     Route::get('user/username/{username}', [UserController::class, 'findByUsername']);
     Route::get('user/search/by-word', [UserController::class, 'search']);
     Route::get('user/{user}/belongs-to', [UserController::class, 'hasBelongsTo']);

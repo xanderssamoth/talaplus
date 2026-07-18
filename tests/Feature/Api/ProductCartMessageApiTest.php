@@ -3,6 +3,8 @@
 namespace Tests\Feature\Api;
 
 use App\Models\AdminNotification;
+use App\Models\Cart;
+use App\Models\Category;
 use App\Models\Comment;
 use App\Models\CustomerOrder;
 use App\Models\File;
@@ -83,6 +85,9 @@ class ProductCartMessageApiTest extends TestCase
             $table->string('firstname')->nullable();
             $table->string('email')->nullable();
             $table->string('username')->nullable();
+            $table->text('about_me')->nullable();
+            $table->string('country')->nullable();
+            $table->string('city')->nullable();
             $table->text('password')->nullable();
             $table->timestamps();
             $table->softDeletes();
@@ -741,6 +746,53 @@ class ProductCartMessageApiTest extends TestCase
 
         $this->assertSame(0, Reaction::query()->where('type', 'star')->where('product_id', $product->id)->count());
         $this->assertFalse(History::query()->where('entity', 'product')->whereIn('action', ['star', 'like'])->where('entity_id', $product->id)->exists());
+    }
+
+    public function test_user_entrepreneurs_returns_product_publishers_with_product_stats(): void
+    {
+        $owner = User::create(['email' => 'owner@example.com', 'password' => 'password', 'about_me' => 'Entrepreneur tech', 'country' => 'CD', 'city' => 'Kinshasa']);
+        $otherOwner = User::create(['email' => 'other-owner@example.com', 'password' => 'password', 'country' => 'FR', 'city' => 'Paris']);
+        User::create(['email' => 'member@example.com', 'password' => 'password']);
+        $buyerOne = User::create(['email' => 'buyer-one@example.com', 'password' => 'password']);
+        $buyerTwo = User::create(['email' => 'buyer-two@example.com', 'password' => 'password']);
+        $category = Category::create(['category_name' => ['fr' => 'Livres'], 'for_type' => 'product']);
+        $otherCategory = Category::create(['category_name' => ['fr' => 'Mode'], 'for_type' => 'product']);
+        $productOne = Product::create(['product_name' => 'Book', 'price' => 10, 'currency' => 'USD', 'category_id' => $category->id, 'user_id' => $owner->id]);
+        $productTwo = Product::create(['product_name' => 'Notebook', 'price' => 5, 'currency' => 'USD', 'category_id' => $category->id, 'user_id' => $owner->id]);
+        $otherProduct = Product::create(['product_name' => 'Shirt', 'price' => 15, 'currency' => 'USD', 'category_id' => $otherCategory->id, 'user_id' => $otherOwner->id]);
+        $cartOne = Cart::create(['user_id' => $buyerOne->id]);
+        $cartTwo = Cart::create(['user_id' => $buyerTwo->id]);
+
+        Reaction::create(['type' => 'star', 'number_of_stars' => 4, 'product_id' => $productOne->id, 'user_id' => $buyerOne->id]);
+        Reaction::create(['type' => 'star', 'number_of_stars' => 5, 'product_id' => $productTwo->id, 'user_id' => $buyerTwo->id]);
+        Comment::create(['comment_content' => 'Great product', 'type' => 'comment', 'product_id' => $productOne->id, 'user_id' => $buyerOne->id]);
+        Comment::create(['comment_content' => 'Useful product', 'type' => 'comment', 'product_id' => $productTwo->id, 'user_id' => $buyerTwo->id]);
+        Comment::create(['comment_content' => 'Other product comment', 'type' => 'comment', 'product_id' => $otherProduct->id, 'user_id' => $buyerTwo->id]);
+        CustomerOrder::create(['product_id' => $productOne->id, 'cart_id' => $cartOne->id]);
+        CustomerOrder::create(['product_id' => $productTwo->id, 'cart_id' => $cartOne->id]);
+        CustomerOrder::create(['product_id' => $productTwo->id, 'cart_id' => $cartTwo->id]);
+
+        $response = $this->postJson('/api/v1/user/entrepreneurs', [
+            'category_ids' => [$category->id],
+            'countries' => ['CD'],
+            'cities' => ['Kinshasa'],
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('count', 1)
+            ->assertJsonPath('data.0.id', $owner->id)
+            ->assertJsonPath('data.0.about_me', 'Entrepreneur tech')
+            ->assertJsonPath('data.0.product_categories.0.id', $category->id)
+            ->assertJsonPath('data.0.product_stars_sum', 9)
+            ->assertJsonPath('data.0.product_comments_count', 2)
+            ->assertJsonPath('data.0.product_customers_count', 2);
+
+        $this->getJson("/api/v1/user/{$owner->id}")
+            ->assertOk()
+            ->assertJsonPath('data.product_categories.0.id', $category->id)
+            ->assertJsonPath('data.product_stars_sum', 9)
+            ->assertJsonPath('data.product_comments_count', 2)
+            ->assertJsonPath('data.product_customers_count', 2);
     }
 
     public function test_comment_news_feed_prioritizes_interacted_followed_then_recent_posts(): void
