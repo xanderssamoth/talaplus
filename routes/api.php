@@ -41,6 +41,8 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1')->group(function (): void {
     Route::middleware('auth:sanctum')->post('ai/chat', [AIController::class, 'chat']);
 
+    Route::middleware('auth:sanctum')->post('chat/token', [AIController::class, 'chat']);
+
     Route::post('user/login', [UserController::class, 'login']);
     Route::post('user/entrepreneurs', [UserController::class, 'entrepreneurs']);
     Route::get('user/username/{username}', [UserController::class, 'findByUsername']);
