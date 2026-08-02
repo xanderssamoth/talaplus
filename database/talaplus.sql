@@ -210,6 +210,7 @@ CREATE TABLE IF NOT EXISTS `medias` (
   `for_youth` TINYINT NOT NULL DEFAULT 0,
   `belongs_to` BIGINT NULL,
   `type` ENUM('film_series', 'comedy', 'music', 'education', 'business', 'crafts_diy', 'sports', 'documentary') NOT NULL,
+  `is_audio` TINYINT NOT NULL DEFAULT 0,
   `is_shared` TINYINT NOT NULL DEFAULT 0,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
