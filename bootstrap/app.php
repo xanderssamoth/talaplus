@@ -9,6 +9,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -78,6 +79,14 @@ return Application::configure(basePath: dirname(__DIR__))
             if (! $request->is('api/*')) {
                 return null;
             }
+
+            Log::error('api.query_failed', [
+                'method' => $request->method(),
+                'url' => $request->fullUrl(),
+                'sql' => $exception->getSql(),
+                'bindings' => $exception->getBindings(),
+                'message' => $exception->getMessage(),
+            ]);
 
             return app(BaseController::class)->handleError(null, __('api.errors.query_failed'), 500);
         });

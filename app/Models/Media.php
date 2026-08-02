@@ -27,6 +27,7 @@ class Media extends SqlModel
             'is_free' => 'boolean',
             'price' => 'decimal:2',
             'for_youth' => 'boolean',
+            'is_audio' => 'boolean',
             'is_shared' => 'boolean',
         ];
     }

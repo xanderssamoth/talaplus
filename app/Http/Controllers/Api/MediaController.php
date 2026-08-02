@@ -293,6 +293,7 @@ final class MediaController extends ApiResourceController
             'category_ids.*' => ['integer', 'exists:categories,id'],
             'hashtag_ids' => ['nullable', 'array'],
             'hashtag_ids.*' => ['integer', 'exists:hashtags,id'],
+            'is_audio' => ['nullable', 'boolean'],
             'word' => ['nullable', 'string'],
             'user_id' => ['nullable', 'integer', 'exists:users,id'],
         ]);
@@ -308,6 +309,7 @@ final class MediaController extends ApiResourceController
                 'hashtags',
                 fn ($query) => $query->whereIn('hashtags.id', $hashtagIds)
             ))
+            ->when(array_key_exists('is_audio', $validated), fn ($query) => $query->where('is_audio', $request->boolean('is_audio')))
             ->when($validated['word'] ?? null, function ($query, string $word): void {
                 $query->where(function ($query) use ($word): void {
                     $query->where('media_title', 'like', "%{$word}%")

@@ -84,6 +84,7 @@ class MediaUploadApiTest extends TestCase
             $table->boolean('is_free')->default(true);
             $table->decimal('price', 12, 2);
             $table->boolean('for_youth')->default(false);
+            $table->boolean('is_audio')->default(false);
             $table->unsignedBigInteger('belongs_to')->nullable();
             $table->string('type')->default('music');
             $table->boolean('is_shared')->default(false);
@@ -280,6 +281,29 @@ class MediaUploadApiTest extends TestCase
         $this->assertSame('Person who sends videos to publish on the platform.', $creatorRole->getTranslation('role_description', 'en'));
         $this->assertSame(0, (int) DB::table('role_user')->where('user_id', $owner->id)->where('role_id', $memberRole->id)->value('is_selected'));
         $this->assertSame(1, (int) DB::table('role_user')->where('user_id', $owner->id)->where('role_id', $creatorRole->id)->value('is_selected'));
+    }
+
+    public function test_filter_medias_can_filter_by_is_audio(): void
+    {
+        Media::create([
+            'media_title' => ['fr' => 'Audio'],
+            'type' => 'music',
+            'price' => 0,
+            'is_audio' => true,
+        ]);
+        Media::create([
+            'media_title' => ['fr' => 'Video'],
+            'type' => 'music',
+            'price' => 0,
+            'is_audio' => false,
+        ]);
+
+        $response = $this->getJson('/api/v1/media/filter/list?is_audio=1');
+
+        $response->assertOk()
+            ->assertJsonPath('count', 1)
+            ->assertJsonPath('data.0.media_title.fr', 'Audio')
+            ->assertJsonPath('data.0.is_audio', true);
     }
 
     public function test_store_validates_category_ids_before_syncing(): void
