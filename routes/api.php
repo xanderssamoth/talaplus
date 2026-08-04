@@ -40,7 +40,6 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function (): void {
     Route::middleware('auth:sanctum')->post('ai/chat', [AIController::class, 'chat']);
-
     Route::middleware('auth:sanctum')->post('chat/token', [AIController::class, 'chat']);
 
     Route::post('user/login', [UserController::class, 'login']);
@@ -99,6 +98,8 @@ Route::prefix('v1')->group(function (): void {
     Route::get('message/conversation', [MessageController::class, 'conversations']);
     Route::get('message/conversation/users', [MessageController::class, 'userConversation']);
     Route::get('message/conversation/group', [MessageController::class, 'groupConversation']);
+
+    Route::get('group/user/{user}', [GroupController::class, 'userGroups']);
 
     Route::get('category/for-type/{forType}', [CategoryController::class, 'findByForType']);
     Route::get('hashtag/{hashtag}/entities', [HashtagController::class, 'entities']);
