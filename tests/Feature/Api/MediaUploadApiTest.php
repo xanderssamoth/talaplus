@@ -221,13 +221,36 @@ class MediaUploadApiTest extends TestCase
             'user_id' => $owner->id,
         ]);
 
-        $response->assertOk()->assertJsonPath('success', true);
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.cover_url', asset('assets/img/cover-video.png'));
 
         $media = Media::query()->firstOrFail();
 
         $this->assertNull($media->media_url);
         $this->assertNull($media->cover_url);
         $this->assertSame('0.00', (string) $media->price);
+    }
+
+    public function test_store_accepts_audio_files_and_returns_the_default_audio_cover(): void
+    {
+        Storage::fake('s3');
+        $owner = User::create(['email' => 'owner@example.com', 'username' => 'owner', 'password' => 'password']);
+
+        $this->post('/api/v1/media', [
+            'media_title' => 'Audio message',
+            'type' => 'music',
+            'user_id' => $owner->id,
+            'media_file' => UploadedFile::fake()->create('message.mp3', 100, 'audio/mpeg'),
+        ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('data.is_audio', true)
+            ->assertJsonPath('data.cover_url', asset('assets/img/cover-audio.png'));
+
+        $media = Media::query()->firstOrFail();
+
+        $this->assertStringContainsString('medias/audios/', (string) $media->media_url);
+        Storage::disk('s3')->assertExists('medias/audios/'.basename((string) $media->media_url));
     }
 
     public function test_store_saves_uploaded_file_metadata(): void

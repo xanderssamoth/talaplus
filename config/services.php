@@ -35,6 +35,11 @@ return [
         ],
     ],
 
+    'exchange_rate' => [
+        'key' => env('EXCHANGERATE_API_KEY'),
+        'url' => env('EXCHANGERATE_API_URL'),
+    ],
+
     'flexpay' => [
         'merchant' => env('FLEXPAY_MERCHANT'),
         'gateway_mobile' => env('FLEXPAY_GATEWAY_MOBILE'),

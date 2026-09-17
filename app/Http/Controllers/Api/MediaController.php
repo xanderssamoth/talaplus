@@ -12,12 +12,15 @@ use App\Models\Hashtag;
 use App\Models\History;
 use App\Models\Media;
 use App\Models\MediaProgress;
+use App\Models\Pricing;
 use App\Models\Reaction;
 use App\Models\Report;
 use App\Models\Role;
 use App\Models\Subscription;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -25,6 +28,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use InvalidArgumentException;
+use RuntimeException;
 
 final class MediaController extends ApiResourceController
 {
@@ -46,7 +51,7 @@ final class MediaController extends ApiResourceController
         $request->validate([
             'media_url' => ['nullable', 'string'],
             'cover_url' => ['nullable', 'string'],
-            'media_file' => ['nullable', 'file', 'mimes:mp4,mov,avi,mkv,webm', 'max:512000'],
+            'media_file' => ['nullable', 'file', 'mimes:mp4,mov,avi,mkv,webm,mp3,wav,ogg,m4a,aac,flac', 'max:512000'],
             'cover_file' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,gif', 'max:10240'],
             'price' => ['nullable', 'numeric'],
             'category_ids' => ['nullable', 'array'],
@@ -59,7 +64,10 @@ final class MediaController extends ApiResourceController
         $payload['price'] ??= 0;
 
         if ($request->hasFile('media_file')) {
-            $payload['media_url'] = Storage::disk('s3')->url($request->file('media_file')->store('medias/videos', 's3'));
+            $mediaFile = $request->file('media_file');
+            $isAudio = str_starts_with((string) $mediaFile->getMimeType(), 'audio/');
+            $payload['media_url'] = Storage::disk('s3')->url($mediaFile->store($isAudio ? 'medias/audios' : 'medias/videos', 's3'));
+            $payload['is_audio'] = $isAudio;
         }
 
         if ($request->hasFile('cover_file')) {
@@ -86,7 +94,11 @@ final class MediaController extends ApiResourceController
             $payload = [
                 'file_name' => $uploadedFile->getClientOriginalName(),
                 'file_url' => Storage::disk('s3')->url($uploadedFile->store('medias/files', 's3')),
-                'file_type' => str_starts_with((string) $uploadedFile->getMimeType(), 'video/') ? 'video' : 'document',
+                'file_type' => match (true) {
+                    str_starts_with((string) $uploadedFile->getMimeType(), 'video/') => 'video',
+                    str_starts_with((string) $uploadedFile->getMimeType(), 'audio/') => 'audio',
+                    default => 'document',
+                },
                 'user_id' => $media->user_id,
                 ...File::metadataFromUploadedFile($uploadedFile),
             ];
@@ -424,17 +436,33 @@ final class MediaController extends ApiResourceController
 
     public function gift(Request $request, int $id): JsonResponse
     {
+        if (! $request->has('action')) {
+            $request->merge(['action' => 'add']);
+        }
+
         $validated = $request->validate([
             'user_id' => ['required', 'integer', 'exists:users,id'],
             'pricing_id' => ['nullable', 'integer', 'exists:pricings,id'],
             'action' => ['nullable', 'string', 'in:add,remove'],
+            'payment_type' => ['required_if:action,add', 'nullable', 'integer', 'in:1,2'],
+            'phone' => ['required_if:payment_type,1', 'nullable', 'string', 'max:45'],
+            'description' => ['nullable', 'string'],
+            'callback_url' => ['required_if:action,add', 'nullable', 'url', 'max:2048'],
+            'approve_url' => ['required_if:payment_type,2', 'nullable', 'url', 'max:2048'],
+            'cancel_url' => ['required_if:payment_type,2', 'nullable', 'url', 'max:2048'],
+            'decline_url' => ['required_if:payment_type,2', 'nullable', 'url', 'max:2048'],
+            'channel' => ['nullable', 'string', 'max:45'],
         ]);
 
         if (($validated['action'] ?? 'add') === 'add' && ! isset($validated['pricing_id'])) {
             return $this->handleError(['pricing_id' => ['The pricing id field is required.']], __('validation.required', ['attribute' => 'pricing id']), 422);
         }
 
-        return $this->handleReaction($id, $validated['user_id'], 'gift', $validated['action'] ?? 'add', $validated['pricing_id'] ?? null);
+        if ($request->user()?->id !== $validated['user_id']) {
+            return $this->handleError(null, 'You are not authorized to send this gift.', 403);
+        }
+
+        return $this->handleReaction($id, $validated['user_id'], 'gift', $validated['action'] ?? 'add', $validated['pricing_id'] ?? null, $validated);
     }
 
     public function report(Request $request, int $id, int $userId): JsonResponse
@@ -593,7 +621,7 @@ final class MediaController extends ApiResourceController
             ->first();
     }
 
-    private function handleReaction(int $mediaId, int $userId, string $type, string $action, ?int $pricingId = null): JsonResponse
+    private function handleReaction(int $mediaId, int $userId, string $type, string $action, ?int $pricingId = null, array $paymentAttributes = []): JsonResponse
     {
         $media = Media::query()->findOrFail($mediaId);
 
@@ -619,6 +647,51 @@ final class MediaController extends ApiResourceController
                 ->delete();
 
             return $this->handleResponse(null, $this->apiMessage('deleted', 'reaction'));
+        }
+
+        if ($type === 'gift') {
+            $pricing = Pricing::query()->findOrFail($pricingId);
+
+            if ($pricing->pricing_cost === null || $pricing->pricing_cost <= 0 || blank($pricing->currency)) {
+                return $this->handleError(null, 'The gift pricing must have a positive amount and a currency.', 422);
+            }
+
+            try {
+                $paymentResult = $this->initiateFlexPayPayment([
+                    'user_id' => $userId,
+                    'type' => $paymentAttributes['payment_type'],
+                    'amount' => $pricing->pricing_cost,
+                    'currency' => strtoupper($pricing->currency),
+                    'phone' => $paymentAttributes['phone'] ?? null,
+                    'description' => $paymentAttributes['description'] ?? 'Media gift',
+                    'callback_url' => $paymentAttributes['callback_url'],
+                    'approve_url' => $paymentAttributes['approve_url'] ?? null,
+                    'cancel_url' => $paymentAttributes['cancel_url'] ?? null,
+                    'decline_url' => $paymentAttributes['decline_url'] ?? null,
+                    'channel' => $paymentAttributes['channel'] ?? null,
+                    'reason' => 'gift',
+                    'entity' => 'media',
+                    'entity_id' => $media->id,
+                ]);
+            } catch (InvalidArgumentException $exception) {
+                return $this->handleError(null, $exception->getMessage(), 422);
+            } catch (ConnectionException $exception) {
+                report($exception);
+
+                return $this->handleError(null, 'The payment service is temporarily unavailable.', 503);
+            } catch (RequestException $exception) {
+                report($exception);
+
+                return $this->handleError(null, 'The payment service could not process the request.', 502);
+            } catch (RuntimeException $exception) {
+                return $this->handleError(null, $exception->getMessage(), 422);
+            }
+
+            return $this->handleResponse([
+                'payment' => ApiResource::make($paymentResult['payment']),
+                'order_number' => $paymentResult['payment']->order_number,
+                'url' => $paymentResult['response']['url'] ?? null,
+            ], $this->apiMessage('created', 'payment'));
         }
 
         $reaction = Reaction::create([

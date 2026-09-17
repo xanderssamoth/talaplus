@@ -10,12 +10,15 @@ class ProductResource extends ApiResource
     public function toArray(Request $request): array
     {
         $this->resource->loadMissing('specifications');
+        $this->resource->loadMissing('files');
 
         $data = parent::toArray($request);
 
         $data['specifications'] = ApiResource::collection($this->whenLoaded('specifications'));
         $data['reviews'] = $this->reviewsSummary();
         $data['promotion'] = $this->promotionSummary();
+        $cover = $this->resource->files->first(fn ($file): bool => $file->file_type === 'photo' || str_starts_with((string) $file->mime_type, 'image/'));
+        $data['cover_url'] = $cover?->file_url ?? asset('assets/img/cover-product.png');
 
         return $data;
     }

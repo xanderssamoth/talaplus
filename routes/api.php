@@ -49,6 +49,7 @@ Route::prefix('v1')->group(function (): void {
     Route::get('user/{user}/belongs-to', [UserController::class, 'hasBelongsTo']);
     Route::patch('user/{user}/child-lock-code', [UserController::class, 'switchChildLockCode']);
     Route::get('user/{user}/watchlist', [UserController::class, 'userWatchlist']);
+    Route::middleware('auth:sanctum')->get('user/{user}/cart', [UserController::class, 'myCart']);
     Route::post('user/{user}/watchlist/{media}', [UserController::class, 'addToWatchlist']);
     Route::delete('user/{user}/watchlist/{media}', [UserController::class, 'removeFromWatchlist']);
     Route::patch('user/{user}/status', [UserController::class, 'updateStatus']);
@@ -72,7 +73,7 @@ Route::prefix('v1')->group(function (): void {
     Route::get('media/{media}/like', [MediaController::class, 'mediaLikes']);
     Route::get('media/{media}/gift', [MediaController::class, 'mediaGifts']);
     Route::post('media/{media}/like', [MediaController::class, 'like']);
-    Route::post('media/{media}/gift', [MediaController::class, 'gift']);
+    Route::middleware('auth:sanctum')->post('media/{media}/gift', [MediaController::class, 'gift']);
     Route::post('media/{media}/report/{user}', [MediaController::class, 'report']);
 
     Route::get('product/popular/list', [ProductController::class, 'popularProducts']);
@@ -86,6 +87,7 @@ Route::prefix('v1')->group(function (): void {
     Route::post('product/{product}/report/{user}', [ProductController::class, 'report']);
 
     Route::post('cart/add', [CartController::class, 'addToCart']);
+    Route::middleware('auth:sanctum')->post('cart/purchase', [CartController::class, 'purchase']);
     Route::delete('cart/remove', [CartController::class, 'removeFromCart']);
     Route::get('cart/is-in-cart', [CartController::class, 'isInCart']);
 

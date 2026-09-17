@@ -6,6 +6,7 @@ use App\Http\Resources\Api\ApiResource;
 use App\Http\Resources\Api\MediaResource;
 use App\Http\Resources\Api\UserResource;
 use App\Models\AdminNotification;
+use App\Models\Cart;
 use App\Models\File;
 use App\Models\History;
 use App\Models\Media;
@@ -13,6 +14,7 @@ use App\Models\MediaProgress;
 use App\Models\PasswordReset;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\ExchangeRateService;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,6 +23,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use RuntimeException;
 
 final class UserController extends ApiResourceController
 {
@@ -253,6 +256,61 @@ final class UserController extends ApiResourceController
         $medias->setCollection($items->map(fn (Media $media): array|JsonResource => $this->mediaPayload($media, $user->id)));
 
         return $this->handleResponse($medias->items(), $this->apiMessage('find_all_success', 'media'), $medias->lastPage(), $medias->total());
+    }
+
+    public function myCart(Request $request, ExchangeRateService $exchangeRateService, int $id): JsonResponse
+    {
+        $user = User::query()->findOrFail($id);
+        if ($request->user()?->id !== $user->id) {
+            return $this->handleError(null, 'You are not authorized to view this cart.', 403);
+        }
+
+        $currency = strtoupper((string) $user->currency);
+        if ($currency === '') {
+            return $this->handleError(null, 'The user currency is required.', 422);
+        }
+
+        $cart = Cart::query()
+            ->whereBelongsTo($user)
+            ->latest('id')
+            ->with(['orders' => fn ($query) => $query
+                ->select(['id', 'cart_id', 'product_id', 'price_at_that_time', 'currency', 'quantity'])
+                ->with('product')])
+            ->first();
+
+        if ($cart === null) {
+            return $this->handleResponse(['currency' => $currency, 'items' => [], 'total' => 0], $this->apiMessage('find_all_success', 'cart'));
+        }
+
+        if ($cart->orders->contains(fn ($order): bool => $order->price_at_that_time === null || $order->price_at_that_time <= 0 || blank($order->currency) || $order->quantity === null || $order->quantity < 1)) {
+            return $this->handleError(null, 'The cart contains invalid order prices.', 422);
+        }
+
+        try {
+            $items = $cart->orders->map(function ($order) use ($currency, $exchangeRateService): array {
+                $convertedPrice = $exchangeRateService->convert((float) $order->price_at_that_time, $order->currency, $currency);
+
+                return [
+                    'product' => ApiResource::make($order->product),
+                    'quantity' => $order->quantity,
+                    'price_at_that_time' => (float) $order->price_at_that_time,
+                    'currency_at_that_time' => $order->currency,
+                    'converted_price' => round($convertedPrice, 2),
+                    'currency' => $currency,
+                    'total' => round($convertedPrice * $order->quantity, 2),
+                ];
+            })->values();
+        } catch (RuntimeException $exception) {
+            report($exception);
+
+            return $this->handleError(null, 'The order prices could not be converted to the user currency.', 503);
+        }
+
+        return $this->handleResponse([
+            'currency' => $currency,
+            'items' => $items,
+            'total' => round($items->sum('total'), 2),
+        ], $this->apiMessage('find_all_success', 'cart'));
     }
 
     public function addToWatchlist(int $id, int $mediaId): JsonResponse

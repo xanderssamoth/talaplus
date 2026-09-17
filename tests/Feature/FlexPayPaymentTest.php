@@ -64,7 +64,7 @@ class FlexPayPaymentTest extends TestCase
             'services.flexpay.api_token' => 'test-token',
             'services.flexpay.merchant' => 'merchant-code',
             'services.flexpay.gateway_mobile' => 'https://flexpay.test/mobile',
-            'services.flexpay.gateway_card_v2' => 'https://flexpay.test/card',
+            'services.flexpay.gateway_card' => 'https://flexpay.test/card',
         ]);
     }
 
