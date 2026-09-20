@@ -31,6 +31,10 @@ final class UserController extends ApiResourceController
 
     protected string $resourceClass = UserResource::class;
 
+    public function __construct(
+        private ExchangeRateService $exchangeRateService,
+    ) {}
+
     public function store(Request $request): JsonResponse
     {
         if (! $request->has('password_confirmation')) {
@@ -258,16 +262,16 @@ final class UserController extends ApiResourceController
         return $this->handleResponse($medias->items(), $this->apiMessage('find_all_success', 'media'), $medias->lastPage(), $medias->total());
     }
 
-    public function myCart(Request $request, ExchangeRateService $exchangeRateService, int $id): JsonResponse
+    public function myCart(Request $request, int $id): JsonResponse
     {
         $user = User::query()->findOrFail($id);
         if ($request->user()?->id !== $user->id) {
-            return $this->handleError(null, 'You are not authorized to view this cart.', 403);
+            return $this->handleError(null, __('api.cart.view_not_authorized'), 403);
         }
 
         $currency = strtoupper((string) $user->currency);
         if ($currency === '') {
-            return $this->handleError(null, 'The user currency is required.', 422);
+            return $this->handleError(null, __('api.cart.user_currency_required'), 422);
         }
 
         $cart = Cart::query()
@@ -283,12 +287,12 @@ final class UserController extends ApiResourceController
         }
 
         if ($cart->orders->contains(fn ($order): bool => $order->price_at_that_time === null || $order->price_at_that_time <= 0 || blank($order->currency) || $order->quantity === null || $order->quantity < 1)) {
-            return $this->handleError(null, 'The cart contains invalid order prices.', 422);
+            return $this->handleError(null, __('api.cart.invalid_order_prices'), 422);
         }
 
         try {
-            $items = $cart->orders->map(function ($order) use ($currency, $exchangeRateService): array {
-                $convertedPrice = $exchangeRateService->convert((float) $order->price_at_that_time, $order->currency, $currency);
+            $items = $cart->orders->map(function ($order) use ($currency): array {
+                $convertedPrice = $this->exchangeRateService->convert((float) $order->price_at_that_time, $order->currency, $currency);
 
                 return [
                     'product' => ApiResource::make($order->product),
@@ -303,7 +307,7 @@ final class UserController extends ApiResourceController
         } catch (RuntimeException $exception) {
             report($exception);
 
-            return $this->handleError(null, 'The order prices could not be converted to the user currency.', 503);
+            return $this->handleError(null, __('api.cart.prices_not_convertible'), 503);
         }
 
         return $this->handleResponse([

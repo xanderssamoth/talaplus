@@ -261,7 +261,11 @@ final class ProductController extends ApiResourceController
         }
 
         if (! isset($validated['number_of_stars'])) {
-            return $this->handleError(['number_of_stars' => ['The number of stars field is required.']], __('validation.required', ['attribute' => 'number of stars']), 422);
+            return $this->handleError(
+                ['number_of_stars' => [__('api.validation.number_of_stars_required')]],
+                __('api.validation.number_of_stars_required'),
+                422
+            );
         }
 
         $reaction = Reaction::create([

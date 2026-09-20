@@ -114,7 +114,6 @@ class CartPurchaseApiTest extends TestCase
                 'cart_id' => $cart->id,
                 'type' => 1,
                 'phone' => '243810000000',
-                'callback_url' => 'https://app.test/api/v1/payment/callback',
             ])
             ->assertOk()
             ->assertJsonPath('data.payment.order_number', 'FLEX-CART-1')
@@ -142,7 +141,6 @@ class CartPurchaseApiTest extends TestCase
                 'cart_id' => $cart->id,
                 'type' => 1,
                 'phone' => '243810000000',
-                'callback_url' => 'https://app.test/api/v1/payment/callback',
             ])
             ->assertUnprocessable()
             ->assertJsonPath('success', false);
@@ -165,7 +163,6 @@ class CartPurchaseApiTest extends TestCase
                 'cart_id' => $cart->id,
                 'type' => 1,
                 'phone' => '243810000000',
-                'callback_url' => 'https://app.test/api/v1/payment/callback',
             ])
             ->assertForbidden();
 
@@ -190,7 +187,6 @@ class CartPurchaseApiTest extends TestCase
                 'cart_id' => $cart->id,
                 'type' => 1,
                 'phone' => '243810000000',
-                'callback_url' => 'https://app.test/api/v1/payment/callback',
             ])
             ->assertOk()
             ->assertJsonPath('data.payment.amount', '10010.00')
@@ -213,7 +209,6 @@ class CartPurchaseApiTest extends TestCase
                 'cart_id' => $cart->id,
                 'type' => 1,
                 'phone' => '243810000000',
-                'callback_url' => 'https://app.test/api/v1/payment/callback',
             ])
             ->assertUnprocessable()
             ->assertJsonPath('message', 'Payment rejected.');
@@ -233,7 +228,6 @@ class CartPurchaseApiTest extends TestCase
                 'cart_id' => $cart->id,
                 'type' => 1,
                 'phone' => '243810000000',
-                'callback_url' => 'https://app.test/api/v1/payment/callback',
             ])
             ->assertUnprocessable();
 

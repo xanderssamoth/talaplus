@@ -8,6 +8,7 @@ use App\Models\Cart;
 use App\Models\CustomerOrder;
 use App\Models\Product;
 use App\Services\ExchangeRateService;
+use App\Services\FlexPayService;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\JsonResponse;
@@ -22,6 +23,11 @@ final class CartController extends ApiResourceController
     protected string $modelClass = Cart::class;
 
     protected string $resourceClass = CartResource::class;
+
+    public function __construct(
+        private ExchangeRateService $exchangeRateService,
+        private FlexPayService $flexPayService,
+    ) {}
 
     public function addToCart(Request $request): JsonResponse
     {
@@ -104,51 +110,43 @@ final class CartController extends ApiResourceController
         return $this->handleResponse(['is_in_cart' => $exists], $this->apiMessage('find_success'));
     }
 
-    public function purchase(Request $request, ExchangeRateService $exchangeRateService): JsonResponse
+    public function purchase(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'cart_id' => ['required', 'integer', 'exists:carts,id'],
             'type' => ['required', 'integer', Rule::in([1, 2])],
             'phone' => ['required_if:type,1', 'nullable', 'string', 'max:45'],
             'description' => ['nullable', 'string'],
-            'callback_url' => ['required', 'url', 'max:2048'],
-            'approve_url' => ['required_if:type,2', 'nullable', 'url', 'max:2048'],
-            'cancel_url' => ['required_if:type,2', 'nullable', 'url', 'max:2048'],
-            'decline_url' => ['required_if:type,2', 'nullable', 'url', 'max:2048'],
             'channel' => ['nullable', 'string', 'max:45'],
         ]);
 
         $cart = Cart::query()->findOrFail($validated['cart_id']);
         if ($request->user()?->id !== $cart->user_id) {
-            return $this->handleError(null, 'You are not authorized to purchase this cart.', 403);
+            return $this->handleError(null, __('api.cart.purchase_not_authorized'), 403);
         }
 
         $userCurrency = strtoupper((string) $request->user()->currency);
 
         try {
-            $totals = $this->cartPaymentTotals($cart, $userCurrency, $exchangeRateService);
+            $totals = $this->cartPaymentTotals($cart, $userCurrency);
         } catch (RuntimeException $exception) {
             report($exception);
 
-            return $this->handleError(null, 'The order prices could not be converted to the user currency.', 503);
+            return $this->handleError(null, __('api.cart.prices_not_convertible'), 503);
         }
 
         if ($totals === null) {
-            return $this->handleError(null, 'The cart must contain valid orders and the user currency must be USD or CDF.', 422);
+            return $this->handleError(null, __('api.cart.invalid_payment_data'), 422);
         }
 
         try {
-            $result = $this->initiateFlexPayPayment([
+            $result = $this->flexPayService->initiate([
                 'user_id' => $cart->user_id,
                 'type' => $validated['type'],
                 'amount' => $totals['amount'],
                 'currency' => $totals['currency'],
                 'phone' => $validated['phone'] ?? null,
                 'description' => $validated['description'] ?? null,
-                'callback_url' => $validated['callback_url'],
-                'approve_url' => $validated['approve_url'] ?? null,
-                'cancel_url' => $validated['cancel_url'] ?? null,
-                'decline_url' => $validated['decline_url'] ?? null,
                 'channel' => $validated['channel'] ?? null,
                 'reason' => 'product_sale',
                 'entity' => 'cart',
@@ -159,11 +157,11 @@ final class CartController extends ApiResourceController
         } catch (ConnectionException $exception) {
             report($exception);
 
-            return $this->handleError(null, 'The payment service is temporarily unavailable.', 503);
+            return $this->handleError(null, __('api.payment.service_unavailable'), 503);
         } catch (RequestException $exception) {
             report($exception);
 
-            return $this->handleError(null, 'The payment service could not process the request.', 502);
+            return $this->handleError(null, __('api.payment.request_failed'), 502);
         } catch (RuntimeException $exception) {
             return $this->handleError(null, $exception->getMessage(), 422);
         }
@@ -179,7 +177,7 @@ final class CartController extends ApiResourceController
     /**
      * @return array{amount: float, currency: string}|null
      */
-    private function cartPaymentTotals(Cart $cart, string $userCurrency, ExchangeRateService $exchangeRateService): ?array
+    private function cartPaymentTotals(Cart $cart, string $userCurrency): ?array
     {
         $orders = $cart->orders()
             ->select(['id', 'cart_id', 'product_id', 'quantity'])
@@ -195,7 +193,7 @@ final class CartController extends ApiResourceController
         }
 
         return [
-            'amount' => $orders->sum(fn (CustomerOrder $order): float => $exchangeRateService->convert((float) $order->product->price, $order->product->currency, $userCurrency) * $order->quantity),
+            'amount' => $orders->sum(fn (CustomerOrder $order): float => $this->exchangeRateService->convert((float) $order->product->price, $order->product->currency, $userCurrency) * $order->quantity),
             'currency' => $userCurrency,
         ];
     }

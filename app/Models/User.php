@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -134,5 +135,20 @@ class User extends Authenticatable
     public function followers(): HasMany
     {
         return $this->hasMany(Subscription::class);
+    }
+
+    public function wallet(): HasOne
+    {
+        return $this->hasOne(Wallet::class);
+    }
+
+    public function sentGiftTransactions(): HasMany
+    {
+        return $this->hasMany(GiftTransaction::class, 'sender_id');
+    }
+
+    public function receivedGiftTransactions(): HasMany
+    {
+        return $this->hasMany(GiftTransaction::class, 'receiver_id');
     }
 }

@@ -67,6 +67,6 @@ class AIService
      */
     public function regenerateResponse(AiConversation $conversation, AiMessage $message, array $options = []): AiMessage
     {
-        throw new RuntimeException('Not implemented.');
+        throw new RuntimeException(__('api.ai.not_implemented'));
     }
 }

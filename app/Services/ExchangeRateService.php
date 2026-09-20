@@ -29,7 +29,7 @@ class ExchangeRateService
 
                 if ($response->failed()) {
                     throw new RuntimeException(
-                        'Impossible de récupérer les taux de change.'
+                        __('api.exchange_rate.unavailable')
                     );
                 }
 
@@ -37,7 +37,7 @@ class ExchangeRateService
 
                 if (($data['result'] ?? null) !== 'success') {
                     throw new RuntimeException(
-                        $data['error-type'] ?? 'Erreur ExchangeRate API.'
+                        __('api.exchange_rate.request_failed')
                     );
                 }
 
@@ -59,7 +59,7 @@ class ExchangeRateService
 
         if (! isset($rates[$to])) {
             throw new RuntimeException(
-                "Devise {$to} non supportée."
+                __('api.exchange_rate.currency_not_supported', ['currency' => $to])
             );
         }
 

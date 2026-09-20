@@ -49,7 +49,7 @@ class MessageService
     public function attachFiles(AiMessage $message, array $files = []): AiMessage
     {
         if ($files !== []) {
-            throw new RuntimeException('File attachment is not implemented.');
+            throw new RuntimeException(__('api.ai.file_attachment_not_implemented'));
         }
 
         return $message->refresh();

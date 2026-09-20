@@ -34,7 +34,7 @@ class AIConversationRunner
 
     public function stream(User $user, string $content, ?AiConversation $conversation = null, array $options = []): iterable
     {
-        throw new RuntimeException('Not implemented.');
+        throw new RuntimeException(__('api.ai.not_implemented'));
     }
 
     private function resolveConversation(User $user, ChatRequestData $request): AiConversation
@@ -46,7 +46,7 @@ class AIConversationRunner
             );
 
             if ($conversation === null) {
-                throw new RuntimeException('Conversation introuvable.');
+                throw new RuntimeException(__('api.ai.conversation_not_found'));
             }
 
             return $conversation;

@@ -4,22 +4,17 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class Payment extends SqlModel
+class Wallet extends SqlModel
 {
     protected function tableName(): string
     {
-        return 'payments';
+        return 'wallets';
     }
 
     protected function castsAttributes(): array
     {
         return [
-            'amount' => 'decimal:2',
-            'amount_customer' => 'decimal:2',
-            'type' => 'integer',
-            'status' => 'integer',
-            'entity_id' => 'integer',
-            'coins_credited_at' => 'datetime',
+            'coins_balance' => 'integer',
         ];
     }
 

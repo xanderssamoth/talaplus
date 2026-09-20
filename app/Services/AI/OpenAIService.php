@@ -91,12 +91,12 @@ class OpenAIService implements AIProvider
 
             return [
                 'success' => true,
-                'message' => 'Connexion à OpenAI réussie.',
+                'message' => __('api.ai.openai_connection_success'),
             ];
         } catch (Throwable $exception) {
             return [
                 'success' => false,
-                'message' => $exception->getMessage(),
+                'message' => __('api.ai.openai_connection_failed'),
             ];
         }
     }

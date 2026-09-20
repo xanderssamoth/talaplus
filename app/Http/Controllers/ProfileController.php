@@ -53,7 +53,7 @@ class ProfileController extends Controller
         $request->user()->update(['avatar_url' => $avatarUrl]);
 
         return response()->json([
-            'message' => 'Avatar mis à jour.',
+            'message' => __('api.profile.avatar_updated'),
             'avatar_url' => $avatarUrl,
         ]);
     }

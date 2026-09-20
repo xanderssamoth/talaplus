@@ -21,6 +21,7 @@ class Pricing extends SqlModel
     protected function castsAttributes(): array
     {
         return [
+            'coins_amount' => 'integer',
             'pricing_cost' => 'decimal:2',
         ];
     }
@@ -28,5 +29,10 @@ class Pricing extends SqlModel
     public function descriptions(): HasMany
     {
         return $this->hasMany(PricingDescription::class);
+    }
+
+    public function giftTransactions(): HasMany
+    {
+        return $this->hasMany(GiftTransaction::class);
     }
 }

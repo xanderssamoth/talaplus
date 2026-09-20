@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class History extends SqlModel
@@ -24,5 +25,10 @@ class History extends SqlModel
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function giftTransactions(): HasMany
+    {
+        return $this->hasMany(GiftTransaction::class);
     }
 }

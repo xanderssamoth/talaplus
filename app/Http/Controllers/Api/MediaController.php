@@ -18,9 +18,8 @@ use App\Models\Report;
 use App\Models\Role;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Services\GiftService;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
-use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -29,13 +28,16 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
-use RuntimeException;
 
 final class MediaController extends ApiResourceController
 {
     protected string $modelClass = Media::class;
 
     protected string $resourceClass = MediaResource::class;
+
+    public function __construct(
+        private GiftService $giftService,
+    ) {}
 
     public function store(Request $request): JsonResponse
     {
@@ -436,33 +438,32 @@ final class MediaController extends ApiResourceController
 
     public function gift(Request $request, int $id): JsonResponse
     {
-        if (! $request->has('action')) {
-            $request->merge(['action' => 'add']);
-        }
-
         $validated = $request->validate([
-            'user_id' => ['required', 'integer', 'exists:users,id'],
-            'pricing_id' => ['nullable', 'integer', 'exists:pricings,id'],
-            'action' => ['nullable', 'string', 'in:add,remove'],
-            'payment_type' => ['required_if:action,add', 'nullable', 'integer', 'in:1,2'],
-            'phone' => ['required_if:payment_type,1', 'nullable', 'string', 'max:45'],
-            'description' => ['nullable', 'string'],
-            'callback_url' => ['required_if:action,add', 'nullable', 'url', 'max:2048'],
-            'approve_url' => ['required_if:payment_type,2', 'nullable', 'url', 'max:2048'],
-            'cancel_url' => ['required_if:payment_type,2', 'nullable', 'url', 'max:2048'],
-            'decline_url' => ['required_if:payment_type,2', 'nullable', 'url', 'max:2048'],
-            'channel' => ['nullable', 'string', 'max:45'],
+            'pricing_id' => ['required', 'integer', 'exists:pricings,id'],
+            'quantity' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ]);
 
-        if (($validated['action'] ?? 'add') === 'add' && ! isset($validated['pricing_id'])) {
-            return $this->handleError(['pricing_id' => ['The pricing id field is required.']], __('validation.required', ['attribute' => 'pricing id']), 422);
+        $media = Media::query()->with('user')->findOrFail($id);
+        $pricing = Pricing::query()->findOrFail($validated['pricing_id']);
+        $user = $request->user();
+
+        try {
+            $giftTransaction = $this->giftService->sendGift(sender: $user, media: $media, pricing: $pricing, quantity: (int) ($validated['quantity'] ?? 1));
+        } catch (InvalidArgumentException $exception) {
+            return $this->handleError(null, $exception->getMessage(), 422);
         }
 
-        if ($request->user()?->id !== $validated['user_id']) {
-            return $this->handleError(null, 'You are not authorized to send this gift.', 403);
-        }
-
-        return $this->handleReaction($id, $validated['user_id'], 'gift', $validated['action'] ?? 'add', $validated['pricing_id'] ?? null, $validated);
+        return $this->handleResponse(
+            ApiResource::make(
+                $giftTransaction->load([
+                    'sender',
+                    'receiver',
+                    'pricing',
+                    'history',
+                ])
+            ),
+            $this->apiMessage('created', 'gift')
+        );
     }
 
     public function report(Request $request, int $id, int $userId): JsonResponse
@@ -647,51 +648,6 @@ final class MediaController extends ApiResourceController
                 ->delete();
 
             return $this->handleResponse(null, $this->apiMessage('deleted', 'reaction'));
-        }
-
-        if ($type === 'gift') {
-            $pricing = Pricing::query()->findOrFail($pricingId);
-
-            if ($pricing->pricing_cost === null || $pricing->pricing_cost <= 0 || blank($pricing->currency)) {
-                return $this->handleError(null, 'The gift pricing must have a positive amount and a currency.', 422);
-            }
-
-            try {
-                $paymentResult = $this->initiateFlexPayPayment([
-                    'user_id' => $userId,
-                    'type' => $paymentAttributes['payment_type'],
-                    'amount' => $pricing->pricing_cost,
-                    'currency' => strtoupper($pricing->currency),
-                    'phone' => $paymentAttributes['phone'] ?? null,
-                    'description' => $paymentAttributes['description'] ?? 'Media gift',
-                    'callback_url' => $paymentAttributes['callback_url'],
-                    'approve_url' => $paymentAttributes['approve_url'] ?? null,
-                    'cancel_url' => $paymentAttributes['cancel_url'] ?? null,
-                    'decline_url' => $paymentAttributes['decline_url'] ?? null,
-                    'channel' => $paymentAttributes['channel'] ?? null,
-                    'reason' => 'gift',
-                    'entity' => 'media',
-                    'entity_id' => $media->id,
-                ]);
-            } catch (InvalidArgumentException $exception) {
-                return $this->handleError(null, $exception->getMessage(), 422);
-            } catch (ConnectionException $exception) {
-                report($exception);
-
-                return $this->handleError(null, 'The payment service is temporarily unavailable.', 503);
-            } catch (RequestException $exception) {
-                report($exception);
-
-                return $this->handleError(null, 'The payment service could not process the request.', 502);
-            } catch (RuntimeException $exception) {
-                return $this->handleError(null, $exception->getMessage(), 422);
-            }
-
-            return $this->handleResponse([
-                'payment' => ApiResource::make($paymentResult['payment']),
-                'order_number' => $paymentResult['payment']->order_number,
-                'url' => $paymentResult['response']['url'] ?? null,
-            ], $this->apiMessage('created', 'payment'));
         }
 
         $reaction = Reaction::create([

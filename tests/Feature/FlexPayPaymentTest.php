@@ -2,13 +2,13 @@
 
 namespace Tests\Feature;
 
-use App\Http\Controllers\Api\ApiResourceController;
-use App\Http\Resources\Api\ApiResource;
 use App\Models\Payment;
 use App\Models\User;
+use App\Services\FlexPayService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use RuntimeException;
@@ -55,6 +55,7 @@ class FlexPayPaymentTest extends TestCase
             $table->string('entity')->nullable();
             $table->unsignedBigInteger('entity_id')->nullable();
             $table->timestamps();
+            $table->timestamp('coins_credited_at')->nullable();
             $table->foreignId('user_id')->nullable();
         });
 
@@ -80,13 +81,12 @@ class FlexPayPaymentTest extends TestCase
             ]),
         ]);
 
-        $result = $this->paymentController()->launch([
+        $result = app(FlexPayService::class)->initiate([
             'user_id' => $user->id,
             'type' => 1,
             'amount' => 25.50,
             'currency' => 'USD',
             'phone' => '243810000000',
-            'callback_url' => 'https://app.test/api/v1/payment/callback',
             'reason' => 'product_sale',
             'entity' => 'cart',
             'entity_id' => 8,
@@ -103,7 +103,7 @@ class FlexPayPaymentTest extends TestCase
                 && $request['merchant'] === 'merchant-code'
                 && $request['type'] === 1
                 && $request['phone'] === '243810000000'
-                && $request['callbackUrl'] === 'https://app.test/api/v1/payment/callback';
+                && $request['callbackUrl'] === getApiURL().'/payment/store';
         });
     }
 
@@ -121,16 +121,15 @@ class FlexPayPaymentTest extends TestCase
             ]),
         ]);
 
-        $result = $this->paymentController()->launch([
+        $result = app(FlexPayService::class)->initiate([
             'user_id' => $user->id,
             'type' => 2,
             'amount' => 100,
             'currency' => 'CDF',
             'description' => 'Order payment',
-            'callback_url' => 'https://app.test/api/v1/payment/callback',
-            'approve_url' => 'https://app.test/payment/approved',
-            'cancel_url' => 'https://app.test/payment/cancelled',
-            'decline_url' => 'https://app.test/payment/declined',
+            'approve_url' => 'https://untrusted.test/approved',
+            'cancel_url' => 'https://untrusted.test/cancelled',
+            'decline_url' => 'https://untrusted.test/declined',
         ]);
 
         $this->assertSame('FLEX-REFERENCE', $result['payment']->reference);
@@ -138,10 +137,10 @@ class FlexPayPaymentTest extends TestCase
         $this->assertSame('FLEX-1002', $result['payment']->order_number);
 
         Http::assertSent(fn (Request $request): bool => $request->url() === 'https://flexpay.test/card'
-            && $request['callback_url'] === 'https://app.test/api/v1/payment/callback'
-            && $request['approve_url'] === 'https://app.test/payment/approved'
-            && $request['cancel_url'] === 'https://app.test/payment/cancelled'
-            && $request['decline_url'] === 'https://app.test/payment/declined');
+            && $request['callback_url'] === getApiURL().'/payment/store'
+            && $request['approve_url'] === getWebURL()."/paid/100/CDF/0/{$user->id}"
+            && $request['cancel_url'] === getWebURL()."/paid/100/CDF/1/{$user->id}"
+            && $request['decline_url'] === getWebURL()."/paid/100/CDF/2/{$user->id}");
     }
 
     public function test_it_does_not_store_a_payment_when_flexpay_rejects_the_request(): void
@@ -151,13 +150,12 @@ class FlexPayPaymentTest extends TestCase
         Http::fake(['https://flexpay.test/mobile' => Http::response(['code' => '1', 'message' => 'Rejected.'])]);
 
         try {
-            $this->paymentController()->launch([
+            app(FlexPayService::class)->initiate([
                 'user_id' => $user->id,
                 'type' => 1,
                 'amount' => 25,
                 'currency' => 'USD',
                 'phone' => '243810000000',
-                'callback_url' => 'https://app.test/api/v1/payment/callback',
             ]);
 
             $this->fail('A rejected FlexPay request must throw an exception.');
@@ -166,24 +164,19 @@ class FlexPayPaymentTest extends TestCase
         }
     }
 
-    private function paymentController(): FlexPayTestController
+    public function test_payment_casts_the_coin_credit_timestamp_as_a_date(): void
     {
-        return new FlexPayTestController;
-    }
-}
+        $user = User::create(['email' => 'customer@example.com', 'password' => 'password']);
+        $creditedAt = now()->startOfSecond();
 
-class FlexPayTestController extends ApiResourceController
-{
-    protected string $modelClass = Payment::class;
+        $payment = Payment::create([
+            'order_number' => 'FLEX-CREDITED',
+            'type' => 1,
+            'user_id' => $user->id,
+            'coins_credited_at' => $creditedAt,
+        ]);
 
-    protected string $resourceClass = ApiResource::class;
-
-    /**
-     * @param  array<string, mixed>  $attributes
-     * @return array{payment: Payment, response: array<string, mixed>}
-     */
-    public function launch(array $attributes): array
-    {
-        return $this->initiateFlexPayPayment($attributes);
+        $this->assertInstanceOf(Carbon::class, $payment->refresh()->coins_credited_at);
+        $this->assertTrue($payment->refresh()->coins_credited_at->equalTo($creditedAt));
     }
 }

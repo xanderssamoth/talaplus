@@ -14,7 +14,11 @@ use Illuminate\Pagination\LengthAwarePaginator;
 if (! function_exists('getWebURL')) {
     function getWebURL()
     {
-        return (! empty($_SERVER['HTTPS']) ? 'https' : 'http').'://'.$_SERVER['HTTP_HOST'];
+        $configuredUrl = (string) config('app.url', 'http://localhost');
+        $scheme = ! empty($_SERVER['HTTPS']) ? 'https' : (parse_url($configuredUrl, PHP_URL_SCHEME) ?: 'http');
+        $host = $_SERVER['HTTP_HOST'] ?? parse_url($configuredUrl, PHP_URL_HOST) ?? 'localhost';
+
+        return "{$scheme}://{$host}";
     }
 }
 
@@ -22,7 +26,11 @@ if (! function_exists('getWebURL')) {
 if (! function_exists('getApiURL')) {
     function getApiURL()
     {
-        return (! empty($_SERVER['HTTPS']) ? 'https' : 'http').'://'.$_SERVER['HTTP_HOST'].'/api';
+        $configuredUrl = (string) config('app.url', 'http://localhost');
+        $scheme = ! empty($_SERVER['HTTPS']) ? 'https' : (parse_url($configuredUrl, PHP_URL_SCHEME) ?: 'http');
+        $host = $_SERVER['HTTP_HOST'] ?? parse_url($configuredUrl, PHP_URL_HOST) ?? 'localhost';
+
+        return "{$scheme}://{$host}/api";
     }
 }
 
