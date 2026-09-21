@@ -41,7 +41,6 @@ class AiConversationApiTest extends TestCase
             'ai_message_files',
             'ai_messages',
             'ai_conversations',
-            'bank_cards',
             'blocked_users',
             'notifications',
             'reactions',

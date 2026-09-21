@@ -8,7 +8,6 @@ use App\Models\AboutSubject;
 use App\Models\AboutTitle;
 use App\Models\AdminNotification;
 use App\Models\AI\AiConversation;
-use App\Models\BankCard;
 use App\Models\Cart;
 use App\Models\Category;
 use App\Models\Comment;
@@ -54,7 +53,6 @@ class ApiModelsTest extends TestCase
             MoneyTransfer::class,
             History::class,
             Reaction::class,
-            BankCard::class,
             AboutDash::class,
             Cart::class,
             CustomerOrder::class,
@@ -73,19 +71,9 @@ class ApiModelsTest extends TestCase
             'firstname' => 'Tala',
         ]);
 
-        $bankCard = (new BankCard)->forceFill([
-            'card_name' => 'Main card',
-            'card_number' => '4111111111111111',
-            'cvv_code' => '123',
-            'provider' => 'Visa',
-        ]);
-
         $userArray = $user->toArray();
-        $cardArray = $bankCard->toArray();
 
         $this->assertArrayNotHasKey('password', $userArray);
         $this->assertArrayNotHasKey('api_token', $userArray);
-        $this->assertArrayNotHasKey('card_number', $cardArray);
-        $this->assertArrayNotHasKey('cvv_code', $cardArray);
     }
 }

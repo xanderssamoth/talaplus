@@ -9,7 +9,6 @@ use App\Http\Controllers\Api\AI\AiConversationController;
 use App\Http\Controllers\Api\AI\AiMessageController;
 use App\Http\Controllers\Api\AI\AiMessageFileController;
 use App\Http\Controllers\Api\AI\AiToolCallController;
-use App\Http\Controllers\Api\BankCardController;
 use App\Http\Controllers\Api\BlockedUserController;
 use App\Http\Controllers\Api\CartController;
 use App\Http\Controllers\Api\CategoryController;
@@ -159,7 +158,6 @@ Route::prefix('v1')->group(function (): void {
         Route::apiResource('report', ReportController::class);
         Route::apiResource('hashtag', HashtagController::class);
         Route::apiResource('reaction', ReactionController::class);
-        Route::apiResource('bank-card', BankCardController::class);
         Route::apiResource('cart', CartController::class);
         Route::apiResource('customer-order', CustomerOrderController::class);
         Route::apiResource('comment', CommentController::class);

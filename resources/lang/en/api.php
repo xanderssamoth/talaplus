@@ -119,7 +119,6 @@ return [
         'ai_message' => $entityMessages('AI message'),
         'ai_message_file' => $entityMessages('AI message file'),
         'ai_tool_call' => $entityMessages('AI tool call'),
-        'bank_card' => $entityMessages('Bank card'),
         'blocked_user' => $entityMessages('Blocked user'),
         'cart' => $entityMessages('Cart'),
         'category' => $entityMessages('Category'),

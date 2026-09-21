@@ -8,6 +8,14 @@ use Tests\TestCase;
 
 class ApiRouteProtectionTest extends TestCase
 {
+    public function test_removed_bank_card_resource_is_not_registered(): void
+    {
+        $bankCardRoutes = collect(app('router')->getRoutes())
+            ->filter(fn (Route $route): bool => Str::startsWith($route->uri(), 'api/v1/bank-card'));
+
+        $this->assertCount(0, $bankCardRoutes);
+    }
+
     public function test_only_explicitly_allowed_api_routes_are_public(): void
     {
         $publicRoutes = [

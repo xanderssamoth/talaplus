@@ -42,7 +42,6 @@ class ProductCartMessageApiTest extends TestCase
         Schema::disableForeignKeyConstraints();
 
         foreach ([
-            'bank_cards',
             'blocked_users',
             'notifications',
             'reactions',
