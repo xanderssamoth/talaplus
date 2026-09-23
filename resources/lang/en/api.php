@@ -13,6 +13,7 @@ return [
     'auth' => [
         'email_not_verified' => 'The email address is not verified.',
         'former_password_invalid' => 'The former password is invalid.',
+        'password_unchanged' => 'This is already your current password. Please sign in or choose a stronger new password.',
         'invalid_credentials' => 'The credentials are invalid.',
         'login_success' => 'User logged in successfully.',
         'password_updated' => 'Password updated successfully.',

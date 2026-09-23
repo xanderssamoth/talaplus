@@ -11,6 +11,14 @@ class PasswordReset extends SqlModel
         return 'password_resets';
     }
 
+    /**
+     * @return array<int, string>
+     */
+    protected function hiddenAttributes(): array
+    {
+        return ['former_password'];
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'email', 'email');

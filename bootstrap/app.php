@@ -11,6 +11,7 @@ use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 if (! function_exists('apiExceptionEntity')) {
@@ -52,6 +53,10 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->shouldRenderJsonWhen(
+            fn (Request $request, Throwable $exception): bool => $request->is('api/*') || $request->expectsJson()
+        );
+
         $exceptions->render(function (ModelNotFoundException $exception, Request $request) {
             if (! $request->is('api/*')) {
                 return null;
@@ -60,6 +65,18 @@ return Application::configure(basePath: dirname(__DIR__))
             $entity = apiExceptionEntity($request, $exception->getModel());
 
             return app(BaseController::class)->handleError(null, apiNotFoundMessage($entity), 404);
+        });
+
+        $exceptions->render(function (ValidationException $exception, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => $exception->getMessage(),
+                'errors' => $exception->errors(),
+            ], $exception->status);
         });
 
         $exceptions->render(function (NotFoundHttpException $exception, Request $request) {
@@ -96,8 +113,6 @@ return Application::configure(basePath: dirname(__DIR__))
                 return null;
             }
 
-            return response()->json([
-                'message' => __('notifications.401_description'),
-            ], 401);
+            return app(BaseController::class)->handleError(null, __('notifications.401_description'), 401);
         });
     })->create();

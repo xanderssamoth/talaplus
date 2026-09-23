@@ -8,6 +8,13 @@ use Tests\TestCase;
 
 class ApiRouteProtectionTest extends TestCase
 {
+    public function test_unauthenticated_api_status_update_returns_json_instead_of_a_login_redirect(): void
+    {
+        $this->patch('/api/v1/user/1/status', ['status' => 'activated'], ['Accept' => 'text/html'])
+            ->assertUnauthorized()
+            ->assertJsonPath('message', __('notifications.401_description'));
+    }
+
     public function test_removed_bank_card_resource_is_not_registered(): void
     {
         $bankCardRoutes = collect(app('router')->getRoutes())

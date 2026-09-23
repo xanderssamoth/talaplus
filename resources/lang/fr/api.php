@@ -13,6 +13,7 @@ return [
     'auth' => [
         'email_not_verified' => 'L’adresse email n’est pas vérifiée.',
         'former_password_invalid' => 'L’ancien mot de passe est invalide.',
+        'password_unchanged' => 'Ceci est déjà votre mot de passe actuel. Veuillez vous connecter ou choisir un nouveau mot de passe plus sûr.',
         'invalid_credentials' => 'Les identifiants sont invalides.',
         'login_success' => 'Utilisateur connecté avec succès.',
         'password_updated' => 'Mot de passe modifié avec succès.',

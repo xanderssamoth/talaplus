@@ -19,7 +19,9 @@ use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -86,7 +88,7 @@ final class UserController extends ApiResourceController
                 'email' => $user->email,
                 'phone' => $user->phone,
                 'token' => (string) random_int(100000, 999999),
-                'former_password' => $generatedPassword,
+                'former_password' => $generatedPassword !== null ? Hash::make($generatedPassword) : null,
             ]);
         }
 
@@ -250,7 +252,7 @@ final class UserController extends ApiResourceController
     {
         $user = User::query()->findOrFail($id);
         $medias = $user->watchlist()
-            ->with(['files', 'user'])
+            ->with($this->watchlistMediaRelations())
             ->latest('media_user.id')
             ->paginate(10)
             ->withQueryString();
@@ -320,7 +322,7 @@ final class UserController extends ApiResourceController
     public function addToWatchlist(int $id, int $mediaId): JsonResponse
     {
         $user = User::query()->findOrFail($id);
-        $media = Media::query()->with(['files', 'user'])->findOrFail($mediaId);
+        $media = Media::query()->with($this->watchlistMediaRelations())->findOrFail($mediaId);
         $user->watchlist()->syncWithoutDetaching([$media->id]);
 
         return $this->handleResponse($this->mediaPayload($media, $user->id), $this->apiMessage('created', 'media'));
@@ -329,7 +331,7 @@ final class UserController extends ApiResourceController
     public function removeFromWatchlist(int $id, int $mediaId): JsonResponse
     {
         $user = User::query()->findOrFail($id);
-        $media = Media::query()->with(['files', 'user'])->findOrFail($mediaId);
+        $media = Media::query()->with($this->watchlistMediaRelations())->findOrFail($mediaId);
         $user->watchlist()->detach($media->id);
 
         return $this->handleResponse($this->mediaPayload($media, $user->id), $this->apiMessage('deleted', 'media'));
@@ -362,7 +364,14 @@ final class UserController extends ApiResourceController
 
     public function updateStatus(Request $request, int $id): JsonResponse
     {
-        return $this->updateSingleAttribute($request, $id, 'status', ['created', 'activated', 'disabled', 'blocked', 'deleted']);
+        $validated = $request->validate([
+            'status' => ['required', Rule::in(['created', 'activated', 'disabled', 'blocked', 'deleted'])],
+        ]);
+
+        $user = User::query()->findOrFail($id);
+        $user->update($validated);
+
+        return $this->handleResponse(UserResource::make($user->refresh()), $this->apiMessage('updated'));
     }
 
     public function updateType(Request $request, int $id): JsonResponse
@@ -396,26 +405,42 @@ final class UserController extends ApiResourceController
 
     public function updatePassword(Request $request, int $id): JsonResponse
     {
-        if (! $request->has('password_confirmation')) {
-            $request->merge([
-                'password_confirmation' => $request->input('confirm_password', $request->input('confirm_passord')),
-            ]);
-        }
-
         $validated = $request->validate([
             'former_password' => ['required', 'string'],
             'new_password' => ['required', 'string'],
             'password_confirmation' => ['required', 'same:new_password'],
         ]);
 
-        $user = User::query()->findOrFail($id);
+        $result = DB::transaction(function () use ($id, $validated): array {
+            $user = User::query()->lockForUpdate()->findOrFail($id);
 
-        if (! Hash::check($validated['former_password'], $user->password)) {
-            return $this->handleError(UserResource::make($user), __('api.auth.former_password_invalid'), 422);
+            if (! Hash::check($validated['former_password'], $user->password)) {
+                return ['user' => null, 'error' => 'former_password_invalid'];
+            }
+
+            if (Hash::check($validated['new_password'], $user->password)) {
+                return ['user' => null, 'error' => 'password_unchanged'];
+            }
+
+            $user->password = $validated['new_password'];
+            $user->save();
+
+            if ($user->email !== null || $user->phone !== null) {
+                PasswordReset::query()->updateOrCreate(
+                    ['email' => $user->email, 'phone' => $user->phone],
+                    ['former_password' => Hash::make($validated['new_password'])],
+                );
+            }
+
+            return ['user' => $user, 'error' => null];
+        });
+
+        /** @var ?User $user */
+        $user = $result['user'];
+
+        if ($user === null) {
+            return $this->handleError(null, __('api.auth.'.$result['error']), 422);
         }
-
-        $user->password = $validated['new_password'];
-        $user->save();
 
         return $this->handleResponse(UserResource::make($user->refresh()), __('api.auth.password_updated'));
     }
@@ -479,6 +504,20 @@ final class UserController extends ApiResourceController
         }
 
         return $code;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function watchlistMediaRelations(): array
+    {
+        $relations = ['user'];
+
+        if (Schema::hasColumn('files', 'media_id')) {
+            $relations[] = 'files';
+        }
+
+        return $relations;
     }
 
     private function mediaPayload(Media $media, int $userId): array|JsonResource
