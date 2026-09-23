@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS `users` (
   `address_1` TEXT NULL,
   `address_2` TEXT NULL,
   `p_o_box` VARCHAR(45) NULL,
-  `currency` VARCHAR(45) NULL,
+  `currency` VARCHAR(45) NOT NULL DEFAULT 'USD',
   `email` VARCHAR(255) NULL,
   `phone` VARCHAR(45) NULL,
   `email_verified_at` DATETIME NULL,
