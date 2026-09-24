@@ -84,6 +84,8 @@ return [
         'user_id_invalid' => 'L’identifiant utilisateur FlexPay doit être numérique.',
     ],
     'profile' => [
+        'avatar_invalid' => 'L’avatar doit être une image PNG, JPEG ou WebP valide encodée en Base64, d’au plus 5 Mo.',
+        'avatar_upload_failed' => 'L’avatar n’a pas pu être envoyé.',
         'avatar_updated' => 'Avatar mis à jour avec succès.',
     ],
     'gift' => [

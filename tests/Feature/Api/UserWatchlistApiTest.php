@@ -10,6 +10,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -73,6 +74,7 @@ class UserWatchlistApiTest extends TestCase
             $table->string('email')->nullable();
             $table->string('username')->nullable();
             $table->text('password')->nullable();
+            $table->text('avatar_url')->nullable();
             $table->string('status')->default('created');
             $table->timestamps();
             $table->softDeletes();
@@ -337,5 +339,24 @@ class UserWatchlistApiTest extends TestCase
         $this->assertDatabaseHas('role_user', ['user_id' => $user->id, 'role_id' => $existingRole->id, 'is_selected' => false]);
         $this->assertDatabaseHas('role_user', ['user_id' => $user->id, 'role_id' => $newRole->id, 'is_selected' => true]);
         $this->assertDatabaseCount('role_user', 3);
+    }
+
+    public function test_avatar_update_stores_a_base64_image_on_s3_without_creating_a_file_record(): void
+    {
+        Storage::fake('s3');
+        $user = User::create(['email' => 'avatar@example.com', 'username' => 'avatar-user', 'password' => 'password']);
+        $avatarBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+        Sanctum::actingAs($user);
+
+        $this->patchJson("/api/v1/user/{$user->id}/avatar", ['avatar_base64' => $avatarBase64])
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $avatarUrl = (string) $user->refresh()->avatar_url;
+
+        $this->assertStringContainsString('users/avatars/', $avatarUrl);
+        Storage::disk('s3')->assertExists('users/avatars/'.basename($avatarUrl));
+        $this->assertDatabaseCount('files', 0);
     }
 }

@@ -389,23 +389,21 @@ final class UserController extends ApiResourceController
     public function updateAvatar(Request $request, int $id): JsonResponse
     {
         $validated = $request->validate([
-            'avatar' => ['required_without:avatar_url', 'nullable', 'file', 'max:5120'],
-            'avatar_url' => ['required_without:avatar', 'nullable', 'string'],
+            'avatar_base64' => ['required', 'string', 'max:7000000'],
         ]);
 
-        $user = User::query()->findOrFail($id);
-        $avatarUrl = $validated['avatar_url'] ?? Storage::disk('s3')->url($request->file('avatar')->store('users/avatars', 's3'));
-        $user->update(['avatar_url' => $avatarUrl]);
-
-        if ($request->hasFile('avatar')) {
-            File::create([
-                'file_name' => $request->file('avatar')->getClientOriginalName(),
-                'file_url' => $avatarUrl,
-                'file_type' => 'photo',
-                'user_id' => $user->id,
-                ...File::metadataFromUploadedFile($request->file('avatar')),
-            ]);
+        $avatar = $this->avatarFromBase64($validated['avatar_base64']);
+        if ($avatar === null) {
+            return $this->handleError(null, __('api.profile.avatar_invalid'), 422);
         }
+
+        $user = User::query()->findOrFail($id);
+        $path = 'users/avatars/'.Str::uuid().'.'.$avatar['extension'];
+        if (! Storage::disk('s3')->put($path, $avatar['binary'])) {
+            return $this->handleError(null, __('api.profile.avatar_upload_failed'), 503);
+        }
+
+        $user->update(['avatar_url' => Storage::disk('s3')->url($path)]);
 
         return $this->handleResponse(UserResource::make($user->refresh()), $this->apiMessage('updated'));
     }
@@ -499,6 +497,44 @@ final class UserController extends ApiResourceController
         });
 
         return $this->handleResponse(ApiResource::collection($files), __('api.file.created_many'));
+    }
+
+    /**
+     * @return array{binary: string, extension: string}|null
+     */
+    private function avatarFromBase64(string $avatarBase64): ?array
+    {
+        if (preg_match('/^data:image\/(png|jpe?g|webp);base64,/', $avatarBase64, $matches) !== 1) {
+            return null;
+        }
+
+        $encodedImage = substr($avatarBase64, strlen($matches[0]));
+        if (strlen($encodedImage) > 7000000) {
+            return null;
+        }
+
+        $binary = base64_decode($encodedImage, true);
+        if ($binary === false || strlen($binary) > 10 * 1024 * 1024 || @getimagesizefromstring($binary) === false) {
+            return null;
+        }
+
+        $mimeType = (new \finfo(FILEINFO_MIME_TYPE))->buffer($binary);
+        $extensions = [
+            'image/png' => 'png',
+            'image/jpeg' => 'jpg',
+            'image/webp' => 'webp',
+        ];
+        $declaredMimeType = match ($matches[1]) {
+            'png' => 'image/png',
+            'jpg', 'jpeg' => 'image/jpeg',
+            'webp' => 'image/webp',
+        };
+
+        if (! isset($extensions[$mimeType]) || $mimeType !== $declaredMimeType) {
+            return null;
+        }
+
+        return ['binary' => $binary, 'extension' => $extensions[$mimeType]];
     }
 
     private function updateSingleAttribute(Request $request, int $id, string $attribute, array $acceptedValues): JsonResponse

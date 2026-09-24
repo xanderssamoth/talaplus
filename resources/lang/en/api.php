@@ -84,6 +84,8 @@ return [
         'user_id_invalid' => 'The FlexPay user ID must be numeric.',
     ],
     'profile' => [
+        'avatar_invalid' => 'The avatar must be a valid PNG, JPEG, or WebP image encoded in Base64, with a maximum size of 5 MB.',
+        'avatar_upload_failed' => 'The avatar could not be uploaded.',
         'avatar_updated' => 'Avatar updated successfully.',
     ],
     'gift' => [
