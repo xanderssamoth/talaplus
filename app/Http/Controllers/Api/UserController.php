@@ -376,7 +376,14 @@ final class UserController extends ApiResourceController
 
     public function updateType(Request $request, int $id): JsonResponse
     {
-        return $this->updateSingleAttribute($request, $id, 'type', ['uncertified', 'certified']);
+        $validated = $request->validate([
+            'type' => ['required', Rule::in(['uncertified', 'certified'])],
+        ]);
+
+        $user = User::query()->findOrFail($id);
+        $user->update($validated);
+
+        return $this->handleResponse(UserResource::make($user->refresh()), $this->apiMessage('updated'));
     }
 
     public function updateAvatar(Request $request, int $id): JsonResponse
