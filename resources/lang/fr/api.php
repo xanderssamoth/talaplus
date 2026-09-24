@@ -87,6 +87,8 @@ return [
         'avatar_invalid' => 'L’avatar doit être une image PNG, JPEG ou WebP valide encodée en Base64, d’au plus 5 Mo.',
         'avatar_upload_failed' => 'L’avatar n’a pas pu être envoyé.',
         'avatar_updated' => 'Avatar mis à jour avec succès.',
+        'cover_invalid' => 'La couverture doit être une image PNG, JPEG ou WebP valide encodée en Base64, d’au plus 5 Mo.',
+        'cover_upload_failed' => 'La couverture n’a pas pu être envoyée.',
     ],
     'gift' => [
         'coin_price_invalid' => 'Le prix en coins du cadeau est invalide.',

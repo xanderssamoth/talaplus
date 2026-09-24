@@ -3,6 +3,7 @@
 namespace App\Helpers;
 
 use App\Http\Controllers\Api\ApiResourceController;
+use App\Http\Controllers\Api\UserController;
 use Dedoc\Scramble\Extensions\OperationExtension;
 use Dedoc\Scramble\Support\Generator\Operation;
 use Dedoc\Scramble\Support\Generator\RequestBodyObject;
@@ -35,6 +36,10 @@ final class ApiStoreColumnsExtension extends OperationExtension
         $controllerClass = $routeInfo->className();
 
         if (! $controllerClass || ! is_subclass_of($controllerClass, ApiResourceController::class)) {
+            return;
+        }
+
+        if ($controllerClass === UserController::class) {
             return;
         }
 

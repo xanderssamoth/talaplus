@@ -71,11 +71,47 @@ class UserWatchlistApiTest extends TestCase
 
         Schema::create('users', function (Blueprint $table): void {
             $table->id();
+            $table->string('firstname')->nullable();
+            $table->string('lastname')->nullable();
+            $table->string('surname')->nullable();
+            $table->string('partner_name')->nullable();
+            $table->text('about_me')->nullable();
+            $table->string('gender')->nullable();
+            $table->date('birthdate')->nullable();
+            $table->string('country')->nullable();
+            $table->string('city')->nullable();
+            $table->text('address_1')->nullable();
+            $table->text('address_2')->nullable();
+            $table->string('p_o_box')->nullable();
+            $table->string('currency')->default('USD');
             $table->string('email')->nullable();
+            $table->string('phone')->nullable();
             $table->string('username')->nullable();
             $table->text('password')->nullable();
+            $table->text('api_key')->nullable();
             $table->text('avatar_url')->nullable();
+            $table->text('cover_url')->nullable();
+            $table->string('promo_code')->nullable();
+            $table->text('two_factor_secret')->nullable();
+            $table->text('two_factor_recovery_codes')->nullable();
+            $table->timestamp('two_factor_email_confirmed_at')->nullable();
+            $table->timestamp('two_factor_phone_confirmed_at')->nullable();
+            $table->boolean('tips_at_every_login')->default(true);
+            $table->boolean('is_online')->default(true);
+            $table->boolean('christian_preference')->default(false);
+            $table->foreignId('belongs_to')->nullable();
+            $table->string('child_lock_code')->nullable();
             $table->string('status')->default('created');
+            $table->string('type')->default('uncertified');
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('notifications', function (Blueprint $table): void {
+            $table->id();
+            $table->string('type');
+            $table->boolean('is_read')->default(false);
+            $table->foreignId('to_user_id')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
@@ -358,5 +394,107 @@ class UserWatchlistApiTest extends TestCase
         $this->assertStringContainsString('users/avatars/', $avatarUrl);
         Storage::disk('s3')->assertExists('users/avatars/'.basename($avatarUrl));
         $this->assertDatabaseCount('files', 0);
+    }
+
+    public function test_user_store_saves_optional_base64_avatar_and_cover_without_accepting_server_fields(): void
+    {
+        Storage::fake('s3');
+        $administrator = User::create(['email' => 'administrator@example.com', 'username' => 'administrator', 'password' => 'password']);
+        $imageBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+        Sanctum::actingAs($administrator);
+
+        $this->postJson('/api/v1/user', [
+            'email' => 'new-user@example.com',
+            'username' => 'new-user',
+            'password' => 'secure-password',
+            'password_confirmation' => 'secure-password',
+            'avatar_base64' => $imageBase64,
+            'cover_base64' => $imageBase64,
+            'status' => 'blocked',
+            'type' => 'certified',
+            'api_token' => 'must-not-be-stored',
+        ])
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.user.status', 'activated')
+            ->assertJsonPath('data.user.type', 'uncertified');
+
+        $user = User::query()->where('email', 'new-user@example.com')->firstOrFail();
+
+        $this->assertStringContainsString('users/avatars/', (string) $user->avatar_url);
+        $this->assertStringContainsString('users/covers/', (string) $user->cover_url);
+        Storage::disk('s3')->assertExists('users/avatars/'.basename((string) $user->avatar_url));
+        Storage::disk('s3')->assertExists('users/covers/'.basename((string) $user->cover_url));
+        $this->assertDatabaseCount('files', 0);
+    }
+
+    public function test_user_update_saves_optional_base64_images_and_supported_account_fields(): void
+    {
+        Storage::fake('s3');
+        $user = User::create([
+            'email' => 'profile@example.com',
+            'username' => 'profile-user',
+            'password' => 'password',
+            'status' => 'blocked',
+            'type' => 'certified',
+        ]);
+        $imageBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+        Sanctum::actingAs($user);
+
+        $this->putJson("/api/v1/user/{$user->id}", [
+            'avatar_base64' => $imageBase64,
+            'cover_base64' => $imageBase64,
+            'api_token' => 'must-not-be-stored',
+            'status' => 'activated',
+            'type' => 'uncertified',
+            'partner_name' => 'Partenaire',
+            'currency' => 'CDF',
+            'child_lock_code' => 'LOCK-123',
+            'api_key' => 'api-key',
+            'promo_code' => 'PROMO-123',
+            'two_factor_secret' => 'two-factor-secret',
+            'two_factor_recovery_codes' => 'recovery-codes',
+            'two_factor_email_confirmed_at' => '2026-09-24 12:00:00',
+            'two_factor_phone_confirmed_at' => '2026-09-24 12:00:00',
+            'tips_at_every_login' => false,
+            'is_online' => false,
+        ])
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.status', 'activated')
+            ->assertJsonPath('data.type', 'uncertified');
+
+        $user->refresh();
+
+        $this->assertStringContainsString('users/avatars/', (string) $user->avatar_url);
+        $this->assertStringContainsString('users/covers/', (string) $user->cover_url);
+        Storage::disk('s3')->assertExists('users/avatars/'.basename((string) $user->avatar_url));
+        Storage::disk('s3')->assertExists('users/covers/'.basename((string) $user->cover_url));
+        $this->assertSame('Partenaire', $user->partner_name);
+        $this->assertSame('CDF', $user->currency);
+        $this->assertSame('LOCK-123', $user->child_lock_code);
+        $this->assertSame('api-key', $user->api_key);
+        $this->assertSame('PROMO-123', $user->promo_code);
+        $this->assertSame('two-factor-secret', $user->two_factor_secret);
+        $this->assertSame('recovery-codes', $user->two_factor_recovery_codes);
+        $this->assertFalse($user->tips_at_every_login);
+        $this->assertFalse($user->is_online);
+        $this->assertDatabaseCount('files', 0);
+    }
+
+    public function test_user_store_assigns_created_status_when_no_password_is_provided(): void
+    {
+        $administrator = User::create(['email' => 'administrator-created@example.com', 'username' => 'administrator-created', 'password' => 'password']);
+
+        Sanctum::actingAs($administrator);
+
+        $this->postJson('/api/v1/user', ['username' => 'pending-user'])
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.user.status', 'created')
+            ->assertJsonPath('data.user.type', 'uncertified')
+            ->assertJsonPath('data.user.currency', 'USD');
     }
 }

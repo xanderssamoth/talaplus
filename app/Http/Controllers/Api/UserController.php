@@ -19,6 +19,7 @@ use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
@@ -39,31 +40,38 @@ final class UserController extends ApiResourceController
 
     public function store(Request $request): JsonResponse
     {
-        if (! $request->has('password_confirmation')) {
-            $request->merge([
-                'password_confirmation' => $request->input('confirm_password', $request->input('confirm_passord')),
-            ]);
-        }
-
         $validated = $request->validate([
             'firstname' => ['nullable', 'string', 'max:255'],
             'lastname' => ['nullable', 'string', 'max:255'],
             'surname' => ['nullable', 'string', 'max:255'],
+            'partner_name' => ['nullable', 'string', 'max:255'],
             'about_me' => ['nullable', 'string'],
+            'gender' => ['nullable', 'string', 'max:45'],
+            'birthdate' => ['nullable', 'date'],
+            'country' => ['nullable', 'string', 'max:255'],
+            'city' => ['nullable', 'string', 'max:255'],
+            'address_1' => ['nullable', 'string'],
+            'address_2' => ['nullable', 'string'],
+            'p_o_box' => ['nullable', 'string', 'max:45'],
+            'currency' => ['nullable', 'string', 'max:45', Rule::in(['USD', 'CDF'])],
             'email' => ['nullable', 'email', 'max:255', 'unique:users,email'],
             'phone' => ['nullable', 'string', 'max:45', 'unique:users,phone'],
             'username' => ['required', 'string', 'max:255', 'unique:users,username'],
-            'password' => ['nullable', 'string', 'confirmed'],
-            'password_confirmation' => ['required_with:password', 'nullable', 'string'],
-            'avatar_url' => ['nullable', 'string'],
-            'cover_url' => ['nullable', 'string'],
             'christian_preference' => ['nullable', 'boolean'],
             'belongs_to' => ['nullable', 'integer', 'exists:users,id'],
-            'status' => ['nullable', Rule::in(['created', 'activated', 'disabled', 'blocked', 'deleted'])],
-            'type' => ['nullable', Rule::in(['uncertified', 'certified'])],
+            'child_lock_code' => ['nullable', 'string', 'max:45'],
+            'password' => ['nullable', 'string', 'confirmed'],
+            'password_confirmation' => ['required_with:password', 'nullable', 'string'],
+            'avatar_base64' => ['nullable', 'string', 'max:7000000'],
+            'cover_base64' => ['nullable', 'string', 'max:7000000'],
         ]);
 
-        unset($validated['password_confirmation']);
+        $profileImageUrls = $this->profileImageUrls($validated);
+        if ($profileImageUrls instanceof JsonResponse) {
+            return $profileImageUrls;
+        }
+
+        $validated = Arr::except($validated, ['password_confirmation', 'avatar_base64', 'cover_base64']);
 
         $generatedPassword = null;
         if (($validated['password'] ?? null) === null) {
@@ -75,27 +83,33 @@ final class UserController extends ApiResourceController
             }
         }
 
-        $user = User::create($validated);
-        $user->api_token = $this->issuePlainTextToken($user);
-        $user->save();
+        $validated['status'] = ($validated['password'] ?? null) === null ? 'created' : 'activated';
+        $validated['type'] = 'uncertified';
+        $validated['currency'] ??= 'USD';
 
-        $memberRole = $this->memberRole();
-        $user->roles()->attach($memberRole->id, ['is_selected' => true]);
+        [$user, $passwordReset] = DB::transaction(function () use ($validated, $profileImageUrls, $generatedPassword): array {
+            $user = User::create([...$validated, ...$profileImageUrls]);
 
-        $passwordReset = null;
-        if ($user->email !== null || $user->phone !== null) {
-            $passwordReset = PasswordReset::create([
-                'email' => $user->email,
-                'phone' => $user->phone,
-                'token' => (string) random_int(100000, 999999),
-                'former_password' => $generatedPassword !== null ? Hash::make($generatedPassword) : null,
+            $memberRole = $this->memberRole();
+            $user->roles()->attach($memberRole->id, ['is_selected' => true]);
+
+            $passwordReset = null;
+            if ($user->email !== null || $user->phone !== null) {
+                $passwordReset = PasswordReset::create([
+                    'email' => $user->email,
+                    'phone' => $user->phone,
+                    'token' => (string) random_int(100000, 999999),
+                    'former_password' => $generatedPassword !== null ? Hash::make($generatedPassword) : null,
+                ]);
+            }
+
+            AdminNotification::create([
+                'type' => 'welcome_new_user',
+                'to_user_id' => $user->id,
             ]);
-        }
 
-        AdminNotification::create([
-            'type' => 'welcome_new_user',
-            'to_user_id' => $user->id,
-        ]);
+            return [$user, $passwordReset];
+        });
 
         return $this->handleResponse([
             'user' => UserResource::make($user->refresh()),
@@ -105,25 +119,55 @@ final class UserController extends ApiResourceController
 
     public function update(Request $request, int $id): JsonResponse
     {
-        if (! $request->has('password_confirmation')) {
-            $request->merge([
-                'password_confirmation' => $request->input('confirm_password', $request->input('confirm_passord')),
-            ]);
+        $user = User::query()->findOrFail($id);
+        $payload = $request->validate([
+            'firstname' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'lastname' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'surname' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'partner_name' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'about_me' => ['sometimes', 'nullable', 'string'],
+            'gender' => ['sometimes', 'nullable', 'string', 'max:45'],
+            'birthdate' => ['sometimes', 'nullable', 'date'],
+            'country' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'city' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'address_1' => ['sometimes', 'nullable', 'string'],
+            'address_2' => ['sometimes', 'nullable', 'string'],
+            'p_o_box' => ['sometimes', 'nullable', 'string', 'max:45'],
+            'currency' => ['sometimes', Rule::in(['USD', 'CDF'])],
+            'email' => ['sometimes', 'nullable', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
+            'phone' => ['sometimes', 'nullable', 'string', 'max:45', Rule::unique('users', 'phone')->ignore($user->id)],
+            'username' => ['sometimes', 'required', 'string', 'max:255', Rule::unique('users', 'username')->ignore($user->id)],
+            'christian_preference' => ['sometimes', 'nullable', 'boolean'],
+            'belongs_to' => ['sometimes', 'nullable', 'integer', 'exists:users,id'],
+            'child_lock_code' => ['sometimes', 'nullable', 'string', 'max:45'],
+            'password' => ['sometimes', 'nullable', 'string', 'confirmed'],
+            'password_confirmation' => ['required_with:password', 'nullable', 'string'],
+            'avatar_base64' => ['sometimes', 'nullable', 'string', 'max:7000000'],
+            'cover_base64' => ['sometimes', 'nullable', 'string', 'max:7000000'],
+            'api_key' => ['sometimes', 'nullable', 'string'],
+            'promo_code' => ['sometimes', 'nullable', 'string', 'max:45'],
+            'two_factor_secret' => ['sometimes', 'nullable', 'string'],
+            'two_factor_recovery_codes' => ['sometimes', 'nullable', 'string'],
+            'two_factor_email_confirmed_at' => ['sometimes', 'nullable', 'date'],
+            'two_factor_phone_confirmed_at' => ['sometimes', 'nullable', 'date'],
+            'tips_at_every_login' => ['sometimes', 'boolean'],
+            'is_online' => ['sometimes', 'boolean'],
+            'status' => ['sometimes', Rule::in(['created', 'activated', 'disabled', 'blocked', 'deleted'])],
+            'type' => ['sometimes', Rule::in(['uncertified', 'certified'])],
+        ]);
+
+        $profileImageUrls = $this->profileImageUrls($payload);
+        if ($profileImageUrls instanceof JsonResponse) {
+            return $profileImageUrls;
         }
 
-        $user = User::query()->findOrFail($id);
-        $payload = $this->payload($request);
+        $payload = Arr::except($payload, ['password_confirmation', 'avatar_base64', 'cover_base64']);
 
-        if (array_key_exists('password', $payload) && $payload['password'] !== null) {
-            $request->validate([
-                'password' => ['required', 'string', 'confirmed'],
-                'password_confirmation' => ['required', 'string'],
-            ]);
-        } elseif (array_key_exists('password', $payload)) {
+        if (array_key_exists('password', $payload) && $payload['password'] === null) {
             unset($payload['password']);
         }
 
-        $user->fill($payload);
+        $user->fill([...$payload, ...$profileImageUrls]);
         $user->save();
 
         return $this->handleResponse(UserResource::make($user->refresh()), $this->apiMessage('updated'));
@@ -535,6 +579,39 @@ final class UserController extends ApiResourceController
         }
 
         return ['binary' => $binary, 'extension' => $extensions[$mimeType]];
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, string>|JsonResponse
+     */
+    private function profileImageUrls(array $payload): array|JsonResponse
+    {
+        $imageInputs = [
+            'avatar_base64' => ['column' => 'avatar_url', 'directory' => 'avatars', 'invalid' => 'api.profile.avatar_invalid', 'failed' => 'api.profile.avatar_upload_failed'],
+            'cover_base64' => ['column' => 'cover_url', 'directory' => 'covers', 'invalid' => 'api.profile.cover_invalid', 'failed' => 'api.profile.cover_upload_failed'],
+        ];
+        $urls = [];
+
+        foreach ($imageInputs as $input => $configuration) {
+            if (! isset($payload[$input]) || $payload[$input] === null) {
+                continue;
+            }
+
+            $image = $this->avatarFromBase64($payload[$input]);
+            if ($image === null) {
+                return $this->handleError(null, __($configuration['invalid']), 422);
+            }
+
+            $path = 'users/'.$configuration['directory'].'/'.Str::uuid().'.'.$image['extension'];
+            if (! Storage::disk('s3')->put($path, $image['binary'])) {
+                return $this->handleError(null, __($configuration['failed']), 503);
+            }
+
+            $urls[$configuration['column']] = Storage::disk('s3')->url($path);
+        }
+
+        return $urls;
     }
 
     private function updateSingleAttribute(Request $request, int $id, string $attribute, array $acceptedValues): JsonResponse
