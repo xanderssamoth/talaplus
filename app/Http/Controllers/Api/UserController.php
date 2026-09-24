@@ -455,8 +455,22 @@ final class UserController extends ApiResourceController
     public function updateRole(Request $request, int $id): JsonResponse
     {
         $validated = $request->validate(['role_id' => ['required', 'integer', 'exists:roles,id']]);
-        $user = User::query()->findOrFail($id);
-        $user->roles()->sync([$validated['role_id'] => ['is_selected' => true]]);
+        $user = DB::transaction(function () use ($id, $validated): User {
+            $user = User::query()->lockForUpdate()->findOrFail($id);
+
+            DB::table('role_user')
+                ->where('user_id', $user->id)
+                ->update([
+                    'is_selected' => false,
+                    'updated_at' => now(),
+                ]);
+
+            $user->roles()->syncWithoutDetaching([
+                $validated['role_id'] => ['is_selected' => true],
+            ]);
+
+            return $user;
+        });
 
         return $this->handleResponse(UserResource::make($user->refresh()->load('roles')), $this->apiMessage('updated'));
     }

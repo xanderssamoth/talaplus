@@ -4,6 +4,7 @@ namespace Tests\Feature\Api;
 
 use App\Models\Media;
 use App\Models\PasswordReset;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
@@ -83,6 +84,22 @@ class UserWatchlistApiTest extends TestCase
             $table->string('phone')->nullable();
             $table->string('token')->nullable();
             $table->text('former_password')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('roles', function (Blueprint $table): void {
+            $table->id();
+            $table->json('role_name')->nullable();
+            $table->json('role_description')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('role_user', function (Blueprint $table): void {
+            $table->id();
+            $table->foreignId('role_id');
+            $table->foreignId('user_id');
+            $table->boolean('is_selected')->default(false);
             $table->timestamps();
         });
 
@@ -293,5 +310,32 @@ class UserWatchlistApiTest extends TestCase
 
         $this->assertTrue(Hash::check('password', $user->refresh()->password));
         $this->assertDatabaseCount('password_resets', 0);
+    }
+
+    public function test_role_update_preserves_existing_roles_and_selects_only_the_requested_role(): void
+    {
+        $user = User::create(['email' => 'roles@example.com', 'username' => 'roles-user', 'password' => 'password']);
+        $formerRole = Role::create(['role_name' => ['fr' => 'Ancien']]);
+        $existingRole = Role::create(['role_name' => ['fr' => 'Existant']]);
+        $newRole = Role::create(['role_name' => ['fr' => 'Nouveau']]);
+
+        $user->roles()->attach([
+            $formerRole->id => ['is_selected' => true],
+            $existingRole->id => ['is_selected' => false],
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->patchJson("/api/v1/user/{$user->id}/role", ['role_id' => $existingRole->id])->assertOk();
+
+        $this->assertDatabaseHas('role_user', ['user_id' => $user->id, 'role_id' => $formerRole->id, 'is_selected' => false]);
+        $this->assertDatabaseHas('role_user', ['user_id' => $user->id, 'role_id' => $existingRole->id, 'is_selected' => true]);
+        $this->assertDatabaseCount('role_user', 2);
+
+        $this->patchJson("/api/v1/user/{$user->id}/role", ['role_id' => $newRole->id])->assertOk();
+
+        $this->assertDatabaseHas('role_user', ['user_id' => $user->id, 'role_id' => $existingRole->id, 'is_selected' => false]);
+        $this->assertDatabaseHas('role_user', ['user_id' => $user->id, 'role_id' => $newRole->id, 'is_selected' => true]);
+        $this->assertDatabaseCount('role_user', 3);
     }
 }
