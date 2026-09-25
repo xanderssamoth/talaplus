@@ -69,6 +69,27 @@ class SubscriptionApiTest extends TestCase
             ->exists());
     }
 
+    public function test_store_defaults_granted_to_false_when_omitted_or_null(): void
+    {
+        $followed = User::create(['email' => 'default-followed@example.com', 'password' => 'password']);
+        $follower = User::create(['email' => 'default-follower@example.com', 'password' => 'password']);
+        Sanctum::actingAs($follower);
+
+        $this->postJson('/api/v1/subscription', [
+            'user_id' => $followed->id,
+            'follower_id' => $follower->id,
+            'granted' => null,
+        ])
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $this->assertDatabaseHas('subscriptions', [
+            'user_id' => $followed->id,
+            'follower_id' => $follower->id,
+            'granted' => false,
+        ]);
+    }
+
     public function test_is_follower_checks_existing_subscription_between_users(): void
     {
         $followed = User::create(['email' => 'followed@example.com', 'password' => 'password']);

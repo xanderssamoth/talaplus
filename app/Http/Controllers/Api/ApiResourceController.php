@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 abstract class ApiResourceController extends BaseController
@@ -81,8 +82,23 @@ abstract class ApiResourceController extends BaseController
     protected function payload(Request $request): array
     {
         $model = new ($this->modelClass)();
+        $payload = Arr::only($request->all(), $model->getFillable());
 
-        return Arr::only($request->all(), $model->getFillable());
+        if (! $request->isMethod('post')) {
+            return $payload;
+        }
+
+        $columns = collect(Schema::getColumns($model->getTable()))->keyBy('name');
+
+        return Arr::where($payload, function (mixed $value, string $attribute) use ($columns): bool {
+            if ($value !== null) {
+                return true;
+            }
+
+            $column = $columns->get($attribute);
+
+            return ! is_array($column) || ! array_key_exists('default', $column) || $column['default'] === null;
+        });
     }
 
     protected function apiMessage(string $action, ?string $entity = null): string

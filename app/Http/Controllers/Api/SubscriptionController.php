@@ -18,7 +18,17 @@ final class SubscriptionController extends ApiResourceController
 
     public function store(Request $request): JsonResponse
     {
-        $subscription = Subscription::create($this->payload($request));
+        $validated = $request->validate([
+            'user_id' => ['required', 'integer', 'exists:users,id'],
+            'follower_id' => ['required', 'integer', 'exists:users,id'],
+            'granted' => ['nullable', 'boolean'],
+        ]);
+
+        $subscription = Subscription::create([
+            'user_id' => $validated['user_id'],
+            'follower_id' => $validated['follower_id'],
+            'granted' => $request->boolean('granted'),
+        ]);
 
         AdminNotification::create([
             'type' => 'new_follower',
