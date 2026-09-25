@@ -192,6 +192,16 @@
                                         <input class="form-control file-url-input" id="{{ $name }}" name="{{ $name }}" type="file" accept="{{ $field['accept'] ?? '' }}" data-required-on-create="{{ !empty($field['required']) ? '1' : '0' }}" {{ !empty($field['required']) ? 'required' : '' }}>
                                         <div class="file-preview mt-2 d-none" data-preview-for="{{ $name }}"></div>
                                     </div>
+                                @elseif ($type === 'image-base64')
+                                    <div class="mb-3" data-field-wrapper="{{ $name }}">
+                                        <label class="form-label" for="{{ $name }}-input">{{ $field['label'] }}</label>
+                                        <input id="{{ $name }}" name="{{ $name }}" type="hidden">
+                                        <input class="d-none" id="{{ $name }}-input" type="file" accept="{{ $field['accept'] ?? 'image/png,image/jpeg,image/webp' }}" data-image-base64-input="{{ $name }}">
+                                        <button class="btn btn-outline-primary" type="button" data-image-base64-trigger="{{ $name }}-input">
+                                            <i class="bi bi-image"></i> Uploader image
+                                        </button>
+                                        <div class="file-preview mt-2 d-none" data-image-base64-preview="{{ $name }}"></div>
+                                    </div>
                                 @else
                                     <div class="mb-3" data-field-wrapper="{{ $name }}">
                                         <label class="form-label" for="{{ $name }}">{{ $field['label'] }}</label>
@@ -868,6 +878,8 @@
             $('#resource-form .file-url-input').each(function () {
                 $(this).prop('required', $(this).data('required-on-create') == 1);
             });
+            $('[data-image-base64-input]').val('');
+            $('[data-image-base64-preview]').addClass('d-none').empty();
             $('#descriptions-fields, #titles-fields').empty();
             refreshFilePreviews();
             setAvatarPreview('');
@@ -990,6 +1002,25 @@
             ['media_url', 'cover_url'].forEach(field => renderFilePreview(field, item[field] || ''));
         }
 
+        function renderBase64ImagePreview(field, url) {
+            const $preview = $('[data-image-base64-preview="' + field + '"]');
+            if (!$preview.length) return;
+
+            if (!url) {
+                $preview.addClass('d-none').empty();
+                return;
+            }
+
+            $preview.removeClass('d-none').html('<div class="file-preview-box"><img src="' + display(url) + '" class="rounded" alt="Aperçu"></div>');
+        }
+
+        function refreshBase64ImagePreviews(item = {}) {
+            $('[data-image-base64-preview]').each(function () {
+                const field = String($(this).data('image-base64-preview'));
+                renderBase64ImagePreview(field, field === 'image_base64' ? item.image_url || '' : '');
+            });
+        }
+
         function detailHtml(item) {
             const rows = Object.keys(item)
                 .filter(key => !String(key).endsWith('_display'))
@@ -1066,6 +1097,7 @@
                     }
                 });
                 refreshFilePreviews(item);
+                refreshBase64ImagePreviews(item);
                 filterProductCategories();
                 setAvatarPreview(item.avatar_url || '');
                 (item.descriptions || []).forEach(addDescription);
@@ -1135,6 +1167,30 @@
         $(document).on('change', 'input[type="file"][name="media_url"], input[type="file"][name="cover_url"]', function () {
             const file = this.files?.[0];
             renderFilePreview(this.name, file ? URL.createObjectURL(file) : '');
+        });
+
+        $(document).on('click', '[data-image-base64-trigger]', function () {
+            $('#' + $(this).data('image-base64-trigger')).trigger('click');
+        });
+
+        $(document).on('change', '[data-image-base64-input]', function () {
+            const file = this.files?.[0];
+            const field = String($(this).data('image-base64-input'));
+
+            if (!file) {
+                $('#' + field).val('');
+                renderBase64ImagePreview(field, '');
+
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function (event) {
+                const dataUrl = String(event.target?.result || '');
+                $('#' + field).val(dataUrl);
+                renderBase64ImagePreview(field, dataUrl);
+            };
+            reader.readAsDataURL(file);
         });
 
         $(document).on('click', '.toggle-password', function () {

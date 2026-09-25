@@ -70,8 +70,10 @@ final class SubscriptionController extends ApiResourceController
 
     public function userSubscriptions(int $userId): JsonResponse
     {
+        $user = User::query()->findOrFail($userId);
+
         $followedUserIds = Subscription::query()
-            ->where('follower_id', $userId)
+            ->where('follower_id', $user->id)
             ->pluck('user_id');
 
         $users = User::query()
@@ -85,8 +87,10 @@ final class SubscriptionController extends ApiResourceController
 
     public function userFollowers(int $userId): JsonResponse
     {
+        $user = User::query()->findOrFail($userId);
+
         $followerIds = Subscription::query()
-            ->where('user_id', $userId)
+            ->where('user_id', $user->id)
             ->pluck('follower_id');
 
         $users = User::query()
@@ -100,11 +104,13 @@ final class SubscriptionController extends ApiResourceController
 
     public function userConnections(int $userId): JsonResponse
     {
+        $user = User::query()->findOrFail($userId);
+
         $followedUserIds = Subscription::query()
-            ->where('follower_id', $userId)
+            ->where('follower_id', $user->id)
             ->pluck('user_id');
         $followerIds = Subscription::query()
-            ->where('user_id', $userId)
+            ->where('user_id', $user->id)
             ->pluck('follower_id');
 
         $users = User::query()

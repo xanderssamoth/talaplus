@@ -27,6 +27,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class AdminResourceController extends Controller
 {
@@ -85,10 +86,11 @@ class AdminResourceController extends Controller
             'fields' => [
                 ['name' => 'pricing_name', 'label' => 'Nom de la tarification', 'type' => 'translatable', 'required' => true],
                 ['name' => 'pricing_type', 'label' => 'Type de tarification', 'type' => 'select', 'options' => ['money' => 'Montant fixe', 'percentage' => 'Pourcentage'], 'required' => true],
-                ['name' => 'reason', 'label' => 'Motif', 'type' => 'select', 'options' => ['' => '-', 'media_boost' => 'Boost de vidéo', 'ad' => 'Publicité', 'gift_sent' => 'Cadeau envoyé', 'user_certfied' => 'Certification utilisateur']],
+                ['name' => 'reason', 'label' => 'Motif', 'type' => 'select', 'options' => ['' => '-', 'media_boost' => 'Boost de vidéo', 'ad' => 'Publicité', 'gift_sent' => 'Cadeau envoyé', 'user_certfied' => 'Certification utilisateur', 'coin_price' => 'Prix des coins']],
                 ['name' => 'pricing_cost', 'label' => 'Coût (en USD)', 'type' => 'number', 'step' => '0.01'],
+                ['name' => 'coins_amount', 'label' => 'Nombre de coins', 'type' => 'number', 'step' => '1'],
                 ['name' => 'currency', 'label' => 'Devise', 'type' => 'hidden', 'value' => 'USD'],
-                ['name' => 'image_url', 'label' => 'URL de l image', 'type' => 'text'],
+                ['name' => 'image_base64', 'label' => 'Uploader image', 'type' => 'image-base64', 'accept' => 'image/png,image/jpeg,image/webp'],
                 ['name' => 'icon', 'label' => 'Icône', 'type' => 'text'],
                 ['name' => 'color', 'label' => 'Couleur', 'type' => 'text'],
             ],
@@ -322,11 +324,13 @@ class AdminResourceController extends Controller
         abort_if($config['readonly'] ?? false, 403);
         $this->validateFileUrlUploads($request, $config);
         $this->validateUserPayload($request, $config);
+        $this->validatePricingImage($request, $config);
 
         $item = DB::transaction(function () use ($request, $config): Model {
             $item = new $config['model'];
             $item->fill($this->payload($request, $config, $item));
             $this->fillUserAvatar($request, $item);
+            $this->fillPricingImage($request, $item);
             $item->save();
             $this->saveChildren($request, $config, $item);
             $this->saveFiles($request, $config, $item);
@@ -345,11 +349,13 @@ class AdminResourceController extends Controller
         abort_if($config['readonly'] ?? false, 403);
         $this->validateFileUrlUploads($request, $config);
         $this->validateUserPayload($request, $config);
+        $this->validatePricingImage($request, $config);
 
         $item = DB::transaction(function () use ($request, $config, $id): Model {
             $item = $config['model']::findOrFail($id);
             $item->fill($this->payload($request, $config, $item));
             $this->fillUserAvatar($request, $item);
+            $this->fillPricingImage($request, $item);
             $item->save();
             $this->saveChildren($request, $config, $item);
             $this->saveFiles($request, $config, $item);
@@ -883,7 +889,7 @@ class AdminResourceController extends Controller
             $name = $field['name'];
             $type = $field['type'];
 
-            if ($type === 'file-multiple') {
+            if (in_array($type, ['file-multiple', 'image-base64'], true)) {
                 continue;
             }
 
@@ -977,6 +983,80 @@ class AdminResourceController extends Controller
         $path = 'users/avatars/'.Str::uuid().'.png';
         Storage::disk('s3')->put($path, $binary);
         $item->avatar_url = Storage::disk('s3')->url($path);
+    }
+
+    private function validatePricingImage(Request $request, array $config): void
+    {
+        if (($config['model'] ?? null) !== Pricing::class) {
+            return;
+        }
+
+        $validated = $request->validate([
+            'image_base64' => ['nullable', 'string', 'max:7000000'],
+        ]);
+
+        if (($validated['image_base64'] ?? null) !== null && $this->imageFromBase64($validated['image_base64']) === null) {
+            throw ValidationException::withMessages([
+                'image_base64' => [__('api.pricing_image_invalid')],
+            ]);
+        }
+    }
+
+    private function fillPricingImage(Request $request, Model $item): void
+    {
+        if (! $item instanceof Pricing || ! $request->filled('image_base64')) {
+            return;
+        }
+
+        $image = $this->imageFromBase64((string) $request->input('image_base64'));
+        if ($image === null) {
+            return;
+        }
+
+        $path = 'pricings/images/'.Str::uuid().'.'.$image['extension'];
+
+        if (! Storage::disk('s3')->put($path, $image['binary'])) {
+            throw ValidationException::withMessages([
+                'image_base64' => [__('api.pricing_image_upload_failed')],
+            ]);
+        }
+
+        $item->image_url = Storage::disk('s3')->url($path);
+    }
+
+    /**
+     * @return array{binary: string, extension: string}|null
+     */
+    private function imageFromBase64(string $imageBase64): ?array
+    {
+        if (preg_match('/^data:image\/(png|jpe?g|webp);base64,/', $imageBase64, $matches) !== 1) {
+            return null;
+        }
+
+        $encodedImage = substr($imageBase64, strlen($matches[0]));
+        $binary = base64_decode($encodedImage, true);
+
+        if ($binary === false || strlen($binary) > 5 * 1024 * 1024 || @getimagesizefromstring($binary) === false) {
+            return null;
+        }
+
+        $mimeType = (new \finfo(FILEINFO_MIME_TYPE))->buffer($binary);
+        $extensions = [
+            'image/png' => 'png',
+            'image/jpeg' => 'jpg',
+            'image/webp' => 'webp',
+        ];
+        $declaredMimeType = match ($matches[1]) {
+            'png' => 'image/png',
+            'jpg', 'jpeg' => 'image/jpeg',
+            'webp' => 'image/webp',
+        };
+
+        if (! isset($extensions[$mimeType]) || $mimeType !== $declaredMimeType) {
+            return null;
+        }
+
+        return ['binary' => $binary, 'extension' => $extensions[$mimeType]];
     }
 
     private function validateFileUrlUploads(Request $request, array $config): void

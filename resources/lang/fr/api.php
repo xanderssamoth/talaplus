@@ -90,6 +90,8 @@ return [
         'cover_invalid' => 'La couverture doit être une image PNG, JPEG ou WebP valide encodée en Base64, d’au plus 5 Mo.',
         'cover_upload_failed' => 'La couverture n’a pas pu être envoyée.',
     ],
+    'pricing_image_invalid' => 'L’image de la tarification doit être une image PNG, JPEG ou WebP valide encodée en Base64, d’au plus 5 Mo.',
+    'pricing_image_upload_failed' => 'L’image de la tarification n’a pas pu être envoyée.',
     'gift' => [
         'coin_price_invalid' => 'Le prix en coins du cadeau est invalide.',
         'invalid_pricing' => 'La tarification sélectionnée n’est pas un cadeau.',

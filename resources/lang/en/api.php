@@ -90,6 +90,8 @@ return [
         'cover_invalid' => 'The cover must be a valid PNG, JPEG, or WebP image encoded in Base64, with a maximum size of 5 MB.',
         'cover_upload_failed' => 'The cover could not be uploaded.',
     ],
+    'pricing_image_invalid' => 'The pricing image must be a valid Base64-encoded PNG, JPEG, or WebP image no larger than 5 MB.',
+    'pricing_image_upload_failed' => 'The pricing image could not be uploaded.',
     'gift' => [
         'coin_price_invalid' => 'The gift has an invalid coin price.',
         'invalid_pricing' => 'The selected pricing is not a gift.',

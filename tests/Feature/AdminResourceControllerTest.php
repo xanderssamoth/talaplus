@@ -92,10 +92,40 @@ class AdminResourceControllerTest extends TestCase
     {
         $view = app(AdminResourceController::class)->index('pricings');
         $fields = collect($view->getData()['config']['fields'])->keyBy('name');
+        $html = $view->render();
 
         $this->assertSame('Coût (en USD)', $fields['pricing_cost']['label']);
         $this->assertSame('hidden', $fields['currency']['type']);
         $this->assertSame('USD', $fields['currency']['value']);
+        $this->assertSame('Prix des coins', $fields['reason']['options']['coin_price']);
+        $this->assertSame('number', $fields['coins_amount']['type']);
+        $this->assertSame('image-base64', $fields['image_base64']['type']);
+        $this->assertArrayNotHasKey('image_url', $fields->all());
+        $this->assertStringContainsString('data-image-base64-input="image_base64"', $html);
+        $this->assertStringContainsString('data-image-base64-preview="image_base64"', $html);
+    }
+
+    public function test_pricing_base64_image_and_coin_price_are_saved(): void
+    {
+        Storage::fake('s3');
+        $this->createPricingTables();
+        $admin = User::factory()->create();
+        $imageBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+        $this->actingAs($admin)->postJson('/pricings', [
+            'pricing_name' => ['fr' => 'Pack de coins'],
+            'pricing_type' => 'money',
+            'reason' => 'coin_price',
+            'pricing_cost' => 2.50,
+            'coins_amount' => 100,
+            'image_base64' => $imageBase64,
+        ])->assertOk();
+
+        $pricing = \DB::table('pricings')->where('reason', 'coin_price')->first();
+
+        $this->assertSame(100, $pricing->coins_amount);
+        $this->assertStringContainsString('pricings/images/', $pricing->image_url);
+        Storage::disk('s3')->assertExists('pricings/images/'.basename($pricing->image_url));
     }
 
     public function test_video_files_can_be_uploaded_to_media_columns(): void
@@ -710,6 +740,7 @@ class AdminResourceControllerTest extends TestCase
             $table->json('pricing_name');
             $table->string('pricing_type')->default('money');
             $table->string('reason')->nullable();
+            $table->unsignedBigInteger('coins_amount')->nullable();
             $table->decimal('pricing_cost', 12, 2)->nullable();
             $table->string('currency', 45)->nullable();
             $table->text('image_url')->nullable();

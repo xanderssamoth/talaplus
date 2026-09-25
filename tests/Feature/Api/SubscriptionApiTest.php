@@ -7,6 +7,7 @@ use App\Models\Subscription;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class SubscriptionApiTest extends TestCase
@@ -52,6 +53,7 @@ class SubscriptionApiTest extends TestCase
     {
         $followed = User::create(['email' => 'followed@example.com', 'password' => 'password']);
         $follower = User::create(['email' => 'follower@example.com', 'password' => 'password']);
+        Sanctum::actingAs($follower);
 
         $response = $this->postJson('/api/v1/subscription', [
             'user_id' => $followed->id,
@@ -72,6 +74,7 @@ class SubscriptionApiTest extends TestCase
         $followed = User::create(['email' => 'followed@example.com', 'password' => 'password']);
         $follower = User::create(['email' => 'follower@example.com', 'password' => 'password']);
         $otherUser = User::create(['email' => 'other@example.com', 'password' => 'password']);
+        Sanctum::actingAs($follower);
         $subscription = Subscription::create([
             'user_id' => $followed->id,
             'follower_id' => $follower->id,
@@ -96,6 +99,7 @@ class SubscriptionApiTest extends TestCase
         $followed = User::create(['email' => 'followed@example.com', 'password' => 'password']);
         $follower = User::create(['email' => 'follower@example.com', 'password' => 'password']);
         $otherUser = User::create(['email' => 'other@example.com', 'password' => 'password']);
+        Sanctum::actingAs($follower);
         Subscription::create([
             'user_id' => $followed->id,
             'follower_id' => $follower->id,
@@ -146,6 +150,7 @@ class SubscriptionApiTest extends TestCase
         $followedUser = User::create(['email' => 'followed@example.com', 'password' => 'password']);
         $followerUser = User::create(['email' => 'follower@example.com', 'password' => 'password']);
         $unrelatedUser = User::create(['email' => 'unrelated@example.com', 'password' => 'password']);
+        Sanctum::actingAs($currentUser);
 
         Subscription::create([
             'user_id' => $followedUser->id,
@@ -185,5 +190,51 @@ class SubscriptionApiTest extends TestCase
         $connectionUserIds = collect($connections->json('data'))->pluck('id')->all();
         $this->assertContains($followedUser->id, $connectionUserIds);
         $this->assertContains($followerUser->id, $connectionUserIds);
+    }
+
+    public function test_existing_user_without_subscriptions_receives_empty_lists(): void
+    {
+        $user = User::create(['email' => 'empty-subscriptions@example.com', 'password' => 'password']);
+        Sanctum::actingAs($user);
+
+        $this->getJson("/api/v1/subscription/user/{$user->id}/subscriptions")
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonCount(0, 'data')
+            ->assertJsonPath('count', 0);
+
+        $this->getJson("/api/v1/subscription/user/{$user->id}/followers")
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonCount(0, 'data')
+            ->assertJsonPath('count', 0);
+
+        $this->getJson("/api/v1/subscription/user/{$user->id}/connections")
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonCount(0, 'data')
+            ->assertJsonPath('count', 0);
+    }
+
+    public function test_subscription_list_routes_reject_a_non_numeric_user_id(): void
+    {
+        $user = User::create(['email' => 'route-binding@example.com', 'password' => 'password']);
+        Sanctum::actingAs($user);
+
+        $response = $this->getJson('/api/v1/subscription/user/{userId}/subscriptions');
+
+        $response
+            ->assertNotFound()
+            ->assertJsonPath('success', false);
+    }
+
+    public function test_subscription_list_routes_return_not_found_for_an_unknown_user_id(): void
+    {
+        $user = User::create(['email' => 'unknown-route-user@example.com', 'password' => 'password']);
+        Sanctum::actingAs($user);
+
+        $this->getJson('/api/v1/subscription/user/999999/subscriptions')
+            ->assertNotFound()
+            ->assertJsonPath('success', false);
     }
 }
