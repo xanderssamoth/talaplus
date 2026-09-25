@@ -27,7 +27,7 @@ class FlexPayService
         $declineUrl = getWebURL()."/paid/{$amount}/{$currency}/2/{$user->id}";
 
         $payload = [
-            'merchant' => config('services.flexpay.merchant'),
+            'merchant' => (string) config('services.flexpay.merchant'),
             'type' => $type,
             'reference' => $reference,
             'amount' => $amount,
@@ -47,7 +47,7 @@ class FlexPayService
         }
 
         $response = Http::acceptJson()
-            ->withToken((string) config('services.flexpay.api_token'))
+            ->withToken('Bearer ' . (string) config('services.flexpay.api_token'))
             ->timeout(15)
             ->connectTimeout(5)
             ->retry([100, 500], throw: false)

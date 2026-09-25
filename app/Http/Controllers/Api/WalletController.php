@@ -11,6 +11,7 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -69,7 +70,7 @@ final class WalletController extends ApiResourceController
                 'entity_id' => $pricing->id,
             ]);
         } catch (InvalidArgumentException $exception) {
-            return $this->handleError(null, $exception->getMessage(), 422);
+            return $this->handleError(null, 'InvalidArgumentException: '.$exception->getMessage(), 422);
         } catch (ConnectionException $exception) {
             report($exception);
 
@@ -77,9 +78,20 @@ final class WalletController extends ApiResourceController
         } catch (RequestException $exception) {
             report($exception);
 
-            return $this->handleError(null, __('api.payment.request_failed'), 502);
+            $details = $this->flexPayRequestErrorDetails($exception);
+
+            Log::warning('FlexPay rejected a coin purchase request.', [
+                'endpoint' => 'wallet.coins.purchase',
+                ...$details,
+            ]);
+
+            return $this->handleError(
+                app()->environment(['local', 'testing']) ? $details : null,
+                __('api.payment.request_failed'),
+                502
+            );
         } catch (RuntimeException $exception) {
-            return $this->handleError(null, $exception->getMessage(), 422);
+            return $this->handleError(null, 'RuntimeException: '.$exception->getMessage(), 422);
         }
 
         return $this->handleResponse([
@@ -87,6 +99,21 @@ final class WalletController extends ApiResourceController
             'coins_amount' => $pricing->coins_amount,
             'order_number' => $result['payment']->order_number,
             'url' => $result['response']['url'] ?? null,
-        ], $this->apiMessage('created', 'payment'));
+        ], trim(($result['response']['message'] ?? '').' '.$this->apiMessage('created', 'payment')));
+    }
+
+    /**
+     * Return provider diagnostics only for the local development environment.
+     *
+     * @return array{provider_status: int|null, provider_response: mixed}
+     */
+    private function flexPayRequestErrorDetails(RequestException $exception): array
+    {
+        $response = $exception->response;
+
+        return [
+            'provider_status' => $response?->status(),
+            'provider_response' => $response?->json() ?? $response?->body(),
+        ];
     }
 }

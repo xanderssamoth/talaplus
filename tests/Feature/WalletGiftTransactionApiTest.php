@@ -102,7 +102,7 @@ class WalletGiftTransactionApiTest extends TestCase
         Schema::enableForeignKeyConstraints();
 
         config([
-            'services.flexpay.api_token' => 'test-token',
+            'services.flexpay.api_token' => 'Bearer test-token',
             'services.flexpay.merchant' => 'merchant-code',
             'services.flexpay.gateway_mobile' => 'https://flexpay.test/mobile',
         ]);
@@ -188,5 +188,36 @@ class WalletGiftTransactionApiTest extends TestCase
             ->assertJsonPath('data.payment.entity_id', $pricing->id);
 
         $this->assertSame(10, $user->refresh()->wallet->coins_balance);
+    }
+
+    public function test_coin_package_purchase_returns_the_complete_provider_error_in_the_local_environment(): void
+    {
+        $user = User::create(['email' => 'user@example.com', 'password' => 'password']);
+        $pricing = Pricing::create([
+            'pricing_name' => ['fr' => '100 coins'],
+            'reason' => 'coin_price',
+            'coins_amount' => 100,
+            'pricing_cost' => 5,
+            'currency' => 'USD',
+        ]);
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://flexpay.test/mobile' => Http::response([
+                'error' => 'Internal Server Error',
+                'message' => 'Last encoded character is invalid.',
+            ], 500),
+        ]);
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson('/api/v1/wallet/coins/purchase', [
+                'pricing_id' => $pricing->id,
+                'type' => 1,
+                'phone' => '243810000000',
+            ])
+            ->assertStatus(502)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', __('api.payment.request_failed'))
+            ->assertJsonPath('data.provider_status', 500)
+            ->assertJsonPath('data.provider_response.message', 'Last encoded character is invalid.');
     }
 }

@@ -62,7 +62,7 @@ class FlexPayPaymentTest extends TestCase
         Schema::enableForeignKeyConstraints();
 
         config([
-            'services.flexpay.api_token' => 'test-token',
+            'services.flexpay.api_token' => 'Bearer test-token',
             'services.flexpay.merchant' => 'merchant-code',
             'services.flexpay.gateway_mobile' => 'https://flexpay.test/mobile',
             'services.flexpay.gateway_card' => 'https://flexpay.test/card',
