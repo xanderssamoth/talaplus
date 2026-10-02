@@ -55,7 +55,6 @@ Route::prefix('v1')->group(function (): void {
 
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::post('ai/chat', [AIController::class, 'chat']);
-        Route::post('chat/token', [AIController::class, 'chat']);
 
         Route::get('user/{user}/belongs-to', [UserController::class, 'hasBelongsTo']);
         Route::patch('user/{user}/child-lock-code', [UserController::class, 'switchChildLockCode']);

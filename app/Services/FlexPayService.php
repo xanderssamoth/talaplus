@@ -18,7 +18,7 @@ class FlexPayService
 
         $user = User::query()->findOrFail($attributes['user_id']);
         $reference = sprintf('REF-%08d-%d', random_int(0, 99999999), $user->id);
-        $type = (int) $attributes['type'];
+        $type = (string) $attributes['type'];
         $amount = $attributes['amount'];
         $currency = strtoupper((string) $attributes['currency']);
         $callbackUrl = getApiURL().'/payment/store';
@@ -34,20 +34,20 @@ class FlexPayService
             'currency' => $currency,
         ];
 
-        if ($type === 1) {
+        if ($type === '1') {
             $payload['phone'] = $attributes['phone'];
-            $payload['callbackUrl'] = $callbackUrl;
+            $payload['callback_url'] = $callbackUrl;
         } else {
             $payload['description'] = $attributes['description'] ?? '';
 
-            $payload['callback_url'] = $callbackUrl;
+            $payload['callbackUrl'] = $callbackUrl;
             $payload['approve_url'] = $approveUrl;
             $payload['cancel_url'] = $cancelUrl;
             $payload['decline_url'] = $declineUrl;
         }
 
         $response = Http::acceptJson()
-            ->withToken('Bearer ' . (string) config('services.flexpay.api_token'))
+            ->withToken((string) config('services.flexpay.api_token'))
             ->timeout(15)
             ->connectTimeout(5)
             ->retry([100, 500], throw: false)
