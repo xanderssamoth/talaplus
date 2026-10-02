@@ -31,7 +31,7 @@ class OpenAIMessageMapperTest extends TestCase
         ]);
 
         $this->assertSame('assistant', $payload[0]['role']);
-        $this->assertSame('input_text', $payload[0]['content'][0]['type']);
+        $this->assertSame('output_text', $payload[0]['content'][0]['type']);
         $this->assertSame('Searching...', $payload[0]['content'][0]['text']);
         $this->assertSame('assistant', $payload[0]['name']);
         $this->assertSame('tool_123', $payload[0]['tool_call_id']);
@@ -39,6 +39,15 @@ class OpenAIMessageMapperTest extends TestCase
         $this->assertSame('function', $payload[0]['tool_calls'][0]['type']);
         $this->assertSame('search_videos', $payload[0]['tool_calls'][0]['name']);
         $this->assertSame(['query' => 'music'], $payload[0]['tool_calls'][0]['parameters']);
+    }
+
+    public function test_to_open_ai_keeps_user_messages_as_input_text(): void
+    {
+        $payload = (new OpenAIMessageMapper)->toOpenAI([
+            new AIMessageData(role: 'user', content: 'Bonjour'),
+        ]);
+
+        $this->assertSame('input_text', $payload[0]['content'][0]['type']);
     }
 
     public function test_to_ai_response_maps_open_ai_chat_response_to_ai_response(): void
