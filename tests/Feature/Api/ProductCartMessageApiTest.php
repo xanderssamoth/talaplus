@@ -770,6 +770,10 @@ class ProductCartMessageApiTest extends TestCase
         CustomerOrder::create(['product_id' => $productOne->id, 'cart_id' => $cartOne->id]);
         CustomerOrder::create(['product_id' => $productTwo->id, 'cart_id' => $cartOne->id]);
         CustomerOrder::create(['product_id' => $productTwo->id, 'cart_id' => $cartTwo->id]);
+        History::create(['entity' => 'media', 'entity_id' => 1, 'action' => 'view', 'user_id' => $owner->id]);
+        History::create(['entity' => 'media', 'entity_id' => 2, 'action' => 'view', 'user_id' => $owner->id]);
+        History::create(['entity' => 'media', 'entity_id' => 1, 'action' => 'play', 'user_id' => $owner->id]);
+        History::create(['entity' => 'media', 'entity_id' => 3, 'action' => 'view', 'user_id' => $otherOwner->id]);
 
         $response = $this->postJson('/api/v1/user/entrepreneurs', [
             'category_ids' => [$category->id],
@@ -784,14 +788,19 @@ class ProductCartMessageApiTest extends TestCase
             ->assertJsonPath('data.0.product_categories.0.id', $category->id)
             ->assertJsonPath('data.0.product_stars_sum', 9)
             ->assertJsonPath('data.0.product_comments_count', 2)
-            ->assertJsonPath('data.0.product_customers_count', 2);
+            ->assertJsonPath('data.0.product_customers_count', 2)
+            ->assertJsonPath('data.0.media_views_count', 2)
+            ->assertJsonPath('data.0.media_plays_count', 1);
 
-        $this->getJson("/api/v1/user/{$owner->id}")
+        $this->actingAs($owner, 'sanctum')
+            ->getJson("/api/v1/user/{$owner->id}")
             ->assertOk()
             ->assertJsonPath('data.product_categories.0.id', $category->id)
             ->assertJsonPath('data.product_stars_sum', 9)
             ->assertJsonPath('data.product_comments_count', 2)
-            ->assertJsonPath('data.product_customers_count', 2);
+            ->assertJsonPath('data.product_customers_count', 2)
+            ->assertJsonPath('data.media_views_count', 2)
+            ->assertJsonPath('data.media_plays_count', 1);
     }
 
     public function test_comment_news_feed_prioritizes_interacted_followed_then_recent_posts(): void

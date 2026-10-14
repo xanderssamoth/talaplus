@@ -19,6 +19,8 @@ class UserResource extends ApiResource
         $data['product_stars_sum'] = $this->productStarsSum();
         $data['product_comments_count'] = $this->productCommentsCount();
         $data['product_customers_count'] = $this->productCustomersCount();
+        $data['media_views_count'] = $this->mediaHistoryCount('view');
+        $data['media_plays_count'] = $this->mediaHistoryCount('play');
 
         return $data;
     }
@@ -119,6 +121,30 @@ class UserResource extends ApiResource
 
         if (Schema::hasColumn('products', 'deleted_at')) {
             $query->whereNull('products.deleted_at');
+        }
+
+        return $query->count();
+    }
+
+    private function mediaHistoryCount(string $action): int
+    {
+        if (! Schema::hasTable('histories')) {
+            return 0;
+        }
+
+        foreach (['user_id', 'entity', 'action'] as $column) {
+            if (! Schema::hasColumn('histories', $column)) {
+                return 0;
+            }
+        }
+
+        $query = DB::table('histories')
+            ->where('user_id', $this->resource->id)
+            ->where('entity', 'media')
+            ->where('action', $action);
+
+        if (Schema::hasColumn('histories', 'deleted_at')) {
+            $query->whereNull('deleted_at');
         }
 
         return $query->count();
