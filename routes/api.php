@@ -59,6 +59,8 @@ Route::prefix('v1')->group(function (): void {
         Route::get('user/{user}/belongs-to', [UserController::class, 'hasBelongsTo']);
         Route::patch('user/{user}/child-lock-code', [UserController::class, 'switchChildLockCode']);
         Route::get('user/{user}/watchlist', [UserController::class, 'userWatchlist']);
+        Route::get('user/{user}/products', [UserController::class, 'myProducts']);
+        Route::get('user/{user}/medias', [UserController::class, 'myMedias']);
         Route::get('user/{user}/cart', [UserController::class, 'myCart']);
         Route::post('user/{user}/watchlist/{media}', [UserController::class, 'addToWatchlist']);
         Route::delete('user/{user}/watchlist/{media}', [UserController::class, 'removeFromWatchlist']);

@@ -747,6 +747,48 @@ class ProductCartMessageApiTest extends TestCase
         $this->assertFalse(History::query()->where('entity', 'product')->whereIn('action', ['star', 'like'])->where('entity_id', $product->id)->exists());
     }
 
+    public function test_user_content_lists_include_only_the_requested_users_products_and_medias(): void
+    {
+        $owner = User::create(['email' => 'owner@example.com', 'password' => 'password']);
+        $otherUser = User::create(['email' => 'other@example.com', 'password' => 'password']);
+        $product = Product::create(['product_name' => 'Book', 'price' => 10, 'currency' => 'USD', 'user_id' => $owner->id]);
+        Product::create(['product_name' => 'Other book', 'price' => 15, 'currency' => 'USD', 'user_id' => $otherUser->id]);
+        $media = Media::create(['media_title' => ['fr' => 'Film test'], 'user_id' => $owner->id]);
+        Media::create(['media_title' => ['fr' => 'Autre film'], 'user_id' => $otherUser->id]);
+
+        $this->actingAs($owner, 'sanctum');
+
+        $this->getJson("/api/v1/user/{$owner->id}/products")
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('count', 1)
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $product->id);
+
+        $this->getJson("/api/v1/user/{$owner->id}/medias")
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('count', 1)
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $media->id);
+    }
+
+    public function test_user_content_lists_are_empty_for_an_existing_user_and_missing_users_return_404(): void
+    {
+        $user = User::create(['email' => 'empty@example.com', 'password' => 'password']);
+        $this->actingAs($user, 'sanctum');
+
+        foreach (['products', 'medias'] as $collection) {
+            $this->getJson("/api/v1/user/{$user->id}/{$collection}")
+                ->assertOk()
+                ->assertJsonPath('count', 0)
+                ->assertJsonCount(0, 'data');
+
+            $this->getJson("/api/v1/user/999999/{$collection}")
+                ->assertNotFound();
+        }
+    }
+
     public function test_user_entrepreneurs_returns_product_publishers_with_product_stats(): void
     {
         $owner = User::create(['email' => 'owner@example.com', 'password' => 'password', 'about_me' => 'Entrepreneur tech', 'country' => 'CD', 'city' => 'Kinshasa']);

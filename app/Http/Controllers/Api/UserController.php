@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Resources\Api\ApiResource;
 use App\Http\Resources\Api\MediaResource;
+use App\Http\Resources\Api\ProductResource;
 use App\Http\Resources\Api\UserResource;
 use App\Models\AdminNotification;
 use App\Models\Cart;
@@ -306,6 +307,30 @@ final class UserController extends ApiResourceController
         $medias->setCollection($items->map(fn (Media $media): array|JsonResource => $this->mediaPayload($media, $user->id)));
 
         return $this->handleResponse($medias->items(), $this->apiMessage('find_all_success', 'media'), $medias->lastPage(), $medias->total());
+    }
+
+    public function myProducts(int $id): JsonResponse
+    {
+        $user = User::query()->findOrFail($id);
+        $products = $user->products()
+            ->with(['category', 'files', 'user', 'specifications'])
+            ->latest('id')
+            ->paginate(10)
+            ->withQueryString();
+
+        return $this->handleResponse(ProductResource::collection($products), $this->apiMessage('find_all_success', 'product'), $products->lastPage(), $products->total());
+    }
+
+    public function myMedias(int $id): JsonResponse
+    {
+        $user = User::query()->findOrFail($id);
+        $medias = $user->medias()
+            ->with($this->watchlistMediaRelations())
+            ->latest('id')
+            ->paginate(10)
+            ->withQueryString();
+
+        return $this->handleResponse(MediaResource::collection($medias), $this->apiMessage('find_all_success', 'media'), $medias->lastPage(), $medias->total());
     }
 
     public function myCart(Request $request, int $id): JsonResponse
