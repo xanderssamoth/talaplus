@@ -80,6 +80,12 @@
                             </div>
                         @endif
                     </div>
+                    @if ($resource === 'users')
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" id="referrers-only" type="checkbox">
+                            <label class="form-check-label" for="referrers-only">Voir les parrains</label>
+                        </div>
+                    @endif
                     @if ($config['social_feed'] ?? false)
                         <div class="vstack gap-3" id="notifications-feed">
                             <div class="text-center text-muted py-4">{{ __('admin.empty') }}</div>
@@ -139,6 +145,19 @@
 
                                 @if ($type === 'hidden')
                                     <input id="{{ $name }}" name="{{ $name }}" type="hidden" value="{{ $field['value'] ?? '' }}">
+                                @elseif ($type === 'referral-code')
+                                    <div class="mb-3" data-field-wrapper="{{ $name }}">
+                                        <label class="form-label">{{ $field['label'] }}</label>
+                                        <input id="promo_code" name="promo_code" type="hidden">
+                                        <input id="promo_code_at" name="promo_code_at" type="hidden">
+                                        <div>
+                                            <button class="btn btn-outline-primary" id="generate-promo-code" type="button">Générer code promo</button>
+                                            <div class="d-none" id="promo-code-result">
+                                                <code id="promo-code-preview"></code>
+                                                <button class="btn btn-sm btn-outline-secondary ms-2" id="cancel-promo-code" type="button">Annuler</button>
+                                            </div>
+                                        </div>
+                                    </div>
                                 @elseif (str_starts_with($type, 'translatable'))
                                     <div class="mb-3 translatable-field" data-field="{{ $name }}" data-field-wrapper="{{ $name }}">
                                         <label class="form-label">{{ $field['label'] }}</label>
@@ -563,6 +582,7 @@
     $(function () {
         const endpoints = {
             list: @json(route($resource.'.data')),
+            referralDraft: @json($resource === 'users' ? route('users.referral-code.draft') : null),
             store: @json(route($resource.'.store')),
             show: (id) => @json(url($resource)) + '/' + id,
             update: (id) => @json(url($resource)) + '/' + id,
@@ -836,7 +856,8 @@
         }
 
         function loadRows() {
-            $.getJSON(endpoints.list, function (response) {
+            const filters = resourceName === 'users' ? {referrers_only: $('#referrers-only').is(':checked') ? 1 : 0} : {};
+            $.getJSON(endpoints.list, filters, function (response) {
                 allItems = response.items || [];
                 updateNotificationBadge(response.unread_count, response.unread_count_display);
                 currentPage = 1;
@@ -871,6 +892,16 @@
             $('#admin-user-avatar-preview').attr('src', url || avatarPlaceholder());
         }
 
+        function setReferralCode(code, date) {
+            if (resourceName !== 'users') return;
+
+            $('#promo_code').val(code || '');
+            $('#promo_code_at').val(date || '');
+            $('#promo-code-preview').text(code || '');
+            $('#promo-code-result').toggleClass('d-none', !code);
+            $('#generate-promo-code').toggleClass('d-none', !!code);
+        }
+
         function resetForm() {
             $('#resource-form')[0]?.reset();
             $('#item-id').val('');
@@ -884,6 +915,7 @@
             refreshFilePreviews();
             setAvatarPreview('');
             $('#avatar_base64').val('');
+            setReferralCode('', '');
             applyUserMode('user');
             filterProductCategories();
             descriptionIndex = 0;
@@ -1096,6 +1128,7 @@
                         $(`[name="${key}"]`).val(value);
                     }
                 });
+                setReferralCode(item.promo_code, item.promo_code_at);
                 refreshFilePreviews(item);
                 refreshBase64ImagePreviews(item);
                 filterProductCategories();
@@ -1246,6 +1279,19 @@
         });
 
         $('#refresh-table').on('click', loadRows);
+        $('#referrers-only').on('change', loadRows);
+        $('#generate-promo-code').on('click', function () {
+            $.getJSON(endpoints.referralDraft)
+                .done(function (draft) {
+                    setReferralCode(draft.promo_code, draft.promo_code_at);
+                })
+                .fail(function (xhr) {
+                    alertBox(xhr.responseJSON?.message || xhr.statusText, 'danger');
+                });
+        });
+        $('#cancel-promo-code').on('click', function () {
+            setReferralCode('', '');
+        });
         $('#table-search, #group-filter, #role-filter').on('input change', function () {
             currentPage = 1;
             renderRows();

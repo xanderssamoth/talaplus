@@ -10,3 +10,7 @@ Artisan::command('inspire', function () {
 
 Schedule::command('payments:process-completed')
     ->everyMinute();
+
+Schedule::command('referrals:expire')
+    ->hourly()
+    ->withoutOverlapping();

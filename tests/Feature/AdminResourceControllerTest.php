@@ -579,6 +579,72 @@ class AdminResourceControllerTest extends TestCase
         $this->assertStringContainsString('users/avatars/', $createdUser->avatar_url);
     }
 
+    public function test_referrer_filter_and_form_draft_are_available_in_admin(): void
+    {
+        $this->createRoleTables();
+
+        $admin = User::factory()->create();
+        $referrer = User::factory()->create(['promo_code' => 'ABCDE12345', 'promo_code_at' => now()]);
+        User::factory()->create();
+
+        $this->actingAs($admin)->get('/users')
+            ->assertOk()
+            ->assertSee('Voir les parrains')
+            ->assertSee('Générer code promo')
+            ->assertSee('name="promo_code_at"', false);
+
+        $this->actingAs($admin)->getJson('/users/data?referrers_only=1')
+            ->assertOk()
+            ->assertJsonCount(1, 'items')
+            ->assertJsonPath('items.0.id', $referrer->id);
+
+        $draft = $this->actingAs($admin)->getJson('/users/referral-code/draft')
+            ->assertOk()
+            ->assertJsonStructure(['promo_code', 'promo_code_at']);
+        $this->assertMatchesRegularExpression('/^[A-Z]{5}[0-9]{5}$/', $draft->json('promo_code'));
+    }
+
+    public function test_admin_saves_generated_referral_code_and_clears_it_on_cancel(): void
+    {
+        $admin = User::factory()->create();
+        $user = User::factory()->create();
+
+        $this->actingAs($admin)->putJson("/users/{$user->id}", [
+            'email' => $user->email,
+            'status' => 'activated',
+            'type' => 'uncertified',
+            'promo_code' => 'ABCDE12345',
+            'promo_code_at' => now()->subYear()->toIso8601String(),
+        ])->assertOk();
+
+        $this->assertSame('ABCDE12345', $user->fresh()->promo_code);
+        $this->assertTrue($user->fresh()->promo_code_at->greaterThan(now()->subMinute()));
+
+        $this->actingAs($admin)->putJson("/users/{$user->id}", [
+            'email' => $user->email,
+            'status' => 'activated',
+            'type' => 'uncertified',
+            'promo_code' => null,
+            'promo_code_at' => null,
+        ])->assertOk();
+
+        $this->assertNull($user->fresh()->promo_code);
+        $this->assertNull($user->fresh()->promo_code_at);
+    }
+
+    public function test_referral_expiration_only_clears_codes_older_than_two_months(): void
+    {
+        $expired = User::factory()->create(['promo_code' => 'EXPIRE1234', 'promo_code_at' => now()->subMonthsNoOverflow(2)->subHour()]);
+        $recent = User::factory()->create(['promo_code' => 'RECENT1234', 'promo_code_at' => now()->subMonth()]);
+        $undated = User::factory()->create(['promo_code' => 'UNDATED123', 'promo_code_at' => null]);
+
+        $this->artisan('referrals:expire')->assertSuccessful();
+
+        $this->assertNull($expired->fresh()->promo_code);
+        $this->assertSame('RECENT1234', $recent->fresh()->promo_code);
+        $this->assertSame('UNDATED123', $undated->fresh()->promo_code);
+    }
+
     public function test_category_icons_are_presented_with_their_color(): void
     {
         $this->createCategoryTables();

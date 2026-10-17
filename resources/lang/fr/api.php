@@ -49,6 +49,13 @@ return [
     'file' => [
         'created_many' => 'Fichiers enregistrés avec succès.',
     ],
+    'referral' => [
+        'activated' => 'Votre code de parrainage a été généré.',
+        'terminated' => 'Votre code de parrainage a été désactivé.',
+        'not_authorized' => 'Vous ne pouvez pas modifier le parrainage de cet utilisateur.',
+        'generation_failed' => 'Impossible de générer un code de parrainage unique.',
+        'expired_count' => ':count code(s) de parrainage expiré(s).',
+    ],
     'errors' => [
         'not_found' => 'Ressource introuvable.',
         'query_failed' => 'La requête à la base de données a échoué.',

@@ -58,6 +58,7 @@ class User extends Authenticatable
         'avatar_url',
         'cover_url',
         'promo_code',
+        'promo_code_at',
         'two_factor_secret',
         'two_factor_recovery_codes',
         'two_factor_email_confirmed_at',
@@ -80,6 +81,7 @@ class User extends Authenticatable
     {
         return [
             'birthdate' => 'date',
+            'promo_code_at' => 'datetime',
             'email_verified_at' => 'datetime',
             'phone_verified_at' => 'datetime',
             'two_factor_email_confirmed_at' => 'datetime',

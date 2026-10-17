@@ -16,6 +16,7 @@ use App\Models\PasswordReset;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\ExchangeRateService;
+use App\Services\ReferralService;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -37,6 +38,7 @@ final class UserController extends ApiResourceController
 
     public function __construct(
         private ExchangeRateService $exchangeRateService,
+        private ReferralService $referralService,
     ) {}
 
     public function store(Request $request): JsonResponse
@@ -169,6 +171,9 @@ final class UserController extends ApiResourceController
         }
 
         $user->fill([...$payload, ...$profileImageUrls]);
+        if (array_key_exists('promo_code', $payload) && $user->isDirty('promo_code')) {
+            $user->promo_code_at = $payload['promo_code'] !== null ? now() : null;
+        }
         $user->save();
 
         return $this->handleResponse(UserResource::make($user->refresh()), $this->apiMessage('updated'));
@@ -331,6 +336,26 @@ final class UserController extends ApiResourceController
             ->withQueryString();
 
         return $this->handleResponse(MediaResource::collection($medias), $this->apiMessage('find_all_success', 'media'), $medias->lastPage(), $medias->total());
+    }
+
+    public function becomeReferrer(Request $request, int $userId): JsonResponse
+    {
+        $user = User::query()->findOrFail($userId);
+        if ($request->user()?->id !== $user->id) {
+            return $this->handleError(null, __('api.referral.not_authorized'), 403);
+        }
+
+        return $this->handleResponse(UserResource::make($this->referralService->activate($user)), __('api.referral.activated'));
+    }
+
+    public function terminateReferral(Request $request, int $userId): JsonResponse
+    {
+        $user = User::query()->findOrFail($userId);
+        if ($request->user()?->id !== $user->id) {
+            return $this->handleError(null, __('api.referral.not_authorized'), 403);
+        }
+
+        return $this->handleResponse(UserResource::make($this->referralService->terminate($user)), __('api.referral.terminated'));
     }
 
     public function myCart(Request $request, int $id): JsonResponse

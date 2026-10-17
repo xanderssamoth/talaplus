@@ -16,8 +16,10 @@ use App\Models\Product;
 use App\Models\Reason;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\ReferralService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
@@ -208,7 +210,7 @@ class AdminResourceController extends Controller
                 ['name' => 'username', 'label' => 'Nom d’utilisateur', 'type' => 'text'],
                 ['name' => 'password', 'label' => 'Mot de passe', 'type' => 'password'],
                 ['name' => 'password_confirmation', 'label' => 'Confirmation du mot de passe', 'type' => 'password'],
-                ['name' => 'promo_code', 'label' => 'Code promotionnel', 'type' => 'text'],
+                ['name' => 'promo_code', 'label' => 'Code promotionnel', 'type' => 'referral-code'],
                 ['name' => 'tips_at_every_login', 'label' => 'Conseils à chaque connexion', 'type' => 'checkbox'],
                 ['name' => 'is_online', 'label' => 'En ligne', 'type' => 'checkbox'],
                 ['name' => 'christian_preference', 'label' => 'Préférence chrétienne', 'type' => 'checkbox'],
@@ -216,7 +218,7 @@ class AdminResourceController extends Controller
                 ['name' => 'type', 'label' => 'Type', 'type' => 'select', 'options' => ['uncertified' => 'Non certifié', 'certified' => 'Certifié']],
                 ['name' => 'role_id', 'label' => 'Rôle', 'type' => 'select', 'options' => []],
             ],
-            'columns' => ['firstname', 'lastname', 'email', 'phone', 'status'],
+            'columns' => ['firstname', 'lastname', 'email', 'phone', 'promo_code', 'promo_code_at', 'status'],
             'table_labels' => [
                 'status' => 'État',
             ],
@@ -282,6 +284,16 @@ class AdminResourceController extends Controller
         return view('admin.resource', ['resource' => $resource, 'config' => $this->config($resource)]);
     }
 
+    public function draftReferralCode(ReferralService $referralService): JsonResponse
+    {
+        $draft = $referralService->draft();
+
+        return response()->json([
+            'promo_code' => $draft['promo_code'],
+            'promo_code_at' => $draft['promo_code_at']->toIso8601String(),
+        ]);
+    }
+
     public function list(string $resource)
     {
         $config = $this->config($resource);
@@ -289,6 +301,7 @@ class AdminResourceController extends Controller
             ->when(! empty($config['with']), fn ($query) => $query->with($config['with']))
             ->when(! empty($config['where']), fn ($query) => $query->where($config['where']))
             ->when(! empty($config['current_user_only']), fn ($query) => $query->where('to_user_id', request()->user()?->id))
+            ->when($resource === 'users' && request()->boolean('referrers_only'), fn ($query) => $query->whereNotNull('promo_code'))
             ->latest('id');
 
         $response = [
@@ -949,6 +962,10 @@ class AdminResourceController extends Controller
             $payload['type'] ??= 'uncertified';
         }
 
+        if ($item instanceof User && $item->promo_code !== ($payload['promo_code'] ?? null)) {
+            $payload['promo_code_at'] = filled($payload['promo_code'] ?? null) ? now() : null;
+        }
+
         return $payload;
     }
 
@@ -961,6 +978,8 @@ class AdminResourceController extends Controller
         $request->validate([
             'password' => ['nullable', 'confirmed'],
             'avatar_base64' => ['nullable', 'string'],
+            'promo_code' => ['nullable', 'string', 'max:45', Rule::unique('users', 'promo_code')->ignore($request->route('id'))],
+            'promo_code_at' => ['nullable', 'date'],
         ]);
     }
 

@@ -61,6 +61,8 @@ Route::prefix('v1')->group(function (): void {
         Route::get('user/{user}/watchlist', [UserController::class, 'userWatchlist']);
         Route::get('user/{user}/products', [UserController::class, 'myProducts']);
         Route::get('user/{user}/medias', [UserController::class, 'myMedias']);
+        Route::post('user/{userId}/become-referrer', [UserController::class, 'becomeReferrer'])->whereNumber('userId');
+        Route::post('user/{userId}/terminate-referral', [UserController::class, 'terminateReferral'])->whereNumber('userId');
         Route::get('user/{user}/cart', [UserController::class, 'myCart']);
         Route::post('user/{user}/watchlist/{media}', [UserController::class, 'addToWatchlist']);
         Route::delete('user/{user}/watchlist/{media}', [UserController::class, 'removeFromWatchlist']);

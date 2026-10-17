@@ -49,6 +49,13 @@ return [
     'file' => [
         'created_many' => 'Files uploaded successfully.',
     ],
+    'referral' => [
+        'activated' => 'Your referral code has been generated.',
+        'terminated' => 'Your referral code has been deactivated.',
+        'not_authorized' => 'You cannot change this user’s referral status.',
+        'generation_failed' => 'Unable to generate a unique referral code.',
+        'expired_count' => ':count referral code(s) expired.',
+    ],
     'errors' => [
         'not_found' => 'Resource not found.',
         'query_failed' => 'The database query failed.',

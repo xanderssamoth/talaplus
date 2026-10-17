@@ -92,6 +92,7 @@ class UserWatchlistApiTest extends TestCase
             $table->text('avatar_url')->nullable();
             $table->text('cover_url')->nullable();
             $table->string('promo_code')->nullable();
+            $table->dateTime('promo_code_at')->nullable();
             $table->text('two_factor_secret')->nullable();
             $table->text('two_factor_recovery_codes')->nullable();
             $table->timestamp('two_factor_email_confirmed_at')->nullable();
@@ -242,6 +243,50 @@ class UserWatchlistApiTest extends TestCase
             'user_id' => $user->id,
             'media_id' => $media->id,
         ]);
+    }
+
+    public function test_user_can_generate_refresh_and_terminate_own_referral_code(): void
+    {
+        $user = User::create(['email' => 'referrer@example.com', 'username' => 'referrer', 'password' => 'password']);
+        Sanctum::actingAs($user);
+
+        $this->postJson("/api/v1/user/{$user->id}/become-referrer")
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $user->refresh();
+        $this->assertMatchesRegularExpression('/^[A-Z]{5}[0-9]{5}$/', $user->promo_code);
+        $this->assertNotNull($user->promo_code_at);
+
+        $user->promo_code_at = now()->subMonth();
+        $user->save();
+
+        $this->postJson("/api/v1/user/{$user->id}/become-referrer")->assertOk();
+        $this->assertTrue($user->fresh()->promo_code_at->greaterThan(now()->subMinute()));
+
+        $this->postJson("/api/v1/user/{$user->id}/terminate-referral")
+            ->assertOk()
+            ->assertJsonPath('data.promo_code', null);
+        $this->assertNull($user->fresh()->promo_code);
+    }
+
+    public function test_user_cannot_manage_another_users_referral_code(): void
+    {
+        $user = User::create(['email' => 'referrer-one@example.com', 'username' => 'referrer-one', 'password' => 'password']);
+        $otherUser = User::create(['email' => 'referrer-two@example.com', 'username' => 'referrer-two', 'password' => 'password']);
+        Sanctum::actingAs($user);
+
+        $this->postJson("/api/v1/user/{$otherUser->id}/become-referrer")->assertForbidden();
+        $this->postJson("/api/v1/user/{$otherUser->id}/terminate-referral")->assertForbidden();
+        $this->assertNull($otherUser->fresh()->promo_code);
+    }
+
+    public function test_referral_actions_require_authentication(): void
+    {
+        $user = User::create(['email' => 'guest-target@example.com', 'username' => 'guest-target', 'password' => 'password']);
+
+        $this->postJson("/api/v1/user/{$user->id}/become-referrer")->assertUnauthorized();
+        $this->postJson("/api/v1/user/{$user->id}/terminate-referral")->assertUnauthorized();
     }
 
     public function test_authenticated_user_can_update_a_status_with_the_status_request_field(): void

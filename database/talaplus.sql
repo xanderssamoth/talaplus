@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS `users` (
   `avatar_url` TEXT NULL,
   `cover_url` TEXT NULL,
   `promo_code` VARCHAR(45) NULL,
+  `promo_code_at` DATETIME NULL,
   `two_factor_secret` TEXT NULL,
   `two_factor_recovery_codes` TEXT NULL,
   `two_factor_email_confirmed_at` TIMESTAMP NULL,
