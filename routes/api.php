@@ -56,12 +56,12 @@ Route::prefix('v1')->group(function (): void {
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::post('ai/chat', [AIController::class, 'chat']);
 
-        Route::get('user/{user}/belongs-to', [UserController::class, 'hasBelongsTo']);
         Route::patch('user/{user}/child-lock-code', [UserController::class, 'switchChildLockCode']);
         Route::get('user/{user}/watchlist', [UserController::class, 'userWatchlist']);
         Route::get('user/{user}/products', [UserController::class, 'myProducts']);
         Route::get('user/{user}/medias', [UserController::class, 'myMedias']);
         Route::get('user/{user}/payments', [UserController::class, 'myPayments'])->whereNumber('user');
+        Route::get('user/{user}/referrer', [UserController::class, 'userReferrer'])->whereNumber('user');
         Route::get('user/{userId}/referrees', [UserController::class, 'userReferrees'])->whereNumber('userId');
         Route::post('user/{userId}/become-referrer', [UserController::class, 'becomeReferrer'])->whereNumber('userId');
         Route::post('user/{userId}/terminate-referral', [UserController::class, 'terminateReferral'])->whereNumber('userId');

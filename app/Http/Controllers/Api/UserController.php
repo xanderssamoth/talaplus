@@ -285,22 +285,6 @@ final class UserController extends ApiResourceController
             ->all();
     }
 
-    public function hasBelongsTo(int $id): JsonResponse
-    {
-        $user = User::query()->findOrFail($id);
-        $belongsTo = $user->belongs_to !== null ? User::query()->find($user->belongs_to) : null;
-
-        if ($belongsTo === null) {
-            return response()->json([
-                'success' => false,
-                'message' => $this->apiMessage('find_success'),
-                'data' => null,
-            ]);
-        }
-
-        return $this->handleResponse(UserResource::make($belongsTo), $this->apiMessage('find_success'));
-    }
-
     public function switchChildLockCode(int $id): JsonResponse
     {
         $user = User::query()->findOrFail($id);
@@ -360,6 +344,22 @@ final class UserController extends ApiResourceController
         $payments = $user->payments()->with('user')->latest('id')->paginate(10)->withQueryString();
 
         return $this->handleResponse(PaymentResource::collection($payments), $this->apiMessage('find_all_success', 'payment'), $payments->lastPage(), $payments->total());
+    }
+
+    public function userReferrer(int $id): JsonResponse
+    {
+        $user = User::query()->findOrFail($id);
+        $referrer = $user->belongs_to !== null ? User::query()->find($user->belongs_to) : null;
+
+        if ($referrer === null) {
+            return response()->json([
+                'success' => false,
+                'message' => $this->apiMessage('find_success'),
+                'data' => null,
+            ]);
+        }
+
+        return $this->handleResponse(UserResource::make($referrer), $this->apiMessage('find_success'));
     }
 
     public function userReferrees(int $userId): JsonResponse
