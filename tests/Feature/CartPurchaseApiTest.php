@@ -117,6 +117,9 @@ class CartPurchaseApiTest extends TestCase
             ])
             ->assertOk()
             ->assertJsonPath('data.payment.order_number', 'FLEX-CART-1')
+            ->assertJsonPath('data.payment.type_text', 'Mobile Money')
+            ->assertJsonPath('data.payment.status_text', 'En cours')
+            ->assertJsonPath('data.payment.reason_text', 'Vente de produit/service')
             ->assertJsonPath('data.order_number', 'FLEX-CART-1');
 
         $payment = Payment::query()->firstOrFail();

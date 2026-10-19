@@ -184,6 +184,7 @@ class WalletGiftTransactionApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.coins_amount', 100)
             ->assertJsonPath('data.payment.reason', 'coin_price')
+            ->assertJsonPath('data.payment.reason_text', 'Achat des coins')
             ->assertJsonPath('data.payment.entity', 'pricing')
             ->assertJsonPath('data.payment.entity_id', $pricing->id);
 

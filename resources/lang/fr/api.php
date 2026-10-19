@@ -66,6 +66,25 @@ return [
         'user_not_found' => 'Utilisateur introuvable.',
     ],
     'payment' => [
+        'view_not_authorized' => 'Vous ne pouvez consulter que vos propres paiements.',
+        'types' => [
+            'mobile_money' => 'Mobile Money',
+            'bank_card' => 'Carte Bancaire',
+        ],
+        'statuses' => [
+            'completed' => 'Effectué',
+            'pending' => 'En cours',
+            'failed' => 'Échoué',
+        ],
+        'reasons' => [
+            'media_create' => 'Création de média',
+            'media_boost' => 'Boost de média',
+            'gift' => 'Envoi de cadeau',
+            'product_sale' => 'Vente de produit/service',
+            'user_certfied' => 'Certification membre',
+            'ad' => 'Annonce',
+            'coin_price' => 'Achat des coins',
+        ],
         'card_urls_required' => 'Les URLs d’approbation, d’annulation et de refus sont obligatoires pour un paiement par carte bancaire.',
         'card_field_required' => 'Le champ :attribute est obligatoire pour un paiement par carte bancaire.',
         'callback_order_number_missing' => 'Le callback FlexPay ne contient pas de numéro de commande.',

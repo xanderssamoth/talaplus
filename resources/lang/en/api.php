@@ -66,6 +66,25 @@ return [
         'user_not_found' => 'User not found.',
     ],
     'payment' => [
+        'view_not_authorized' => 'You can only view your own payments.',
+        'types' => [
+            'mobile_money' => 'Mobile Money',
+            'bank_card' => 'Bank Card',
+        ],
+        'statuses' => [
+            'completed' => 'Completed',
+            'pending' => 'In progress',
+            'failed' => 'Failed',
+        ],
+        'reasons' => [
+            'media_create' => 'Media creation',
+            'media_boost' => 'Media boost',
+            'gift' => 'Gift sending',
+            'product_sale' => 'Product/service sale',
+            'user_certfied' => 'Member certification',
+            'ad' => 'Advertisement',
+            'coin_price' => 'Coin purchase',
+        ],
         'card_urls_required' => 'Approval, cancellation, and decline URLs are required for a bank-card payment.',
         'card_field_required' => 'The :attribute field is required for a bank-card payment.',
         'callback_order_number_missing' => 'The FlexPay callback does not contain an order number.',

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Resources\Api\PaymentResource;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\FlexPayService;
@@ -178,5 +179,129 @@ class FlexPayPaymentTest extends TestCase
 
         $this->assertInstanceOf(Carbon::class, $payment->refresh()->coins_credited_at);
         $this->assertTrue($payment->refresh()->coins_credited_at->equalTo($creditedAt));
+    }
+
+    public function test_my_payments_lists_only_the_authenticated_users_payments_with_translated_labels(): void
+    {
+        $user = User::create(['email' => 'payer@example.com', 'password' => 'password']);
+        $otherUser = User::create(['email' => 'other@example.com', 'password' => 'password']);
+
+        Payment::create(['order_number' => 'MOBILE-1', 'type' => 1, 'status' => 0, 'reason' => 'coin_price', 'user_id' => $user->id]);
+        Payment::create(['order_number' => 'CARD-1', 'type' => 2, 'status' => 2, 'reason' => 'user_certfied', 'user_id' => $user->id]);
+        Payment::create(['order_number' => 'OTHER-1', 'type' => 1, 'status' => 1, 'reason' => 'gift', 'user_id' => $otherUser->id]);
+
+        $this->actingAs($user, 'sanctum')
+            ->getJson("/api/v1/user/{$user->id}/payments?lang=fr")
+            ->assertOk()
+            ->assertJsonPath('count', 2)
+            ->assertJsonPath('data.0.order_number', 'CARD-1')
+            ->assertJsonPath('data.0.type_text', 'Carte Bancaire')
+            ->assertJsonPath('data.0.status_text', 'Échoué')
+            ->assertJsonPath('data.0.reason_text', 'Certification membre')
+            ->assertJsonPath('data.1.type_text', 'Mobile Money')
+            ->assertJsonPath('data.1.status_text', 'Effectué')
+            ->assertJsonPath('data.1.reason_text', 'Achat des coins');
+
+        $this->getJson("/api/v1/user/{$user->id}/payments?lang=en")
+            ->assertOk()
+            ->assertJsonPath('data.0.type_text', 'Bank Card')
+            ->assertJsonPath('data.0.status_text', 'Failed')
+            ->assertJsonPath('data.1.reason_text', 'Coin purchase');
+
+        $this->getJson("/api/v1/user/{$otherUser->id}/payments?lang=fr")
+            ->assertForbidden()
+            ->assertJsonPath('success', false);
+    }
+
+    public function test_my_payments_returns_empty_list_for_existing_user_and_not_found_for_missing_user(): void
+    {
+        $user = User::create(['email' => 'empty@example.com', 'password' => 'password']);
+
+        $this->actingAs($user, 'sanctum')
+            ->getJson("/api/v1/user/{$user->id}/payments")
+            ->assertOk()
+            ->assertJsonPath('count', 0)
+            ->assertJsonPath('data', []);
+
+        $this->getJson('/api/v1/user/999999/payments')->assertNotFound();
+    }
+
+    public function test_payment_callback_includes_translated_labels(): void
+    {
+        $user = User::create(['email' => 'callback@example.com', 'password' => 'password']);
+        $payment = Payment::create([
+            'order_number' => 'CALLBACK-1',
+            'type' => 1,
+            'status' => 1,
+            'reason' => 'media_create',
+            'user_id' => $user->id,
+        ]);
+
+        $this->postJson('/api/payment/store?lang=fr', [
+            'orderNumber' => $payment->order_number,
+            'status' => 0,
+        ])->assertOk()
+            ->assertJsonPath('data.payment_id', $payment->id)
+            ->assertJsonPath('data.type_text', 'Mobile Money')
+            ->assertJsonPath('data.status_text', 'Effectué')
+            ->assertJsonPath('data.reason_text', 'Création de média');
+    }
+
+    public function test_payment_check_and_details_include_translated_labels(): void
+    {
+        $user = User::create(['email' => 'check@example.com', 'password' => 'password']);
+        $payment = Payment::create([
+            'order_number' => 'CHECK-1',
+            'type' => 2,
+            'status' => 1,
+            'reason' => 'ad',
+            'user_id' => $user->id,
+        ]);
+
+        config(['services.flexpay.gateway_check' => 'https://flexpay.test/check']);
+        Http::preventStrayRequests();
+        Http::fake(['https://flexpay.test/check/CHECK-1' => Http::response([
+            'code' => '0',
+            'transaction' => ['status' => 2],
+        ])]);
+
+        $this->actingAs($user, 'sanctum')
+            ->getJson("/api/v1/payment/{$payment->id}/check?lang=en")
+            ->assertOk()
+            ->assertJsonPath('data.type_text', 'Bank Card')
+            ->assertJsonPath('data.status_text', 'Failed')
+            ->assertJsonPath('data.reason_text', 'Advertisement');
+
+        $this->getJson("/api/v1/payment/{$payment->id}?lang=fr")
+            ->assertOk()
+            ->assertJsonPath('data.type_text', 'Carte Bancaire')
+            ->assertJsonPath('data.status_text', 'Échoué')
+            ->assertJsonPath('data.reason_text', 'Annonce');
+    }
+
+    public function test_payment_resource_covers_all_reasons_and_statuses_in_both_languages(): void
+    {
+        $reasons = [
+            'media_create' => ['Création de média', 'Media creation'],
+            'media_boost' => ['Boost de média', 'Media boost'],
+            'gift' => ['Envoi de cadeau', 'Gift sending'],
+            'product_sale' => ['Vente de produit/service', 'Product/service sale'],
+            'user_certfied' => ['Certification membre', 'Member certification'],
+            'ad' => ['Annonce', 'Advertisement'],
+            'coin_price' => ['Achat des coins', 'Coin purchase'],
+        ];
+
+        foreach ($reasons as $reason => [$french, $english]) {
+            $payment = new Payment(['type' => 1, 'status' => 1, 'reason' => $reason]);
+
+            app()->setLocale('fr');
+            $this->assertSame($french, PaymentResource::labels($payment)['reason_text']);
+            app()->setLocale('en');
+            $this->assertSame($english, PaymentResource::labels($payment)['reason_text']);
+        }
+
+        app()->setLocale('fr');
+        $this->assertSame('En cours', PaymentResource::labels(new Payment(['type' => 1, 'status' => 1]))['status_text']);
+        $this->assertNull(PaymentResource::labels(new Payment(['type' => 3, 'status' => 3, 'reason' => 'other']))['reason_text']);
     }
 }

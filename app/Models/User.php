@@ -139,6 +139,11 @@ class User extends Authenticatable
         return $this->hasMany(Product::class);
     }
 
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
+
     public function followers(): HasMany
     {
         return $this->hasMany(Subscription::class);

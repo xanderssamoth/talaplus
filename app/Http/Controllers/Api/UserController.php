@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Resources\Api\ApiResource;
 use App\Http\Resources\Api\MediaResource;
+use App\Http\Resources\Api\PaymentResource;
 use App\Http\Resources\Api\ProductResource;
 use App\Http\Resources\Api\UserResource;
 use App\Models\AdminNotification;
@@ -336,6 +337,18 @@ final class UserController extends ApiResourceController
             ->withQueryString();
 
         return $this->handleResponse(MediaResource::collection($medias), $this->apiMessage('find_all_success', 'media'), $medias->lastPage(), $medias->total());
+    }
+
+    public function myPayments(Request $request, int $id): JsonResponse
+    {
+        $user = User::query()->findOrFail($id);
+        if ($request->user()?->id !== $user->id) {
+            return $this->handleError(null, __('api.payment.view_not_authorized'), 403);
+        }
+
+        $payments = $user->payments()->with('user')->latest('id')->paginate(10)->withQueryString();
+
+        return $this->handleResponse(PaymentResource::collection($payments), $this->apiMessage('find_all_success', 'payment'), $payments->lastPage(), $payments->total());
     }
 
     public function becomeReferrer(Request $request, int $userId): JsonResponse

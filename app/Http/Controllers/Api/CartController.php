@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Resources\Api\ApiResource;
 use App\Http\Resources\Api\CartResource;
+use App\Http\Resources\Api\PaymentResource;
 use App\Models\Cart;
 use App\Models\CustomerOrder;
 use App\Models\Product;
@@ -167,7 +168,7 @@ final class CartController extends ApiResourceController
         }
 
         return $this->handleResponse([
-            'payment' => ApiResource::make($result['payment']),
+            'payment' => PaymentResource::make($result['payment']),
             'message' => $result['response']['message'] ?? null,
             'order_number' => $result['payment']->order_number,
             'url' => $result['response']['url'] ?? null,

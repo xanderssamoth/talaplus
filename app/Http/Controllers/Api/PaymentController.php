@@ -35,6 +35,7 @@ final class PaymentController extends ApiResourceController
                 'payment_id' => $payment->id,
                 'order_number' => $payment->order_number,
                 'status' => (int) $payment->status,
+                ...PaymentResource::labels($payment),
             ],
             $this->apiMessage('updated')
         );
@@ -58,6 +59,7 @@ final class PaymentController extends ApiResourceController
                 'payment_id' => $payment->id,
                 'order_number' => $payment->order_number,
                 'status' => (int) $payment->status,
+                ...PaymentResource::labels($payment),
             ],
             __('api.payment.synchronized_success')
         );
