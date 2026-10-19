@@ -54,6 +54,7 @@ return [
         'terminated' => 'Votre code de parrainage a été désactivé.',
         'not_authorized' => 'Vous ne pouvez pas modifier le parrainage de cet utilisateur.',
         'generation_failed' => 'Impossible de générer un code de parrainage unique.',
+        'referrer_not_found' => 'Aucun parrain ne correspond à ce code de parrainage.',
         'expired_count' => ':count code(s) de parrainage expiré(s).',
     ],
     'errors' => [

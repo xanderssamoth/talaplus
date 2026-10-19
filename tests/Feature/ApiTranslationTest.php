@@ -70,6 +70,7 @@ class ApiTranslationTest extends TestCase
             'payment.transaction_not_found',
             'payment.user_id_invalid',
             'payment.view_not_authorized',
+            'referral.referrer_not_found',
             'payment.types.mobile_money',
             'payment.types.bank_card',
             'payment.statuses.completed',

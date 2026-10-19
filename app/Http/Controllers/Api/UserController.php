@@ -63,6 +63,7 @@ final class UserController extends ApiResourceController
             'username' => ['required', 'string', 'max:255', 'unique:users,username'],
             'christian_preference' => ['nullable', 'boolean'],
             'belongs_to' => ['nullable', 'integer', 'exists:users,id'],
+            'referral_code' => ['nullable', 'string', 'max:45'],
             'child_lock_code' => ['nullable', 'string', 'max:45'],
             'password' => ['nullable', 'string', 'confirmed'],
             'password_confirmation' => ['required_with:password', 'nullable', 'string'],
@@ -70,12 +71,22 @@ final class UserController extends ApiResourceController
             'cover_base64' => ['nullable', 'string', 'max:7000000'],
         ]);
 
+        if (filled($validated['referral_code'] ?? null)) {
+            $referrer = User::query()->where('promo_code', $validated['referral_code'])->first();
+
+            if ($referrer === null) {
+                return $this->handleError(null, __('api.referral.referrer_not_found'), 404);
+            }
+
+            $validated['belongs_to'] = $referrer->id;
+        }
+
         $profileImageUrls = $this->profileImageUrls($validated);
         if ($profileImageUrls instanceof JsonResponse) {
             return $profileImageUrls;
         }
 
-        $validated = Arr::except($validated, ['password_confirmation', 'avatar_base64', 'cover_base64']);
+        $validated = Arr::except($validated, ['password_confirmation', 'avatar_base64', 'cover_base64', 'referral_code']);
 
         $generatedPassword = null;
         if (($validated['password'] ?? null) === null) {
@@ -149,7 +160,7 @@ final class UserController extends ApiResourceController
             'avatar_base64' => ['sometimes', 'nullable', 'string', 'max:7000000'],
             'cover_base64' => ['sometimes', 'nullable', 'string', 'max:7000000'],
             'api_key' => ['sometimes', 'nullable', 'string'],
-            'promo_code' => ['sometimes', 'nullable', 'string', 'max:45'],
+            'promo_code' => ['sometimes', 'nullable', 'string', 'max:45', Rule::unique('users', 'promo_code')->ignore($user->id)],
             'two_factor_secret' => ['sometimes', 'nullable', 'string'],
             'two_factor_recovery_codes' => ['sometimes', 'nullable', 'string'],
             'two_factor_email_confirmed_at' => ['sometimes', 'nullable', 'date'],
@@ -349,6 +360,14 @@ final class UserController extends ApiResourceController
         $payments = $user->payments()->with('user')->latest('id')->paginate(10)->withQueryString();
 
         return $this->handleResponse(PaymentResource::collection($payments), $this->apiMessage('find_all_success', 'payment'), $payments->lastPage(), $payments->total());
+    }
+
+    public function userReferrees(int $userId): JsonResponse
+    {
+        $user = User::query()->findOrFail($userId);
+        $referrees = $user->referrees()->latest('id')->paginate(10)->withQueryString();
+
+        return $this->handleResponse(UserResource::collection($referrees), $this->apiMessage('find_all_success', 'user'), $referrees->lastPage(), $referrees->total());
     }
 
     public function becomeReferrer(Request $request, int $userId): JsonResponse

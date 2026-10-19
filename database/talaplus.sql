@@ -54,7 +54,8 @@ CREATE TABLE IF NOT EXISTS `users` (
   UNIQUE INDEX `id_users_UNIQUE` (`id` ASC),
   UNIQUE INDEX `email_UNIQUE` (`email` ASC),
   UNIQUE INDEX `phone_UNIQUE` (`phone` ASC),
-  UNIQUE INDEX `username_UNIQUE` (`username` ASC))
+  UNIQUE INDEX `username_UNIQUE` (`username` ASC),
+  UNIQUE INDEX `promo_code_UNIQUE` (`promo_code` ASC))
 ENGINE = InnoDB;
 
 

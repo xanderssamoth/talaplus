@@ -604,6 +604,48 @@ class AdminResourceControllerTest extends TestCase
         $this->assertMatchesRegularExpression('/^[A-Z]{5}[0-9]{5}$/', $draft->json('promo_code'));
     }
 
+    public function test_users_promo_code_has_a_unique_database_index(): void
+    {
+        $promoCodeIndex = collect(Schema::getIndexes('users'))
+            ->first(fn (array $index): bool => strcasecmp($index['name'], 'promo_code_UNIQUE') === 0);
+
+        $this->assertNotNull($promoCodeIndex);
+        $this->assertTrue($promoCodeIndex['unique']);
+    }
+
+    public function test_promo_code_migration_renames_an_existing_unique_index(): void
+    {
+        $migration = require database_path('migrations/2026_10_19_204539_add_unique_index_to_users_promo_code.php');
+        $migration->down();
+
+        Schema::table('users', function (Blueprint $table): void {
+            $table->unique('promo_code', 'legacy_promo_code_unique');
+        });
+
+        $migration->up();
+
+        $indexes = collect(Schema::getIndexes('users'));
+        $this->assertTrue($indexes->contains(fn (array $index): bool => strcasecmp($index['name'], 'promo_code_UNIQUE') === 0));
+        $this->assertFalse($indexes->contains(fn (array $index): bool => $index['name'] === 'legacy_promo_code_unique'));
+    }
+
+    public function test_followup_migration_renames_an_already_deployed_unique_index(): void
+    {
+        $initialMigration = require database_path('migrations/2026_10_19_204539_add_unique_index_to_users_promo_code.php');
+        $initialMigration->down();
+
+        Schema::table('users', function (Blueprint $table): void {
+            $table->unique('promo_code', 'legacy_promo_code_unique');
+        });
+
+        $followupMigration = require database_path('migrations/2026_10_19_211218_rename_existing_users_promo_code_index.php');
+        $followupMigration->up();
+
+        $indexes = collect(Schema::getIndexes('users'));
+        $this->assertTrue($indexes->contains(fn (array $index): bool => strcasecmp($index['name'], 'promo_code_UNIQUE') === 0));
+        $this->assertFalse($indexes->contains(fn (array $index): bool => $index['name'] === 'legacy_promo_code_unique'));
+    }
+
     public function test_admin_saves_generated_referral_code_and_clears_it_on_cancel(): void
     {
         $admin = User::factory()->create();

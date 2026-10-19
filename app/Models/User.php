@@ -114,6 +114,11 @@ class User extends Authenticatable
         return $this->belongsTo(self::class, 'belongs_to');
     }
 
+    public function referrees(): HasMany
+    {
+        return $this->hasMany(self::class, 'belongs_to');
+    }
+
     public function watchlist(): BelongsToMany
     {
         return $this->belongsToMany(Media::class, 'media_user')->withTimestamps();

@@ -54,6 +54,7 @@ return [
         'terminated' => 'Your referral code has been deactivated.',
         'not_authorized' => 'You cannot change this user’s referral status.',
         'generation_failed' => 'Unable to generate a unique referral code.',
+        'referrer_not_found' => 'No referrer matches this referral code.',
         'expired_count' => ':count referral code(s) expired.',
     ],
     'errors' => [

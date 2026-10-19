@@ -91,7 +91,7 @@ class UserWatchlistApiTest extends TestCase
             $table->text('api_key')->nullable();
             $table->text('avatar_url')->nullable();
             $table->text('cover_url')->nullable();
-            $table->string('promo_code')->nullable();
+            $table->string('promo_code')->nullable()->unique();
             $table->dateTime('promo_code_at')->nullable();
             $table->text('two_factor_secret')->nullable();
             $table->text('two_factor_recovery_codes')->nullable();
@@ -268,6 +268,129 @@ class UserWatchlistApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.promo_code', null);
         $this->assertNull($user->fresh()->promo_code);
+    }
+
+    public function test_user_store_links_new_account_to_the_matching_referral_code(): void
+    {
+        $referrer = User::create([
+            'email' => 'registration-referrer@example.com',
+            'username' => 'registration-referrer',
+            'password' => 'password',
+            'promo_code' => 'ABCDE12345',
+        ]);
+        $otherUser = User::create(['email' => 'other-parent@example.com', 'username' => 'other-parent', 'password' => 'password']);
+        Sanctum::actingAs($referrer);
+
+        $this->postJson('/api/v1/user', [
+            'username' => 'referred-account',
+            'referral_code' => 'ABCDE12345',
+            'belongs_to' => $otherUser->id,
+        ])->assertOk()
+            ->assertJsonPath('data.user.belongs_to', $referrer->id);
+
+        $this->assertDatabaseHas('users', [
+            'username' => 'referred-account',
+            'belongs_to' => $referrer->id,
+        ]);
+    }
+
+    public function test_user_store_rejects_unknown_referral_code_in_both_languages(): void
+    {
+        $administrator = User::create(['email' => 'registration-admin@example.com', 'username' => 'registration-admin', 'password' => 'password']);
+        Sanctum::actingAs($administrator);
+
+        foreach (['fr', 'en'] as $locale) {
+            $this->postJson("/api/v1/user?lang={$locale}", [
+                'username' => "unknown-referrer-{$locale}",
+                'referral_code' => 'UNKNOWN123',
+            ])->assertNotFound()
+                ->assertJsonPath('success', false)
+                ->assertJsonPath('message', __('api.referral.referrer_not_found'))
+                ->assertJsonMissingPath('data');
+        }
+
+        $this->assertDatabaseMissing('users', ['username' => 'unknown-referrer-fr']);
+        $this->assertDatabaseMissing('users', ['username' => 'unknown-referrer-en']);
+    }
+
+    public function test_generated_referral_codes_are_unique_for_different_users(): void
+    {
+        $first = User::create(['email' => 'unique-first@example.com', 'username' => 'unique-first', 'password' => 'password']);
+        $second = User::create(['email' => 'unique-second@example.com', 'username' => 'unique-second', 'password' => 'password']);
+
+        Sanctum::actingAs($first);
+        $this->postJson("/api/v1/user/{$first->id}/become-referrer")->assertOk();
+        Sanctum::actingAs($second);
+        $this->postJson("/api/v1/user/{$second->id}/become-referrer")->assertOk();
+
+        $this->assertNotSame($first->fresh()->promo_code, $second->fresh()->promo_code);
+        $this->assertMatchesRegularExpression('/^[A-Z]{5}[0-9]{5}$/', $second->fresh()->promo_code);
+    }
+
+    public function test_user_update_rejects_another_users_referral_code(): void
+    {
+        $referrer = User::create(['email' => 'code-owner@example.com', 'username' => 'code-owner', 'promo_code' => 'ABCDE12345']);
+        $user = User::create(['email' => 'code-copy@example.com', 'username' => 'code-copy', 'password' => 'password']);
+        Sanctum::actingAs($user);
+
+        $this->putJson("/api/v1/user/{$user->id}", ['promo_code' => $referrer->promo_code])
+            ->assertUnprocessable()
+            ->assertJsonPath('success', false);
+
+        $this->assertNull($user->fresh()->promo_code);
+    }
+
+    public function test_user_referrees_only_lists_users_whose_belongs_to_matches_the_requested_user(): void
+    {
+        $referrer = User::create(['email' => 'referrer-list@example.com', 'username' => 'referrer-list', 'password' => 'password']);
+        $otherReferrer = User::create(['email' => 'other-referrer@example.com', 'username' => 'other-referrer', 'password' => 'password']);
+        $firstReferree = User::create(['email' => 'first-referree@example.com', 'username' => 'first-referree', 'belongs_to' => $referrer->id]);
+        $secondReferree = User::create(['email' => 'second-referree@example.com', 'username' => 'second-referree', 'belongs_to' => $referrer->id]);
+        User::create(['email' => 'unrelated-referree@example.com', 'username' => 'unrelated-referree', 'belongs_to' => $otherReferrer->id]);
+        Sanctum::actingAs($otherReferrer);
+
+        $this->getJson("/api/v1/user/{$referrer->id}/referrees")
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('count', 2)
+            ->assertJsonPath('lastPage', 1)
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('data.0.id', $secondReferree->id)
+            ->assertJsonPath('data.1.id', $firstReferree->id);
+    }
+
+    public function test_user_referrees_returns_empty_list_or_not_found_as_appropriate(): void
+    {
+        $referrer = User::create(['email' => 'empty-referrer@example.com', 'username' => 'empty-referrer', 'password' => 'password']);
+        Sanctum::actingAs($referrer);
+
+        $this->getJson("/api/v1/user/{$referrer->id}/referrees")
+            ->assertOk()
+            ->assertJsonPath('count', 0)
+            ->assertJsonPath('data', []);
+
+        $this->getJson('/api/v1/user/999999/referrees')->assertNotFound();
+    }
+
+    public function test_user_referrees_are_paginated(): void
+    {
+        $referrer = User::create(['email' => 'paginated-referrer@example.com', 'username' => 'paginated-referrer', 'password' => 'password']);
+
+        for ($index = 1; $index <= 11; $index++) {
+            User::create([
+                'email' => "referree-{$index}@example.com",
+                'username' => "referree-{$index}",
+                'belongs_to' => $referrer->id,
+            ]);
+        }
+
+        Sanctum::actingAs($referrer);
+
+        $this->getJson("/api/v1/user/{$referrer->id}/referrees?page=2")
+            ->assertOk()
+            ->assertJsonPath('count', 11)
+            ->assertJsonPath('lastPage', 2)
+            ->assertJsonCount(1, 'data');
     }
 
     public function test_user_cannot_manage_another_users_referral_code(): void

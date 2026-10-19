@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\User;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use RuntimeException;
 
@@ -24,7 +25,7 @@ class ReferralService
 
             $code = $letters.$digits;
 
-            if (! User::query()->where('promo_code', $code)->exists()) {
+            if (! User::withTrashed()->where('promo_code', $code)->exists()) {
                 return ['promo_code' => $code, 'promo_code_at' => now()];
             }
         }
@@ -34,9 +35,17 @@ class ReferralService
 
     public function activate(User $user): User
     {
-        $user->forceFill($this->draft())->save();
+        for ($attempt = 0; $attempt < 10; $attempt++) {
+            try {
+                $user->forceFill($this->draft())->save();
 
-        return $user->refresh();
+                return $user->refresh();
+            } catch (UniqueConstraintViolationException) {
+                $user->refresh();
+            }
+        }
+
+        throw new RuntimeException(__('api.referral.generation_failed'));
     }
 
     public function terminate(User $user): User
