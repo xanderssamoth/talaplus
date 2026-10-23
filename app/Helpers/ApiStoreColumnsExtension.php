@@ -116,7 +116,13 @@ final class ApiStoreColumnsExtension extends OperationExtension
         $property = $reflectionClass->getProperty('modelClass');
         $property->setAccessible(true);
 
-        $modelClass = $property->getValue($reflectionClass->newInstanceWithoutConstructor());
+        $controller = $reflectionClass->newInstanceWithoutConstructor();
+
+        if (! $property->isInitialized($controller)) {
+            return null;
+        }
+
+        $modelClass = $property->getValue($controller);
 
         if (! is_string($modelClass) || ! is_subclass_of($modelClass, Model::class)) {
             return null;

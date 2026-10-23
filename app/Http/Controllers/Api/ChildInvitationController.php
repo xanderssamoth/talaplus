@@ -2,13 +2,14 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\BaseController;
 use App\Models\ChildInvitation;
 use App\Services\ChildInvitationService;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-class ChildInvitationController extends ApiResourceController
+class ChildInvitationController extends BaseController
 {
     public function __construct(private ChildInvitationService $childInvitationService) {}
 

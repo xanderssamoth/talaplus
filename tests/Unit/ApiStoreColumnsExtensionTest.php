@@ -3,6 +3,8 @@
 namespace Tests\Unit;
 
 use App\Helpers\ApiStoreColumnsExtension;
+use App\Http\Controllers\Api\ApiResourceController;
+use App\Http\Controllers\Api\ChildInvitationController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\UserController;
 use Dedoc\Scramble\Support\Generator\Operation;
@@ -17,6 +19,32 @@ use Tests\TestCase;
 
 class ApiStoreColumnsExtensionTest extends TestCase
 {
+    public function test_it_ignores_custom_invitation_routes(): void
+    {
+        $route = new Route(['POST'], 'api/v1/user/children/invitations', [
+            'uses' => ChildInvitationController::class.'@store',
+        ]);
+
+        $operation = Operation::make('post');
+
+        (new ReflectionClass(ApiStoreColumnsExtension::class))->newInstanceWithoutConstructor()->handle($operation, new RouteInfo($route, 'post'));
+
+        $this->assertArrayNotHasKey('requestBody', $operation->toArray());
+    }
+
+    public function test_it_ignores_resource_controllers_without_a_model_class(): void
+    {
+        $route = new Route(['POST'], 'api/v1/unconfigured', [
+            'uses' => UnconfiguredApiResourceController::class.'@store',
+        ]);
+
+        $operation = Operation::make('post');
+
+        (new ReflectionClass(ApiStoreColumnsExtension::class))->newInstanceWithoutConstructor()->handle($operation, new RouteInfo($route, 'post'));
+
+        $this->assertArrayNotHasKey('requestBody', $operation->toArray());
+    }
+
     public function test_it_documents_store_columns_from_the_sql_schema(): void
     {
         $route = new Route(['POST'], 'api/v1/role', [
@@ -144,3 +172,5 @@ class ApiStoreColumnsExtensionTest extends TestCase
         );
     }
 }
+
+class UnconfiguredApiResourceController extends ApiResourceController {}
