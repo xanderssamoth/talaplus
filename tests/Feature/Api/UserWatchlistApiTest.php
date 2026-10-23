@@ -109,6 +109,15 @@ class UserWatchlistApiTest extends TestCase
             $table->softDeletes();
         });
 
+        Schema::create('promo_codes', function (Blueprint $table): void {
+            $table->id();
+            $table->string('code')->unique();
+            $table->integer('validity');
+            $table->string('status')->default('expired');
+            $table->foreignId('user_id')->nullable();
+            $table->timestamps();
+        });
+
         Schema::create('notifications', function (Blueprint $table): void {
             $table->id();
             $table->string('type');
@@ -258,17 +267,27 @@ class UserWatchlistApiTest extends TestCase
         $user->refresh();
         $this->assertMatchesRegularExpression('/^[A-Z]{5}[0-9]{5}$/', $user->promo_code);
         $this->assertNotNull($user->promo_code_at);
+        $firstCode = $user->promo_code;
+        $this->assertDatabaseHas('promo_codes', [
+            'code' => $firstCode,
+            'user_id' => $user->id,
+            'status' => 'active',
+            'validity' => $user->promo_code_at->copy()->addMonthsNoOverflow(2)->getTimestamp() - $user->promo_code_at->getTimestamp(),
+        ]);
 
         $user->promo_code_at = now()->subMonth();
         $user->save();
 
         $this->postJson("/api/v1/user/{$user->id}/become-referrer")->assertOk();
         $this->assertTrue($user->fresh()->promo_code_at->greaterThan(now()->subMinute()));
+        $this->assertDatabaseHas('promo_codes', ['code' => $firstCode, 'status' => 'expired']);
+        $this->assertDatabaseHas('promo_codes', ['code' => $user->fresh()->promo_code, 'status' => 'active']);
 
         $this->postJson("/api/v1/user/{$user->id}/terminate-referral")
             ->assertOk()
             ->assertJsonPath('data.promo_code', null);
         $this->assertNull($user->fresh()->promo_code);
+        $this->assertDatabaseMissing('promo_codes', ['user_id' => $user->id, 'status' => 'active']);
     }
 
     public function test_user_store_links_new_account_to_the_matching_referral_code(): void
@@ -304,11 +323,11 @@ class UserWatchlistApiTest extends TestCase
         $this->postJson('/api/v1/user', [
             'username' => 'family-child',
             'child_of' => $parent->id,
-        ])->assertOk()->assertJsonPath('data.user.child_of', $parent->id);
+        ])->assertUnprocessable()->assertJsonPath('success', false);
 
-        $child = User::query()->where('username', 'family-child')->firstOrFail();
-        $this->assertTrue($parent->children()->whereKey($child->id)->exists());
-        $this->assertSame($parent->id, $child->parent?->id);
+        $this->assertDatabaseMissing('users', ['username' => 'family-child']);
+
+        $child = User::create(['username' => 'family-child', 'child_of' => $parent->id]);
 
         Sanctum::actingAs($child);
         $this->putJson("/api/v1/user/{$child->id}", ['child_of' => $child->id])

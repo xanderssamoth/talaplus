@@ -82,7 +82,6 @@ class ApiStoreColumnsExtensionTest extends TestCase
         $this->assertArrayHasKey('password_confirmation', $schema['properties']);
         $this->assertArrayHasKey('partner_name', $schema['properties']);
         $this->assertArrayHasKey('currency', $schema['properties']);
-        $this->assertArrayHasKey('child_lock_code', $schema['properties']);
         $this->assertContains('username', $schema['required']);
         $this->assertArrayNotHasKey('confirm_passord', $schema['properties']);
         $this->assertArrayNotHasKey('api_token', $schema['properties']);

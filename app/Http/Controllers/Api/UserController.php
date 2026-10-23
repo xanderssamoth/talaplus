@@ -44,6 +44,10 @@ final class UserController extends ApiResourceController
 
     public function store(Request $request): JsonResponse
     {
+        if ($request->hasAny(['child_of', 'child_lock_code'])) {
+            return $this->handleError(null, __('api.user.parental_fields_readonly'), 422);
+        }
+
         $validated = $request->validate([
             'firstname' => ['nullable', 'string', 'max:255'],
             'lastname' => ['nullable', 'string', 'max:255'],
@@ -63,9 +67,7 @@ final class UserController extends ApiResourceController
             'username' => ['required', 'string', 'max:255', 'unique:users,username'],
             'christian_preference' => ['nullable', 'boolean'],
             'belongs_to' => ['nullable', 'integer', 'exists:users,id'],
-            'child_of' => ['nullable', 'integer', 'exists:users,id'],
             'referral_code' => ['nullable', 'string', 'max:45'],
-            'child_lock_code' => ['nullable', 'string', 'max:45'],
             'password' => ['nullable', 'string', 'confirmed'],
             'password_confirmation' => ['required_with:password', 'nullable', 'string'],
             'avatar_base64' => ['nullable', 'string', 'max:7000000'],

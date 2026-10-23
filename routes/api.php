@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\AI\AiToolCallController;
 use App\Http\Controllers\Api\BlockedUserController;
 use App\Http\Controllers\Api\CartController;
 use App\Http\Controllers\Api\CategoryController;
+use App\Http\Controllers\Api\ChildInvitationController;
 use App\Http\Controllers\Api\CommentController;
 use App\Http\Controllers\Api\CustomerOrderController;
 use App\Http\Controllers\Api\FileController;
@@ -53,6 +54,10 @@ Route::prefix('v1')->group(function (): void {
     Route::get('comment/news-feed', [CommentController::class, 'newsFeed']);
 
     Route::middleware('auth:sanctum')->group(function (): void {
+        Route::post('user/children/invitations', [ChildInvitationController::class, 'store']);
+        Route::get('user/children/invitations', [ChildInvitationController::class, 'index']);
+        Route::post('user/children/invitations/{invitation}/accept', [ChildInvitationController::class, 'accept'])->whereNumber('invitation');
+        Route::post('user/children/invitations/{invitation}/decline', [ChildInvitationController::class, 'decline'])->whereNumber('invitation');
         Route::post('ai/chat', [AIController::class, 'chat']);
 
         Route::patch('user/{user}/child-lock-code', [UserController::class, 'switchChildLockCode']);

@@ -10,6 +10,20 @@ $entityMessages = fn (string $entity): array => [
 ];
 
 return [
+    'child_invitation' => [
+        'sent' => 'Invitation(s) sent to the child accounts.',
+        'listed' => 'Invitations retrieved successfully.',
+        'accepted' => 'Invitation accepted. The account is now linked to the parent.',
+        'declined' => 'Invitation declined.',
+        'parent_is_child' => 'A child account cannot invite another account as a child.',
+        'self_invitation' => 'You cannot invite yourself.',
+        'child_not_found' => 'One of the child accounts could not be found.',
+        'already_linked' => 'One of the child accounts is already linked to a parent.',
+        'not_authorized' => 'This invitation is not intended for you.',
+        'not_pending' => 'This invitation has already been answered.',
+        'expired' => 'This invitation has expired.',
+        'parent_unavailable' => 'The parent account is no longer available.',
+    ],
     'user' => [
         'child_lock_not_authorized' => 'You can only change your own parental lock.',
         'parental_fields_readonly' => 'The parent and parental lock cannot be changed through this API.',

@@ -805,6 +805,27 @@ ENGINE = InnoDB;
 
 
 -- -----------------------------------------------------
+-- Table `carts`
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `carts` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `payment_code` TEXT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `deleted_at` TIMESTAMP NULL,
+  `user_id` BIGINT NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `id_carts_UNIQUE` (`id` ASC),
+  INDEX `fk_carts_users_idx` (`user_id` ASC),
+  CONSTRAINT `fk_carts_users`
+    FOREIGN KEY (`user_id`)
+    REFERENCES `users` (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE)
+ENGINE = InnoDB;
+
+
+-- -----------------------------------------------------
 -- Table `hashtag_media`
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS `hashtag_media` (
@@ -813,10 +834,12 @@ CREATE TABLE IF NOT EXISTS `hashtag_media` (
   `media_id` BIGINT NOT NULL,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `carts_id` BIGINT NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE INDEX `id_hashtagmedia_UNIQUE` (`id` ASC),
   INDEX `fk_hashtagmedia_hashtags_idx` (`hashtag_id` ASC),
   INDEX `fk_hashtagmedia_medias_idx` (`media_id` ASC),
+  INDEX `fk_hashtag_media_carts1_idx` (`carts_id` ASC),
   CONSTRAINT `fk_hashtagmedia_hashtags`
     FOREIGN KEY (`hashtag_id`)
     REFERENCES `hashtags` (`id`)
@@ -826,7 +849,12 @@ CREATE TABLE IF NOT EXISTS `hashtag_media` (
     FOREIGN KEY (`media_id`)
     REFERENCES `medias` (`id`)
     ON DELETE CASCADE
-    ON UPDATE CASCADE)
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_hashtag_media_carts1`
+    FOREIGN KEY (`carts_id`)
+    REFERENCES `carts` (`id`)
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION)
 ENGINE = InnoDB;
 
 
@@ -924,27 +952,6 @@ CREATE TABLE IF NOT EXISTS `about_dashes` (
     FOREIGN KEY (`about_content_id`)
     REFERENCES `about_contents` (`id`)
     ON DELETE SET NULL
-    ON UPDATE CASCADE)
-ENGINE = InnoDB;
-
-
--- -----------------------------------------------------
--- Table `carts`
--- -----------------------------------------------------
-CREATE TABLE IF NOT EXISTS `carts` (
-  `id` BIGINT NOT NULL AUTO_INCREMENT,
-  `payment_code` TEXT NULL,
-  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `deleted_at` TIMESTAMP NULL,
-  `user_id` BIGINT NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE INDEX `id_carts_UNIQUE` (`id` ASC),
-  INDEX `fk_carts_users_idx` (`user_id` ASC),
-  CONSTRAINT `fk_carts_users`
-    FOREIGN KEY (`user_id`)
-    REFERENCES `users` (`id`)
-    ON DELETE CASCADE
     ON UPDATE CASCADE)
 ENGINE = InnoDB;
 
@@ -1332,5 +1339,34 @@ CREATE TABLE IF NOT EXISTS `gift_transactions` (
     FOREIGN KEY (`history_id`)
     REFERENCES `histories` (`id`)
     ON DELETE SET NULL
+    ON UPDATE CASCADE)
+ENGINE = InnoDB;
+
+
+-- -----------------------------------------------------
+-- Table `child_invitations`
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `child_invitations` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `status` ENUM('pending', 'accepted', 'declined') NOT NULL DEFAULT 'pending',
+  `expires_at` TIMESTAMP NULL,
+  `responded_at` TIMESTAMP NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `parent_user_id` BIGINT NOT NULL,
+  `child_user_id` BIGINT NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `id_childinvitations_UNIQUE` (`id` ASC),
+  INDEX `fk_childinvitations_parentusers_idx` (`parent_user_id` ASC),
+  INDEX `fk_childinvitations_childusers_idx` (`child_user_id` ASC),
+  CONSTRAINT `fk_childinvitations_parentusers`
+    FOREIGN KEY (`parent_user_id`)
+    REFERENCES `users` (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_childinvitations_childusers`
+    FOREIGN KEY (`child_user_id`)
+    REFERENCES `users` (`id`)
+    ON DELETE CASCADE
     ON UPDATE CASCADE)
 ENGINE = InnoDB;

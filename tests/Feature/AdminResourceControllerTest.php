@@ -21,6 +21,17 @@ class AdminResourceControllerTest extends TestCase
         parent::setUp();
 
         $this->withoutMiddleware(PreventRequestForgery::class);
+
+        if (! Schema::hasTable('promo_codes')) {
+            Schema::create('promo_codes', function (Blueprint $table): void {
+                $table->id();
+                $table->string('code')->unique();
+                $table->integer('validity');
+                $table->string('status')->default('expired');
+                $table->foreignId('user_id')->nullable();
+                $table->timestamps();
+            });
+        }
     }
 
     public function test_media_can_be_published_and_owner_is_notified(): void
@@ -680,11 +691,22 @@ class AdminResourceControllerTest extends TestCase
         $recent = User::factory()->create(['promo_code' => 'RECENT1234', 'promo_code_at' => now()->subMonth()]);
         $undated = User::factory()->create(['promo_code' => 'UNDATED123', 'promo_code_at' => null]);
 
+        foreach ([$expired, $recent, $undated] as $user) {
+            $user->promoCodes()->create([
+                'code' => $user->promo_code,
+                'validity' => 60 * 60 * 24 * 60,
+                'status' => 'active',
+            ]);
+        }
+
         $this->artisan('referrals:expire')->assertSuccessful();
 
         $this->assertNull($expired->fresh()->promo_code);
         $this->assertSame('RECENT1234', $recent->fresh()->promo_code);
         $this->assertSame('UNDATED123', $undated->fresh()->promo_code);
+        $this->assertDatabaseHas('promo_codes', ['user_id' => $expired->id, 'status' => 'expired']);
+        $this->assertDatabaseHas('promo_codes', ['user_id' => $recent->id, 'status' => 'active']);
+        $this->assertDatabaseHas('promo_codes', ['user_id' => $undated->id, 'status' => 'active']);
     }
 
     public function test_category_icons_are_presented_with_their_color(): void

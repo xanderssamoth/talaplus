@@ -10,6 +10,20 @@ $entityMessages = fn (string $entity): array => [
 ];
 
 return [
+    'child_invitation' => [
+        'sent' => 'Invitation(s) envoyée(s) aux comptes enfants.',
+        'listed' => 'Invitations récupérées avec succès.',
+        'accepted' => 'Invitation acceptée. Le compte est maintenant associé au parent.',
+        'declined' => 'Invitation refusée.',
+        'parent_is_child' => 'Un compte enfant ne peut pas inviter un autre compte comme enfant.',
+        'self_invitation' => 'Vous ne pouvez pas vous inviter vous-même.',
+        'child_not_found' => 'Un des comptes enfants est introuvable.',
+        'already_linked' => 'Un des comptes enfants est déjà associé à un parent.',
+        'not_authorized' => 'Cette invitation ne vous est pas destinée.',
+        'not_pending' => 'Cette invitation a déjà reçu une réponse.',
+        'expired' => 'Cette invitation a expiré.',
+        'parent_unavailable' => 'Le compte parent n’est plus disponible.',
+    ],
     'user' => [
         'child_lock_not_authorized' => 'Vous ne pouvez modifier que votre propre verrou parental.',
         'parental_fields_readonly' => 'Le parent et le verrou parental ne peuvent pas être modifiés depuis cette API.',
