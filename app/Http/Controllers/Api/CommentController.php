@@ -50,7 +50,7 @@ final class CommentController extends ApiResourceController
     {
         $payload = $this->payload($request);
 
-        if (($payload['media_id'] ?? null) !== null && ! Media::query()->whereKey($payload['media_id'])->exists()) {
+        if (($payload['media_id'] ?? null) !== null && ! Media::query()->visibleTo($request->user())->whereKey($payload['media_id'])->exists()) {
             return $this->handleError(null, $this->apiMessage('not_found', 'media'));
         }
 
@@ -135,7 +135,7 @@ final class CommentController extends ApiResourceController
         $comment = Comment::query()->findOrFail($id);
         $payload = $this->payload($request);
 
-        if (($payload['media_id'] ?? null) !== null && ! Media::query()->whereKey($payload['media_id'])->exists()) {
+        if (($payload['media_id'] ?? null) !== null && ! Media::query()->visibleTo($request->user())->whereKey($payload['media_id'])->exists()) {
             return $this->handleError(null, $this->apiMessage('not_found', 'media'));
         }
 

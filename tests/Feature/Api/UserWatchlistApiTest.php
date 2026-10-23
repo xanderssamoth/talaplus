@@ -101,6 +101,7 @@ class UserWatchlistApiTest extends TestCase
             $table->boolean('is_online')->default(true);
             $table->boolean('christian_preference')->default(false);
             $table->foreignId('belongs_to')->nullable();
+            $table->foreignId('child_of')->nullable();
             $table->string('child_lock_code')->nullable();
             $table->string('status')->default('created');
             $table->string('type')->default('uncertified');
@@ -294,6 +295,29 @@ class UserWatchlistApiTest extends TestCase
         ]);
     }
 
+    public function test_user_store_and_update_manage_child_parent_relationship(): void
+    {
+        $parent = User::create(['username' => 'family-parent']);
+        $administrator = User::create(['username' => 'family-admin']);
+        Sanctum::actingAs($administrator);
+
+        $this->postJson('/api/v1/user', [
+            'username' => 'family-child',
+            'child_of' => $parent->id,
+        ])->assertOk()->assertJsonPath('data.user.child_of', $parent->id);
+
+        $child = User::query()->where('username', 'family-child')->firstOrFail();
+        $this->assertTrue($parent->children()->whereKey($child->id)->exists());
+        $this->assertSame($parent->id, $child->parent?->id);
+
+        Sanctum::actingAs($child);
+        $this->putJson("/api/v1/user/{$child->id}", ['child_of' => $child->id])
+            ->assertUnprocessable();
+        $this->putJson("/api/v1/user/{$child->id}", ['child_of' => null])
+            ->assertUnprocessable();
+        $this->assertSame($parent->id, $child->fresh()->child_of);
+    }
+
     public function test_user_store_rejects_unknown_referral_code_in_both_languages(): void
     {
         $administrator = User::create(['email' => 'registration-admin@example.com', 'username' => 'registration-admin', 'password' => 'password']);
@@ -311,6 +335,42 @@ class UserWatchlistApiTest extends TestCase
 
         $this->assertDatabaseMissing('users', ['username' => 'unknown-referrer-fr']);
         $this->assertDatabaseMissing('users', ['username' => 'unknown-referrer-en']);
+    }
+
+    public function test_child_cannot_change_parental_fields_or_take_over_parent_account(): void
+    {
+        $parent = User::create(['username' => 'locked-parent', 'password' => 'parent-password', 'child_lock_code' => '1234']);
+        $child = User::create(['username' => 'locked-child', 'child_of' => $parent->id]);
+        Sanctum::actingAs($child);
+
+        $this->putJson("/api/v1/user/{$child->id}", ['child_of' => null])->assertUnprocessable();
+        $this->putJson("/api/v1/user/{$child->id}", ['child_lock_code' => null])->assertUnprocessable();
+        $this->putJson("/api/v1/user/{$parent->id}", [
+            'password' => 'new-parent-password',
+            'password_confirmation' => 'new-parent-password',
+        ])->assertForbidden();
+        $this->deleteJson("/api/v1/user/{$parent->id}")->assertForbidden();
+        $this->getJson("/api/v1/user/{$parent->id}")->assertOk()->assertJsonMissingPath('data.child_lock_code');
+
+        $this->assertSame($parent->id, $child->fresh()->child_of);
+        $this->assertSame('1234', $parent->fresh()->child_lock_code);
+        $this->assertNull($parent->fresh()->deleted_at);
+        $this->assertFalse(Hash::check('new-parent-password', $parent->fresh()->password));
+    }
+
+    public function test_locked_child_cannot_use_another_users_media_lists_or_watchlist_actions(): void
+    {
+        $parent = User::create(['username' => 'viewer-parent', 'child_lock_code' => '1234']);
+        $child = User::create(['username' => 'viewer-child', 'child_of' => $parent->id]);
+        $owner = User::create(['username' => 'media-owner']);
+        $adult = Media::create(['media_title' => ['fr' => 'Adultes'], 'user_id' => $owner->id]);
+        $owner->watchlist()->attach($adult->id);
+        Sanctum::actingAs($child);
+
+        $this->getJson("/api/v1/user/{$owner->id}/medias")->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson("/api/v1/user/{$owner->id}/watchlist")->assertOk()->assertJsonCount(0, 'data');
+        $this->postJson("/api/v1/user/{$child->id}/watchlist/{$adult->id}")->assertNotFound();
+        $this->postJson("/api/v1/user/{$owner->id}/watchlist/{$adult->id}")->assertForbidden();
     }
 
     public function test_generated_referral_codes_are_unique_for_different_users(): void
@@ -597,6 +657,27 @@ class UserWatchlistApiTest extends TestCase
         $this->assertDatabaseCount('files', 0);
     }
 
+    public function test_child_lock_code_toggles_only_for_the_authenticated_parent(): void
+    {
+        $parent = User::create(['username' => 'parent']);
+        $other = User::create(['username' => 'other']);
+
+        Sanctum::actingAs($parent);
+
+        $this->patchJson("/api/v1/user/{$parent->id}/child-lock-code")
+            ->assertOk()
+            ->assertJsonPath('data.child_lock_code', $parent->fresh()->child_lock_code);
+        $this->assertNotEmpty($parent->fresh()->child_lock_code);
+
+        $this->patchJson("/api/v1/user/{$other->id}/child-lock-code")
+            ->assertForbidden();
+        $this->assertNull($other->fresh()->child_lock_code);
+
+        $this->patchJson("/api/v1/user/{$parent->id}/child-lock-code")
+            ->assertOk();
+        $this->assertNull($parent->fresh()->child_lock_code);
+    }
+
     public function test_user_update_saves_optional_base64_images_and_supported_account_fields(): void
     {
         Storage::fake('s3');
@@ -619,7 +700,6 @@ class UserWatchlistApiTest extends TestCase
             'type' => 'uncertified',
             'partner_name' => 'Partenaire',
             'currency' => 'CDF',
-            'child_lock_code' => 'LOCK-123',
             'api_key' => 'api-key',
             'promo_code' => 'PROMO-123',
             'two_factor_secret' => 'two-factor-secret',
@@ -642,7 +722,7 @@ class UserWatchlistApiTest extends TestCase
         Storage::disk('s3')->assertExists('users/covers/'.basename((string) $user->cover_url));
         $this->assertSame('Partenaire', $user->partner_name);
         $this->assertSame('CDF', $user->currency);
-        $this->assertSame('LOCK-123', $user->child_lock_code);
+        $this->assertNull($user->child_lock_code);
         $this->assertSame('api-key', $user->api_key);
         $this->assertSame('PROMO-123', $user->promo_code);
         $this->assertSame('two-factor-secret', $user->two_factor_secret);

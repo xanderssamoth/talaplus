@@ -32,6 +32,7 @@ final class HashtagController extends ApiResourceController
         }
 
         $medias = Media::query()
+            ->visibleTo(request()->user())
             ->with($mediaRelations)
             ->where(function ($query) use ($record, $keyword): void {
                 $query->whereHas('hashtags', fn ($query) => $query->where('hashtags.id', $record->id))

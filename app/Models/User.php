@@ -22,6 +22,7 @@ use Laravel\Sanctum\HasApiTokens;
     'two_factor_recovery_codes',
     'api_token',
     'api_key',
+    'child_lock_code',
 ])]
 class User extends Authenticatable
 {
@@ -67,6 +68,7 @@ class User extends Authenticatable
         'is_online',
         'christian_preference',
         'belongs_to',
+        'child_of',
         'child_lock_code',
         'status',
         'type',
@@ -90,6 +92,7 @@ class User extends Authenticatable
             'is_online' => 'boolean',
             'christian_preference' => 'boolean',
             'belongs_to' => 'integer',
+            'child_of' => 'integer',
             'password' => 'hashed',
         ];
     }
@@ -117,6 +120,21 @@ class User extends Authenticatable
     public function referrees(): HasMany
     {
         return $this->hasMany(self::class, 'belongs_to');
+    }
+
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'child_of');
+    }
+
+    public function children(): HasMany
+    {
+        return $this->hasMany(self::class, 'child_of');
+    }
+
+    public function hasParentalMediaLock(): bool
+    {
+        return $this->child_of !== null && $this->parent()->whereNotNull('child_lock_code')->exists();
     }
 
     public function watchlist(): BelongsToMany

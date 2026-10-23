@@ -24,6 +24,7 @@ use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class ProductCartMessageApiTest extends TestCase
@@ -88,6 +89,8 @@ class ProductCartMessageApiTest extends TestCase
             $table->string('country')->nullable();
             $table->string('city')->nullable();
             $table->text('password')->nullable();
+            $table->foreignId('child_of')->nullable();
+            $table->string('child_lock_code')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
@@ -105,6 +108,7 @@ class ProductCartMessageApiTest extends TestCase
             $table->id();
             $table->json('media_title')->nullable();
             $table->json('media_description')->nullable();
+            $table->boolean('for_youth')->default(false);
             $table->text('media_url')->nullable();
             $table->text('cover_url')->nullable();
             $table->foreignId('user_id')->nullable();
@@ -932,5 +936,21 @@ class ProductCartMessageApiTest extends TestCase
         $this->getJson("/api/v1/message/conversation/group?user_id={$sender->id}&group_id={$group->id}")
             ->assertOk()
             ->assertJsonPath('data.is_member', true);
+    }
+
+    public function test_locked_child_cannot_comment_on_adult_media(): void
+    {
+        $parent = User::create(['username' => 'parent', 'child_lock_code' => '1234']);
+        $child = User::create(['username' => 'child', 'child_of' => $parent->id]);
+        $adult = Media::create(['media_title' => ['fr' => 'Adultes'], 'for_youth' => false]);
+        Sanctum::actingAs($child);
+
+        $this->postJson('/api/v1/comment', [
+            'media_id' => $adult->id,
+            'comment_content' => 'Un commentaire',
+            'user_id' => $child->id,
+        ])->assertNotFound();
+
+        $this->assertDatabaseMissing('comments', ['media_id' => $adult->id]);
     }
 }

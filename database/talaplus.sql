@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS `users` (
   `is_online` TINYINT NOT NULL DEFAULT 1,
   `christian_preference` TINYINT NOT NULL DEFAULT 0,
   `belongs_to` BIGINT NULL,
+  `child_of` BIGINT NULL,
   `child_lock_code` VARCHAR(45) NULL,
   `status` ENUM('created', 'activated', 'disabled', 'blocked', 'deleted') NOT NULL DEFAULT 'created',
   `type` ENUM('uncertified', 'certified') NOT NULL DEFAULT 'uncertified',

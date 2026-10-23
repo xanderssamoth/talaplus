@@ -49,7 +49,6 @@ Route::prefix('v1')->group(function (): void {
 
     Route::post('password-reset/find-user', [PasswordResetController::class, 'findUser']);
 
-    Route::get('media/popular/list', [MediaController::class, 'popularMedias']);
     Route::get('product/popular/list', [ProductController::class, 'popularProducts']);
     Route::get('comment/news-feed', [CommentController::class, 'newsFeed']);
 
@@ -77,6 +76,7 @@ Route::prefix('v1')->group(function (): void {
 
         Route::post('password-reset/check-token', [PasswordResetController::class, 'checkToken']);
 
+        Route::get('media/popular/list', [MediaController::class, 'popularMedias']);
         Route::get('media/filter/list', [MediaController::class, 'filterMedias']);
         Route::get('media/belongs-to/{belongsTo}', [MediaController::class, 'findByBelongsTo']);
         Route::post('media/progress', [MediaController::class, 'mediaProgress']);

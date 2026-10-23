@@ -39,6 +39,17 @@ final class MediaController extends ApiResourceController
         private GiftService $giftService,
     ) {}
 
+    public function index(Request $request): JsonResponse
+    {
+        $medias = Media::query()
+            ->visibleTo($this->mediaViewer($request))
+            ->latest('id')
+            ->paginate(10)
+            ->withQueryString();
+
+        return $this->handleResponse(MediaResource::collection($medias), $this->apiMessage('find_all_success'), $medias->lastPage(), $medias->total());
+    }
+
     public function store(Request $request): JsonResponse
     {
         if (! $request->has('category_ids') && $request->has('categories')) {
@@ -144,7 +155,7 @@ final class MediaController extends ApiResourceController
             'cover_url' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,gif', 'max:10240'],
         ]);
 
-        $media = Media::query()->findOrFail($id);
+        $media = Media::query()->visibleTo($this->mediaViewer($request))->findOrFail($id);
         $payload = $this->payload($request);
 
         if ($request->hasFile('media_url')) {
@@ -172,19 +183,20 @@ final class MediaController extends ApiResourceController
 
     public function show(int $id): JsonResponse
     {
-        $media = Media::query()->with($this->mediaRelations())->findOrFail($id);
+        $viewer = $this->mediaViewer(request());
+        $media = Media::query()->visibleTo($viewer)->with($this->mediaRelations())->findOrFail($id);
 
-        if (request()->filled('user_id')) {
+        if ($viewer !== null) {
             History::query()->firstOrCreate([
                 'entity' => 'media',
                 'entity_id' => $media->id,
                 'action' => 'view',
-                'user_id' => request()->integer('user_id'),
+                'user_id' => $viewer->id,
             ]);
         }
 
-        $payload = request()->filled('user_id')
-            ? $this->mediaPayload($media, request()->integer('user_id'))
+        $payload = $viewer !== null
+            ? $this->mediaPayload($media, $viewer->id)
             : MediaResource::make($media);
 
         return $this->handleResponse($payload, $this->apiMessage('find_success'));
@@ -192,7 +204,7 @@ final class MediaController extends ApiResourceController
 
     public function publishMedia(int $id): JsonResponse
     {
-        $media = Media::query()->findOrFail($id);
+        $media = Media::query()->visibleTo($this->mediaViewer(request()))->findOrFail($id);
         $media->is_shared = true;
         $media->save();
 
@@ -211,7 +223,7 @@ final class MediaController extends ApiResourceController
 
     public function share(int $mediaId): JsonResponse
     {
-        $media = Media::query()->findOrFail($mediaId);
+        $media = Media::query()->visibleTo($this->mediaViewer(request()))->findOrFail($mediaId);
         $description = (string) ($media->getTranslation('media_description', app()->getLocale(), false)
             ?: $media->getTranslation('media_description', 'fr', false)
             ?: $media->media_description);
@@ -242,8 +254,7 @@ final class MediaController extends ApiResourceController
 
     public function popularMedias(Request $request): JsonResponse
     {
-        $validated = $request->validate(['user_id' => ['required', 'integer', 'exists:users,id']]);
-        $user = User::query()->findOrFail($validated['user_id']);
+        $user = $this->mediaViewer($request);
         $viewedMediaIds = History::query()
             ->where('entity', 'media')
             ->where('action', 'view')
@@ -256,6 +267,7 @@ final class MediaController extends ApiResourceController
         $preferredCategoryIds = $viewedMedias->flatMap->categories->pluck('id')->unique()->values();
 
         $query = Media::query()
+            ->visibleTo($user)
             ->where('is_shared', true)
             ->with(['categories', 'user']);
 
@@ -309,10 +321,12 @@ final class MediaController extends ApiResourceController
             'hashtag_ids.*' => ['integer', 'exists:hashtags,id'],
             'is_audio' => ['nullable', 'boolean'],
             'word' => ['nullable', 'string'],
-            'user_id' => ['nullable', 'integer', 'exists:users,id'],
         ]);
 
+        $viewer = $this->mediaViewer($request);
+
         $medias = Media::query()
+            ->visibleTo($viewer)
             ->with(['categories', 'hashtags', 'user'])
             ->when($validated['type'] ?? null, fn ($query, string $type) => $query->where('type', $type))
             ->when($validated['category_ids'] ?? null, fn ($query, array $categoryIds) => $query->whereHas(
@@ -335,10 +349,10 @@ final class MediaController extends ApiResourceController
             ->paginate(10)
             ->withQueryString();
 
-        if (isset($validated['user_id'])) {
+        if ($viewer !== null) {
             $items = $medias->getCollection();
             /** @var EloquentCollection<int, Media> $items */
-            $medias->setCollection($items->map(fn (Media $media): array|JsonResource => $this->mediaPayload($media, $validated['user_id'])));
+            $medias->setCollection($items->map(fn (Media $media): array|JsonResource => $this->mediaPayload($media, $viewer->id)));
 
             return $this->handleResponse($medias->items(), $this->apiMessage('find_all_success'), $medias->lastPage(), $medias->total());
         }
@@ -349,6 +363,7 @@ final class MediaController extends ApiResourceController
     public function findByBelongsTo(int $belongsTo): JsonResponse
     {
         $medias = Media::query()
+            ->visibleTo($this->mediaViewer(request()))
             ->with($this->mediaRelations(includeUser: true))
             ->where('belongs_to', $belongsTo)
             ->latest('id')
@@ -390,8 +405,11 @@ final class MediaController extends ApiResourceController
             'media_id' => ['required', 'integer', 'exists:medias,id'],
             'watched_seconds' => ['required', 'integer', 'min:0'],
             'percentage' => ['required', 'numeric', 'min:0', 'max:100'],
-            'user_id' => ['required', 'integer', 'exists:users,id'],
         ]);
+
+        $viewer = $this->mediaViewer($request);
+        Media::query()->visibleTo($viewer)->findOrFail($validated['media_id']);
+        $validated['user_id'] = $viewer->id;
 
         if ((float) $validated['percentage'] > 20.0) {
             History::create([
@@ -429,11 +447,12 @@ final class MediaController extends ApiResourceController
     public function like(Request $request, int $id): JsonResponse
     {
         $validated = $request->validate([
-            'user_id' => ['required', 'integer', 'exists:users,id'],
             'action' => ['nullable', 'string', 'in:add,remove'],
         ]);
 
-        return $this->handleReaction($id, $validated['user_id'], 'like', $validated['action'] ?? 'add');
+        Media::query()->visibleTo($this->mediaViewer($request))->findOrFail($id);
+
+        return $this->handleReaction($id, $request->user()->id, 'like', $validated['action'] ?? 'add');
     }
 
     public function gift(Request $request, int $id): JsonResponse
@@ -443,7 +462,7 @@ final class MediaController extends ApiResourceController
             'quantity' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ]);
 
-        $media = Media::query()->with('user')->findOrFail($id);
+        $media = Media::query()->visibleTo($this->mediaViewer($request))->with('user')->findOrFail($id);
         $pricing = Pricing::query()->findOrFail($validated['pricing_id']);
         $user = $request->user();
 
@@ -539,6 +558,11 @@ final class MediaController extends ApiResourceController
             'media' => MediaResource::make($media),
             'progress' => ApiResource::make($progress),
         ];
+    }
+
+    private function mediaViewer(Request $request): User
+    {
+        return $request->user('sanctum');
     }
 
     /**

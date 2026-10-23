@@ -210,6 +210,7 @@ class AdminResourceController extends Controller
                 ['name' => 'username', 'label' => 'Nom d’utilisateur', 'type' => 'text'],
                 ['name' => 'password', 'label' => 'Mot de passe', 'type' => 'password'],
                 ['name' => 'password_confirmation', 'label' => 'Confirmation du mot de passe', 'type' => 'password'],
+                ['name' => 'child_of', 'label' => 'ID du parent', 'type' => 'number'],
                 ['name' => 'promo_code', 'label' => 'Code promotionnel', 'type' => 'referral-code'],
                 ['name' => 'tips_at_every_login', 'label' => 'Conseils à chaque connexion', 'type' => 'checkbox'],
                 ['name' => 'is_online', 'label' => 'En ligne', 'type' => 'checkbox'],
@@ -218,7 +219,7 @@ class AdminResourceController extends Controller
                 ['name' => 'type', 'label' => 'Type', 'type' => 'select', 'options' => ['uncertified' => 'Non certifié', 'certified' => 'Certifié']],
                 ['name' => 'role_id', 'label' => 'Rôle', 'type' => 'select', 'options' => []],
             ],
-            'columns' => ['firstname', 'lastname', 'email', 'phone', 'promo_code', 'promo_code_at', 'status'],
+            'columns' => ['firstname', 'lastname', 'email', 'phone', 'child_of', 'promo_code', 'promo_code_at', 'status'],
             'table_labels' => [
                 'status' => 'État',
             ],
@@ -977,6 +978,7 @@ class AdminResourceController extends Controller
 
         $request->validate([
             'password' => ['nullable', 'confirmed'],
+            'child_of' => ['nullable', 'integer', 'exists:users,id', Rule::notIn([(int) $request->route('id')])],
             'avatar_base64' => ['nullable', 'string'],
             'promo_code' => ['nullable', 'string', 'max:45', Rule::unique('users', 'promo_code')->ignore($request->route('id'))],
             'promo_code_at' => ['nullable', 'date'],

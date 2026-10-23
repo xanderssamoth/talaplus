@@ -15,6 +15,10 @@ class UserResource extends ApiResource
     {
         $data = parent::toArray($request);
 
+        if ($request->user()?->id === $this->resource->id) {
+            $data['child_lock_code'] = $this->resource->child_lock_code;
+        }
+
         $data['product_categories'] = CategoryResource::collection($this->productCategories())->resolve($request);
         $data['product_stars_sum'] = $this->productStarsSum();
         $data['product_comments_count'] = $this->productCommentsCount();

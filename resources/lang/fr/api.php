@@ -10,6 +10,11 @@ $entityMessages = fn (string $entity): array => [
 ];
 
 return [
+    'user' => [
+        'child_lock_not_authorized' => 'Vous ne pouvez modifier que votre propre verrou parental.',
+        'parental_fields_readonly' => 'Le parent et le verrou parental ne peuvent pas être modifiés depuis cette API.',
+        'update_not_authorized' => 'Vous ne pouvez modifier que votre propre compte.',
+    ],
     'auth' => [
         'email_not_verified' => 'L’adresse email n’est pas vérifiée.',
         'former_password_invalid' => 'L’ancien mot de passe est invalide.',

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -30,6 +31,11 @@ class Media extends SqlModel
             'is_audio' => 'boolean',
             'is_shared' => 'boolean',
         ];
+    }
+
+    public function scopeVisibleTo(Builder $query, ?User $viewer): Builder
+    {
+        return $viewer?->hasParentalMediaLock() ? $query->where('for_youth', true) : $query;
     }
 
     public function user(): BelongsTo

@@ -10,6 +10,11 @@ $entityMessages = fn (string $entity): array => [
 ];
 
 return [
+    'user' => [
+        'child_lock_not_authorized' => 'You can only change your own parental lock.',
+        'parental_fields_readonly' => 'The parent and parental lock cannot be changed through this API.',
+        'update_not_authorized' => 'You can only modify your own account.',
+    ],
     'auth' => [
         'email_not_verified' => 'The email address is not verified.',
         'former_password_invalid' => 'The former password is invalid.',

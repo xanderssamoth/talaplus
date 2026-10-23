@@ -63,6 +63,7 @@ final class UserController extends ApiResourceController
             'username' => ['required', 'string', 'max:255', 'unique:users,username'],
             'christian_preference' => ['nullable', 'boolean'],
             'belongs_to' => ['nullable', 'integer', 'exists:users,id'],
+            'child_of' => ['nullable', 'integer', 'exists:users,id'],
             'referral_code' => ['nullable', 'string', 'max:45'],
             'child_lock_code' => ['nullable', 'string', 'max:45'],
             'password' => ['nullable', 'string', 'confirmed'],
@@ -135,6 +136,15 @@ final class UserController extends ApiResourceController
     public function update(Request $request, int $id): JsonResponse
     {
         $user = User::query()->findOrFail($id);
+
+        if ($request->user()?->id !== $user->id) {
+            return $this->handleError(null, __('api.user.update_not_authorized'), 403);
+        }
+
+        if ($request->hasAny(['child_of', 'child_lock_code'])) {
+            return $this->handleError(null, __('api.user.parental_fields_readonly'), 422);
+        }
+
         $payload = $request->validate([
             'firstname' => ['sometimes', 'nullable', 'string', 'max:255'],
             'lastname' => ['sometimes', 'nullable', 'string', 'max:255'],
@@ -154,7 +164,6 @@ final class UserController extends ApiResourceController
             'username' => ['sometimes', 'required', 'string', 'max:255', Rule::unique('users', 'username')->ignore($user->id)],
             'christian_preference' => ['sometimes', 'nullable', 'boolean'],
             'belongs_to' => ['sometimes', 'nullable', 'integer', 'exists:users,id'],
-            'child_lock_code' => ['sometimes', 'nullable', 'string', 'max:45'],
             'password' => ['sometimes', 'nullable', 'string', 'confirmed'],
             'password_confirmation' => ['required_with:password', 'nullable', 'string'],
             'avatar_base64' => ['sometimes', 'nullable', 'string', 'max:7000000'],
@@ -189,6 +198,19 @@ final class UserController extends ApiResourceController
         $user->save();
 
         return $this->handleResponse(UserResource::make($user->refresh()), $this->apiMessage('updated'));
+    }
+
+    public function destroy(int $id): JsonResponse
+    {
+        $user = User::query()->findOrFail($id);
+
+        if (request()->user()?->id !== $user->id) {
+            return $this->handleError(null, __('api.user.update_not_authorized'), 403);
+        }
+
+        $user->delete();
+
+        return $this->handleResponse(null, $this->apiMessage('deleted'));
     }
 
     public function login(Request $request): JsonResponse
@@ -285,9 +307,14 @@ final class UserController extends ApiResourceController
             ->all();
     }
 
-    public function switchChildLockCode(int $id): JsonResponse
+    public function switchChildLockCode(Request $request, int $id): JsonResponse
     {
         $user = User::query()->findOrFail($id);
+
+        if ($request->user()?->id !== $user->id) {
+            return $this->handleError(null, __('api.user.child_lock_not_authorized'), 403);
+        }
+
         $user->child_lock_code = filled($user->child_lock_code) ? null : $this->childLockCode();
         $user->save();
 
@@ -298,6 +325,7 @@ final class UserController extends ApiResourceController
     {
         $user = User::query()->findOrFail($id);
         $medias = $user->watchlist()
+            ->visibleTo(request()->user())
             ->with($this->watchlistMediaRelations())
             ->latest('media_user.id')
             ->paginate(10)
@@ -326,6 +354,7 @@ final class UserController extends ApiResourceController
     {
         $user = User::query()->findOrFail($id);
         $medias = $user->medias()
+            ->visibleTo(request()->user())
             ->with($this->watchlistMediaRelations())
             ->latest('id')
             ->paginate(10)
@@ -445,19 +474,29 @@ final class UserController extends ApiResourceController
         ], $this->apiMessage('find_all_success', 'cart'));
     }
 
-    public function addToWatchlist(int $id, int $mediaId): JsonResponse
+    public function addToWatchlist(Request $request, int $id, int $mediaId): JsonResponse
     {
         $user = User::query()->findOrFail($id);
-        $media = Media::query()->with($this->watchlistMediaRelations())->findOrFail($mediaId);
+
+        if ($request->user()?->id !== $user->id) {
+            return $this->handleError(null, __('api.user.update_not_authorized'), 403);
+        }
+
+        $media = Media::query()->visibleTo($request->user())->with($this->watchlistMediaRelations())->findOrFail($mediaId);
         $user->watchlist()->syncWithoutDetaching([$media->id]);
 
         return $this->handleResponse($this->mediaPayload($media, $user->id), $this->apiMessage('created', 'media'));
     }
 
-    public function removeFromWatchlist(int $id, int $mediaId): JsonResponse
+    public function removeFromWatchlist(Request $request, int $id, int $mediaId): JsonResponse
     {
         $user = User::query()->findOrFail($id);
-        $media = Media::query()->with($this->watchlistMediaRelations())->findOrFail($mediaId);
+
+        if ($request->user()?->id !== $user->id) {
+            return $this->handleError(null, __('api.user.update_not_authorized'), 403);
+        }
+
+        $media = Media::query()->visibleTo($request->user())->with($this->watchlistMediaRelations())->findOrFail($mediaId);
         $user->watchlist()->detach($media->id);
 
         return $this->handleResponse($this->mediaPayload($media, $user->id), $this->apiMessage('deleted', 'media'));

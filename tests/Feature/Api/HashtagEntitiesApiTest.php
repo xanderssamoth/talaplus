@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\Schema;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class HashtagEntitiesApiTest extends TestCase
@@ -47,6 +48,8 @@ class HashtagEntitiesApiTest extends TestCase
             $table->string('email')->nullable();
             $table->string('username')->nullable();
             $table->text('password')->nullable();
+            $table->foreignId('child_of')->nullable();
+            $table->string('child_lock_code')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
@@ -169,6 +172,8 @@ class HashtagEntitiesApiTest extends TestCase
             'user_id' => $user->id,
         ]);
 
+        Sanctum::actingAs($user);
+
         $response = $this->getJson('/api/v1/hashtag/gospel/entities');
 
         $response->assertOk()
@@ -194,6 +199,7 @@ class HashtagEntitiesApiTest extends TestCase
     public function test_user_resource_returns_files_branch(): void
     {
         $user = User::create(['email' => 'owner@example.com', 'username' => 'owner', 'password' => 'password']);
+        Sanctum::actingAs($user);
         File::create([
             'file_name' => 'avatar-proof.jpg',
             'file_type' => 'photo',
@@ -206,5 +212,22 @@ class HashtagEntitiesApiTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.files.0.file_name', 'avatar-proof.jpg');
+    }
+
+    public function test_locked_child_cannot_find_adult_media_by_hashtag(): void
+    {
+        $parent = User::create(['username' => 'parent', 'child_lock_code' => '1234']);
+        $child = User::create(['username' => 'child', 'child_of' => $parent->id]);
+        $hashtag = Hashtag::create(['keyword' => 'cinema']);
+        $youth = Media::create(['media_title' => ['fr' => 'Jeunesse'], 'for_youth' => true]);
+        $adult = Media::create(['media_title' => ['fr' => 'Adultes'], 'for_youth' => false]);
+        $youth->hashtags()->attach($hashtag->id);
+        $adult->hashtags()->attach($hashtag->id);
+        Sanctum::actingAs($child);
+
+        $this->getJson('/api/v1/hashtag/cinema/entities')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.medias')
+            ->assertJsonPath('data.medias.0.id', $youth->id);
     }
 }

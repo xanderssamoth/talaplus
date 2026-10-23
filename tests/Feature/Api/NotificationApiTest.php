@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\Schema;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class NotificationApiTest extends TestCase
@@ -45,6 +46,8 @@ class NotificationApiTest extends TestCase
             $table->string('email')->nullable();
             $table->string('username')->nullable();
             $table->text('password')->nullable();
+            $table->foreignId('child_of')->nullable();
+            $table->string('child_lock_code')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
@@ -53,6 +56,7 @@ class NotificationApiTest extends TestCase
             $table->id();
             $table->json('media_title')->nullable();
             $table->longText('media_description')->nullable();
+            $table->boolean('for_youth')->default(false);
             $table->foreignId('user_id')->nullable();
             $table->timestamps();
             $table->softDeletes();
@@ -147,6 +151,8 @@ class NotificationApiTest extends TestCase
         ]);
         AdminNotification::create(['type' => 'hidden', 'from_user_id' => $sender->id, 'to_user_id' => $otherUser->id]);
 
+        Sanctum::actingAs($recipient);
+
         $response = $this->getJson("/api/v1/notification/user/{$recipient->id}");
 
         $response->assertOk()
@@ -183,6 +189,8 @@ class NotificationApiTest extends TestCase
             'is_read' => false,
         ]);
 
+        Sanctum::actingAs($recipient);
+
         $response = $this->getJson("/api/v1/notification/user/{$recipient->id}/unread");
 
         $response->assertOk()
@@ -197,6 +205,8 @@ class NotificationApiTest extends TestCase
     {
         [$sender, $recipient] = $this->users();
         $notification = AdminNotification::create(['type' => 'single', 'from_user_id' => $sender->id, 'to_user_id' => $recipient->id, 'is_read' => false]);
+
+        Sanctum::actingAs($recipient);
 
         $response = $this->patchJson("/api/v1/notification/{$notification->id}/read");
 
@@ -218,6 +228,8 @@ class NotificationApiTest extends TestCase
         $second = AdminNotification::create(['type' => 'second', 'from_user_id' => $sender->id, 'to_user_id' => $recipient->id, 'is_read' => false]);
         $other = AdminNotification::create(['type' => 'other', 'from_user_id' => $sender->id, 'to_user_id' => $otherUser->id, 'is_read' => false]);
 
+        Sanctum::actingAs($recipient);
+
         $response = $this->patchJson("/api/v1/notification/user/{$recipient->id}/read");
 
         $response->assertOk()
@@ -227,6 +239,19 @@ class NotificationApiTest extends TestCase
         $this->assertDatabaseHas('notifications', ['id' => $first->id, 'is_read' => true]);
         $this->assertDatabaseHas('notifications', ['id' => $second->id, 'is_read' => true]);
         $this->assertDatabaseHas('notifications', ['id' => $other->id, 'is_read' => false]);
+    }
+
+    public function test_locked_child_does_not_receive_adult_media_details_in_notifications(): void
+    {
+        $parent = User::create(['username' => 'parent', 'child_lock_code' => '1234']);
+        $child = User::create(['username' => 'child', 'child_of' => $parent->id]);
+        $adult = Media::create(['media_title' => ['fr' => 'Adultes'], 'for_youth' => false]);
+        AdminNotification::create(['type' => 'media_published', 'to_user_id' => $child->id, 'media_id' => $adult->id]);
+        Sanctum::actingAs($child);
+
+        $this->getJson("/api/v1/notification/user/{$child->id}")
+            ->assertOk()
+            ->assertJsonPath('data.0.media', null);
     }
 
     /**
