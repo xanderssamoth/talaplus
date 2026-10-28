@@ -47,7 +47,7 @@ class FlexPayService
         }
 
         $response = Http::acceptJson()
-            ->withToken((string) config('services.flexpay.api_token'))
+            ->withToken($this->authorizationToken())
             ->timeout(15)
             ->connectTimeout(5)
             ->retry([100, 500], throw: false)
@@ -84,6 +84,8 @@ class FlexPayService
                 'provider_reference' => $response['provider_reference'] ?? null,
                 'amount' => $amount,
                 'amount_customer' => $attributes['amount_customer'] ?? null,
+                'coins_amount' => $attributes['coins_amount'] ?? null,
+                'coin_unit_price' => $attributes['coin_unit_price'] ?? null,
                 'phone' => $attributes['phone'] ?? null,
                 'currency' => $currency,
                 'channel' => $attributes['channel'] ?? null,
@@ -130,7 +132,7 @@ class FlexPayService
         $url = rtrim($baseUrl, '/').'/'.urlencode($orderNumber);
 
         return Http::acceptJson()
-            ->withToken((string) config('services.flexpay.api_token'))
+            ->withToken($this->authorizationToken())
             ->timeout(15)
             ->connectTimeout(5)
             ->retry([100, 500], throw: false)
@@ -245,6 +247,11 @@ class FlexPayService
             throw new RuntimeException(__('api.payment.phone_required'));
         }
 
+    }
+
+    private function authorizationToken(): string
+    {
+        return preg_replace('/^Bearer\s+/i', '', trim((string) config('services.flexpay.api_token'))) ?? '';
     }
 
     private function gateway(int $type): string

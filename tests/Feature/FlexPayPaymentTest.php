@@ -102,9 +102,9 @@ class FlexPayPaymentTest extends TestCase
             return $request->url() === 'https://flexpay.test/mobile'
                 && $request->hasHeader('Authorization', 'Bearer test-token')
                 && $request['merchant'] === 'merchant-code'
-                && $request['type'] === 1
+                && $request['type'] === '1'
                 && $request['phone'] === '243810000000'
-                && $request['callbackUrl'] === getApiURL().'/payment/store';
+                && $request['callback_url'] === getApiURL().'/payment/store';
         });
     }
 
@@ -138,7 +138,7 @@ class FlexPayPaymentTest extends TestCase
         $this->assertSame('FLEX-1002', $result['payment']->order_number);
 
         Http::assertSent(fn (Request $request): bool => $request->url() === 'https://flexpay.test/card'
-            && $request['callback_url'] === getApiURL().'/payment/store'
+            && $request['callbackUrl'] === getApiURL().'/payment/store'
             && $request['approve_url'] === getWebURL()."/paid/100/CDF/0/{$user->id}"
             && $request['cancel_url'] === getWebURL()."/paid/100/CDF/1/{$user->id}"
             && $request['decline_url'] === getWebURL()."/paid/100/CDF/2/{$user->id}");
@@ -289,6 +289,7 @@ class FlexPayPaymentTest extends TestCase
             'user_certfied' => ['Certification membre', 'Member certification'],
             'ad' => ['Annonce', 'Advertisement'],
             'coin_price' => ['Achat des coins', 'Coin purchase'],
+            'earnings_send' => ['Versement des gains', 'Earnings payout'],
         ];
 
         foreach ($reasons as $reason => [$french, $english]) {

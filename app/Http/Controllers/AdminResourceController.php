@@ -219,7 +219,7 @@ class AdminResourceController extends Controller
                 ['name' => 'type', 'label' => 'Type', 'type' => 'select', 'options' => ['uncertified' => 'Non certifié', 'certified' => 'Certifié']],
                 ['name' => 'role_id', 'label' => 'Rôle', 'type' => 'select', 'options' => []],
             ],
-            'columns' => ['firstname', 'lastname', 'email', 'phone', 'child_of', 'promo_code', 'promo_code_at', 'status'],
+            'columns' => ['firstname', 'lastname', 'email', 'phone', 'child_of', 'promo_code', 'referral_code_used', 'promo_code_at', 'status'],
             'table_labels' => [
                 'status' => 'État',
             ],

@@ -16,6 +16,9 @@ class GiftTransaction extends SqlModel
         return [
             'quantity' => 'integer',
             'coins_amount' => 'integer',
+            'gross_amount' => 'decimal:4',
+            'platform_fee_amount' => 'decimal:4',
+            'creator_earning_amount' => 'decimal:4',
         ];
     }
 

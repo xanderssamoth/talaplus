@@ -16,8 +16,10 @@ use App\Models\MediaProgress;
 use App\Models\PasswordReset;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\EarningStatsService;
 use App\Services\ExchangeRateService;
 use App\Services\ReferralService;
+use DomainException;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -40,6 +42,7 @@ final class UserController extends ApiResourceController
     public function __construct(
         private ExchangeRateService $exchangeRateService,
         private ReferralService $referralService,
+        private EarningStatsService $earningStatsService,
     ) {}
 
     public function store(Request $request): JsonResponse
@@ -82,6 +85,7 @@ final class UserController extends ApiResourceController
             }
 
             $validated['belongs_to'] = $referrer->id;
+            $validated['referral_code_used'] = $validated['referral_code'];
         }
 
         $profileImageUrls = $this->profileImageUrls($validated);
@@ -377,10 +381,36 @@ final class UserController extends ApiResourceController
         return $this->handleResponse(PaymentResource::collection($payments), $this->apiMessage('find_all_success', 'payment'), $payments->lastPage(), $payments->total());
     }
 
+    public function earningStats(Request $request, int $userId): JsonResponse
+    {
+        $user = User::query()->findOrFail($userId);
+
+        if ($request->user()?->id !== $user->id) {
+            return $this->handleError(null, __('api.earnings.not_authorized'), 403);
+        }
+
+        try {
+            $stats = $this->earningStatsService->forUser($user);
+        } catch (DomainException $exception) {
+            return $this->handleError(null, $exception->getMessage(), 503);
+        } catch (RuntimeException $exception) {
+            report($exception);
+
+            return $this->handleError(null, __('api.earnings.unavailable'), 503);
+        }
+
+        return $this->handleResponse($stats, __('api.earnings.retrieved'));
+    }
+
     public function userReferrer(int $id): JsonResponse
     {
         $user = User::query()->findOrFail($id);
-        $referrer = $user->belongs_to !== null ? User::query()->find($user->belongs_to) : null;
+        $referrer = filled($user->referral_code_used) && $user->belongs_to !== null
+            ? User::query()
+                ->whereKey($user->belongs_to)
+                ->where('promo_code', $user->referral_code_used)
+                ->first()
+            : null;
 
         if ($referrer === null) {
             return response()->json([

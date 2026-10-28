@@ -16,6 +16,8 @@ class Payment extends SqlModel
         return [
             'amount' => 'decimal:2',
             'amount_customer' => 'decimal:2',
+            'coins_amount' => 'integer',
+            'coin_unit_price' => 'decimal:6',
             'type' => 'integer',
             'status' => 'integer',
             'entity_id' => 'integer',

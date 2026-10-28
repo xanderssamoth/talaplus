@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\GiftTransaction;
 use App\Models\History;
 use App\Models\Media;
+use App\Models\Payment;
 use App\Models\Pricing;
 use App\Models\Reaction;
 use App\Models\User;
@@ -59,6 +60,22 @@ class GiftService
         $totalCoins = $giftCost * $quantity;
 
         return DB::transaction(function () use ($sender, $receiver, $media, $pricing, $quantity, $totalCoins): GiftTransaction {
+            $lastCoinPurchase = Payment::query()
+                ->where('user_id', $sender->id)
+                ->where('reason', 'coin_price')
+                ->where('status', 0)
+                ->whereNotNull('coins_credited_at')
+                ->orderByDesc('coins_credited_at')
+                ->orderByDesc('id')
+                ->first();
+
+            if ($lastCoinPurchase === null || (float) $lastCoinPurchase->coin_unit_price <= 0 || blank($lastCoinPurchase->currency)) {
+                throw new InvalidArgumentException(__('api.gift.coin_purchase_missing'));
+            }
+
+            $grossAmount = round($totalCoins * (float) $lastCoinPurchase->coin_unit_price, 4);
+            $platformFeeAmount = round($grossAmount * 0.3, 4);
+
             $this->walletService->debitCoins(
                 $sender,
                 $totalCoins
@@ -84,6 +101,10 @@ class GiftService
                 'pricing_id' => $pricing->id,
                 'quantity' => $quantity,
                 'coins_amount' => $totalCoins,
+                'gross_amount' => $grossAmount,
+                'platform_fee_amount' => $platformFeeAmount,
+                'creator_earning_amount' => round($grossAmount - $platformFeeAmount, 4),
+                'currency' => strtoupper($lastCoinPurchase->currency),
                 'history_id' => $history->id,
             ]);
         });

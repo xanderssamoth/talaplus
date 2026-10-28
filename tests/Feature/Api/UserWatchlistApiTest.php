@@ -101,6 +101,7 @@ class UserWatchlistApiTest extends TestCase
             $table->boolean('is_online')->default(true);
             $table->boolean('christian_preference')->default(false);
             $table->foreignId('belongs_to')->nullable();
+            $table->string('referral_code_used')->nullable();
             $table->foreignId('child_of')->nullable();
             $table->string('child_lock_code')->nullable();
             $table->string('status')->default('created');
@@ -306,11 +307,13 @@ class UserWatchlistApiTest extends TestCase
             'referral_code' => 'ABCDE12345',
             'belongs_to' => $otherUser->id,
         ])->assertOk()
-            ->assertJsonPath('data.user.belongs_to', $referrer->id);
+            ->assertJsonPath('data.user.belongs_to', $referrer->id)
+            ->assertJsonPath('data.user.referral_code_used', 'ABCDE12345');
 
         $this->assertDatabaseHas('users', [
             'username' => 'referred-account',
             'belongs_to' => $referrer->id,
+            'referral_code_used' => 'ABCDE12345',
         ]);
     }
 
@@ -421,11 +424,11 @@ class UserWatchlistApiTest extends TestCase
 
     public function test_user_referrees_only_lists_users_whose_belongs_to_matches_the_requested_user(): void
     {
-        $referrer = User::create(['email' => 'referrer-list@example.com', 'username' => 'referrer-list', 'password' => 'password']);
-        $otherReferrer = User::create(['email' => 'other-referrer@example.com', 'username' => 'other-referrer', 'password' => 'password']);
-        $firstReferree = User::create(['email' => 'first-referree@example.com', 'username' => 'first-referree', 'belongs_to' => $referrer->id]);
-        $secondReferree = User::create(['email' => 'second-referree@example.com', 'username' => 'second-referree', 'belongs_to' => $referrer->id]);
-        User::create(['email' => 'unrelated-referree@example.com', 'username' => 'unrelated-referree', 'belongs_to' => $otherReferrer->id]);
+        $referrer = User::create(['email' => 'referrer-list@example.com', 'username' => 'referrer-list', 'password' => 'password', 'promo_code' => 'ABCDE12345']);
+        $otherReferrer = User::create(['email' => 'other-referrer@example.com', 'username' => 'other-referrer', 'password' => 'password', 'promo_code' => 'FGHIJ67890']);
+        $firstReferree = User::create(['email' => 'first-referree@example.com', 'username' => 'first-referree', 'belongs_to' => $referrer->id, 'referral_code_used' => 'ABCDE12345']);
+        $secondReferree = User::create(['email' => 'second-referree@example.com', 'username' => 'second-referree', 'belongs_to' => $referrer->id, 'referral_code_used' => 'ABCDE12345']);
+        User::create(['email' => 'unrelated-referree@example.com', 'username' => 'unrelated-referree', 'belongs_to' => $otherReferrer->id, 'referral_code_used' => 'FGHIJ67890']);
         Sanctum::actingAs($otherReferrer);
 
         $this->getJson("/api/v1/user/{$referrer->id}/referrees")
@@ -451,15 +454,43 @@ class UserWatchlistApiTest extends TestCase
         $this->getJson('/api/v1/user/999999/referrees')->assertNotFound();
     }
 
+    public function test_expired_or_replaced_referral_code_hides_old_referral_links(): void
+    {
+        $referrer = User::create(['username' => 'former-referrer', 'promo_code' => 'ABCDE12345']);
+        $referree = User::create(['username' => 'former-referree', 'belongs_to' => $referrer->id, 'referral_code_used' => 'ABCDE12345']);
+        Sanctum::actingAs($referree);
+
+        $this->getJson("/api/v1/user/{$referree->id}/referrer")
+            ->assertOk()
+            ->assertJsonPath('data.id', $referrer->id);
+
+        $referrer->update(['promo_code' => null]);
+
+        $this->getJson("/api/v1/user/{$referree->id}/referrer")
+            ->assertOk()
+            ->assertJsonPath('data', null);
+        $this->getJson("/api/v1/user/{$referrer->id}/referrees")
+            ->assertOk()
+            ->assertJsonPath('count', 0);
+
+        $referrer->update(['promo_code' => 'FGHIJ67890']);
+        $this->getJson("/api/v1/user/{$referrer->id}/referrees")
+            ->assertOk()
+            ->assertJsonPath('count', 0);
+
+        $this->assertSame('ABCDE12345', $referree->fresh()->referral_code_used);
+    }
+
     public function test_user_referrees_are_paginated(): void
     {
-        $referrer = User::create(['email' => 'paginated-referrer@example.com', 'username' => 'paginated-referrer', 'password' => 'password']);
+        $referrer = User::create(['email' => 'paginated-referrer@example.com', 'username' => 'paginated-referrer', 'password' => 'password', 'promo_code' => 'ABCDE12345']);
 
         for ($index = 1; $index <= 11; $index++) {
             User::create([
                 'email' => "referree-{$index}@example.com",
                 'username' => "referree-{$index}",
                 'belongs_to' => $referrer->id,
+                'referral_code_used' => 'ABCDE12345',
             ]);
         }
 

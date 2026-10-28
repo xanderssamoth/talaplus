@@ -4,9 +4,13 @@ namespace Tests\Feature;
 
 use App\Models\GiftTransaction;
 use App\Models\History;
+use App\Models\Media;
+use App\Models\Payment;
 use App\Models\Pricing;
 use App\Models\User;
 use App\Models\Wallet;
+use App\Services\CoinService;
+use App\Services\GiftService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\Http;
@@ -28,7 +32,7 @@ class WalletGiftTransactionApiTest extends TestCase
 
         Schema::disableForeignKeyConstraints();
 
-        foreach (['payments', 'gift_transactions', 'wallets', 'histories', 'pricings', 'users'] as $table) {
+        foreach (['payments', 'gift_transactions', 'reactions', 'medias', 'wallets', 'histories', 'pricings', 'users'] as $table) {
             Schema::dropIfExists($table);
         }
 
@@ -44,6 +48,22 @@ class WalletGiftTransactionApiTest extends TestCase
             $table->id();
             $table->unsignedBigInteger('coins_balance')->default(0);
             $table->foreignId('user_id')->unique();
+            $table->timestamps();
+        });
+
+        Schema::create('medias', function (Blueprint $table): void {
+            $table->id();
+            $table->foreignId('user_id')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('reactions', function (Blueprint $table): void {
+            $table->id();
+            $table->string('type');
+            $table->foreignId('pricing_id')->nullable();
+            $table->foreignId('media_id')->nullable();
+            $table->foreignId('user_id')->nullable();
             $table->timestamps();
         });
 
@@ -73,6 +93,10 @@ class WalletGiftTransactionApiTest extends TestCase
             $table->id();
             $table->unsignedInteger('quantity')->default(1);
             $table->unsignedBigInteger('coins_amount');
+            $table->decimal('gross_amount', 12, 4)->nullable();
+            $table->decimal('platform_fee_amount', 12, 4)->nullable();
+            $table->decimal('creator_earning_amount', 12, 4)->nullable();
+            $table->string('currency')->nullable();
             $table->foreignId('sender_id')->nullable();
             $table->foreignId('receiver_id')->nullable();
             $table->foreignId('pricing_id')->nullable();
@@ -87,6 +111,8 @@ class WalletGiftTransactionApiTest extends TestCase
             $table->text('order_number')->nullable();
             $table->decimal('amount', 12, 2)->nullable();
             $table->decimal('amount_customer', 12, 2)->nullable();
+            $table->unsignedBigInteger('coins_amount')->nullable();
+            $table->decimal('coin_unit_price', 12, 6)->nullable();
             $table->string('phone', 45)->nullable();
             $table->string('currency', 45)->nullable();
             $table->string('channel', 45)->nullable();
@@ -96,6 +122,7 @@ class WalletGiftTransactionApiTest extends TestCase
             $table->string('entity')->nullable();
             $table->unsignedBigInteger('entity_id')->nullable();
             $table->timestamps();
+            $table->timestamp('coins_credited_at')->nullable();
             $table->foreignId('user_id')->nullable();
         });
 
@@ -188,7 +215,67 @@ class WalletGiftTransactionApiTest extends TestCase
             ->assertJsonPath('data.payment.entity', 'pricing')
             ->assertJsonPath('data.payment.entity_id', $pricing->id);
 
+        $payment = Payment::query()->firstOrFail();
+        $this->assertSame(100, $payment->coins_amount);
+        $this->assertSame('0.050000', $payment->coin_unit_price);
         $this->assertSame(10, $user->refresh()->wallet->coins_balance);
+    }
+
+    public function test_coin_credit_uses_the_purchased_quantity_even_after_pricing_changes(): void
+    {
+        $user = User::create(['email' => 'coin-credit@example.com']);
+        $pricing = Pricing::create(['pricing_name' => ['fr' => 'Coins'], 'reason' => 'coin_price', 'coins_amount' => 200, 'pricing_cost' => 10, 'currency' => 'USD']);
+        $payment = Payment::create([
+            'user_id' => $user->id, 'type' => 1, 'status' => 0, 'reason' => 'coin_price',
+            'entity' => 'pricing', 'entity_id' => $pricing->id, 'amount' => 10, 'currency' => 'USD',
+            'coins_amount' => 100, 'coin_unit_price' => 0.1,
+        ]);
+
+        $pricing->update(['coins_amount' => 500]);
+        app(CoinService::class)->completePayment($payment);
+        app(CoinService::class)->completePayment($payment->fresh());
+
+        $this->assertSame(100, $user->fresh()->wallet->coins_balance);
+    }
+
+    public function test_gift_uses_last_confirmed_coin_unit_price_and_records_thirty_percent_fee(): void
+    {
+        $sender = User::create(['email' => 'gift-sender@example.com']);
+        $receiver = User::create(['email' => 'gift-receiver@example.com']);
+        Wallet::create(['user_id' => $sender->id, 'coins_balance' => 100]);
+        $media = Media::create(['user_id' => $receiver->id]);
+        $giftPricing = Pricing::create(['pricing_name' => ['fr' => 'Cadeau'], 'reason' => 'gift_sent', 'pricing_cost' => 20]);
+        Payment::create(['user_id' => $sender->id, 'type' => 1, 'reason' => 'coin_price', 'status' => 0, 'currency' => 'USD', 'coin_unit_price' => 0.05, 'coins_credited_at' => now()->subDay()]);
+        Payment::create(['user_id' => $sender->id, 'type' => 1, 'reason' => 'coin_price', 'status' => 0, 'currency' => 'CDF', 'coin_unit_price' => 100, 'coins_credited_at' => now()]);
+        Payment::create(['user_id' => $sender->id, 'type' => 1, 'reason' => 'coin_price', 'status' => 1, 'currency' => 'USD', 'coin_unit_price' => 9, 'coins_credited_at' => now()->addMinute()]);
+
+        $gift = app(GiftService::class)->sendGift($sender, $media, $giftPricing, 2);
+
+        $this->assertSame(40, $gift->coins_amount);
+        $this->assertSame('4000.0000', $gift->gross_amount);
+        $this->assertSame('1200.0000', $gift->platform_fee_amount);
+        $this->assertSame('2800.0000', $gift->creator_earning_amount);
+        $this->assertSame('CDF', $gift->currency);
+        $this->assertSame(60, $sender->fresh()->wallet->coins_balance);
+    }
+
+    public function test_gift_without_a_confirmed_priced_coin_purchase_does_not_debit_wallet(): void
+    {
+        $sender = User::create(['email' => 'unpriced-sender@example.com']);
+        $receiver = User::create(['email' => 'unpriced-receiver@example.com']);
+        Wallet::create(['user_id' => $sender->id, 'coins_balance' => 100]);
+        $media = Media::create(['user_id' => $receiver->id]);
+        $giftPricing = Pricing::create(['pricing_name' => ['fr' => 'Cadeau'], 'reason' => 'gift_sent', 'pricing_cost' => 20]);
+
+        try {
+            app(GiftService::class)->sendGift($sender, $media, $giftPricing);
+            $this->fail('A gift without a priced purchase should fail.');
+        } catch (\InvalidArgumentException $exception) {
+            $this->assertSame(__('api.gift.coin_purchase_missing'), $exception->getMessage());
+        }
+
+        $this->assertSame(100, $sender->fresh()->wallet->coins_balance);
+        $this->assertSame(0, GiftTransaction::query()->count());
     }
 
     public function test_coin_package_purchase_returns_the_complete_provider_error_in_the_local_environment(): void

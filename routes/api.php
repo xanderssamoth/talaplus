@@ -65,6 +65,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('user/{user}/products', [UserController::class, 'myProducts']);
         Route::get('user/{user}/medias', [UserController::class, 'myMedias']);
         Route::get('user/{user}/payments', [UserController::class, 'myPayments'])->whereNumber('user');
+        Route::get('user/{userId}/earning-stats', [UserController::class, 'earningStats'])->whereNumber('userId');
         Route::get('user/{user}/referrer', [UserController::class, 'userReferrer'])->whereNumber('user');
         Route::get('user/{userId}/referrees', [UserController::class, 'userReferrees'])->whereNumber('userId');
         Route::post('user/{userId}/become-referrer', [UserController::class, 'becomeReferrer'])->whereNumber('userId');

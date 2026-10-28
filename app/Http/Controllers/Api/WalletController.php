@@ -6,7 +6,7 @@ use App\Http\Resources\Api\PaymentResource;
 use App\Http\Resources\Api\WalletResource;
 use App\Models\Pricing;
 use App\Models\Wallet;
-use App\Services\FlexPayService;
+use App\Services\CoinService;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\JsonResponse;
@@ -22,7 +22,7 @@ final class WalletController extends ApiResourceController
     protected string $resourceClass = WalletResource::class;
 
     public function __construct(
-        private FlexPayService $flexPayService,
+        private CoinService $coinService,
     ) {}
 
     public function myWallet(Request $request): JsonResponse
@@ -57,17 +57,11 @@ final class WalletController extends ApiResourceController
         }
 
         try {
-            $result = $this->flexPayService->initiate([
-                'user_id' => $request->user()->id,
+            $result = $this->coinService->purchase($request->user(), $pricing, [
                 'type' => $validated['type'],
-                'amount' => $pricing->pricing_cost,
-                'currency' => strtoupper($pricing->currency),
                 'phone' => $validated['phone'] ?? null,
                 'description' => 'Coin package purchase',
                 'channel' => $validated['channel'] ?? null,
-                'reason' => 'coin_price',
-                'entity' => 'pricing',
-                'entity_id' => $pricing->id,
             ]);
         } catch (InvalidArgumentException $exception) {
             return $this->handleError(null, 'InvalidArgumentException: '.$exception->getMessage(), 422);

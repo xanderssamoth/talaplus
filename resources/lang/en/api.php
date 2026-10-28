@@ -10,6 +10,18 @@ $entityMessages = fn (string $entity): array => [
 ];
 
 return [
+    'earnings' => [
+        'retrieved' => 'Earning statistics retrieved successfully.',
+        'not_authorized' => 'You can only view your own earnings.',
+        'unavailable' => 'Earning statistics are temporarily unavailable.',
+        'gift_valuation_missing' => 'A gift has no recorded monetary value. Its earnings cannot be calculated.',
+        'currency_missing' => 'An earning has no currency.',
+        'order_price_missing' => 'A paid cart has an invalid order price or currency.',
+        'days' => [
+            'monday' => 'Mon', 'tuesday' => 'Tue', 'wednesday' => 'Wed',
+            'thursday' => 'Thu', 'friday' => 'Fri', 'saturday' => 'Sat', 'sunday' => 'Sun',
+        ],
+    ],
     'child_invitation' => [
         'sent' => 'Invitation(s) sent to the child accounts.',
         'listed' => 'Invitations retrieved successfully.',
@@ -104,6 +116,7 @@ return [
             'user_certfied' => 'Member certification',
             'ad' => 'Advertisement',
             'coin_price' => 'Coin purchase',
+            'earnings_send' => 'Earnings payout',
         ],
         'card_urls_required' => 'Approval, cancellation, and decline URLs are required for a bank-card payment.',
         'card_field_required' => 'The :attribute field is required for a bank-card payment.',
@@ -142,6 +155,7 @@ return [
     'pricing_image_upload_failed' => 'The pricing image could not be uploaded.',
     'gift' => [
         'coin_price_invalid' => 'The gift has an invalid coin price.',
+        'coin_purchase_missing' => 'A confirmed coin purchase with a recorded unit price is required before sending a gift.',
         'invalid_pricing' => 'The selected pricing is not a gift.',
         'media_owner_missing' => 'This media does not have an owner.',
         'quantity_invalid' => 'The gift quantity must be at least 1.',

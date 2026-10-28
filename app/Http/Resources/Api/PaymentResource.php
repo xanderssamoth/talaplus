@@ -35,7 +35,7 @@ class PaymentResource extends ApiResource
 
         $reasonKey = in_array($payment->reason, [
             'media_create', 'media_boost', 'gift', 'product_sale',
-            'user_certfied', 'ad', 'coin_price',
+            'user_certfied', 'ad', 'coin_price', 'earnings_send',
         ], true) ? $payment->reason : null;
 
         return [

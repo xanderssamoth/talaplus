@@ -10,6 +10,18 @@ $entityMessages = fn (string $entity): array => [
 ];
 
 return [
+    'earnings' => [
+        'retrieved' => 'Statistiques des gains récupérées avec succès.',
+        'not_authorized' => 'Vous ne pouvez consulter que vos propres gains.',
+        'unavailable' => 'Les statistiques des gains sont temporairement indisponibles.',
+        'gift_valuation_missing' => 'Un cadeau n’a pas de valeur monétaire enregistrée. Ses gains ne peuvent pas être calculés.',
+        'currency_missing' => 'Un gain ne possède pas de devise.',
+        'order_price_missing' => 'Un panier payé contient un prix ou une devise de commande invalide.',
+        'days' => [
+            'monday' => 'Lun', 'tuesday' => 'Mar', 'wednesday' => 'Merc',
+            'thursday' => 'Jeu', 'friday' => 'Ven', 'saturday' => 'Sam', 'sunday' => 'Dim',
+        ],
+    ],
     'child_invitation' => [
         'sent' => 'Invitation(s) envoyée(s) aux comptes enfants.',
         'listed' => 'Invitations récupérées avec succès.',
@@ -104,6 +116,7 @@ return [
             'user_certfied' => 'Certification membre',
             'ad' => 'Annonce',
             'coin_price' => 'Achat des coins',
+            'earnings_send' => 'Versement des gains',
         ],
         'card_urls_required' => 'Les URLs d’approbation, d’annulation et de refus sont obligatoires pour un paiement par carte bancaire.',
         'card_field_required' => 'Le champ :attribute est obligatoire pour un paiement par carte bancaire.',
@@ -142,6 +155,7 @@ return [
     'pricing_image_upload_failed' => 'L’image de la tarification n’a pas pu être envoyée.',
     'gift' => [
         'coin_price_invalid' => 'Le prix en coins du cadeau est invalide.',
+        'coin_purchase_missing' => 'Un achat de coins confirmé avec un prix unitaire enregistré est nécessaire avant d’envoyer un cadeau.',
         'invalid_pricing' => 'La tarification sélectionnée n’est pas un cadeau.',
         'media_owner_missing' => 'Ce média n’a pas de propriétaire.',
         'quantity_invalid' => 'La quantité de cadeaux doit être au moins égale à 1.',

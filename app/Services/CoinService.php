@@ -32,19 +32,19 @@ class CoinService
     public function purchase(User $user, Pricing $pricing, array $paymentAttributes): array
     {
         if ($pricing->reason !== 'coin_price') {
-            throw new InvalidArgumentException('The selected pricing is not a Coins package.');
+            throw new InvalidArgumentException(__('api.wallet.invalid_coin_package'));
         }
 
         if ($pricing->coins_amount === null || (int) $pricing->coins_amount <= 0) {
-            throw new InvalidArgumentException('The Coins package has an invalid Coins amount.');
+            throw new InvalidArgumentException(__('api.wallet.coin_amount_invalid'));
         }
 
         if ($pricing->pricing_cost === null || (float) $pricing->pricing_cost <= 0) {
-            throw new InvalidArgumentException('The Coins package has an invalid price.');
+            throw new InvalidArgumentException(__('api.wallet.coin_price_invalid'));
         }
 
         if (blank($pricing->currency)) {
-            throw new InvalidArgumentException('The Coins package has no currency.');
+            throw new InvalidArgumentException(__('api.wallet.coin_currency_missing'));
         }
 
         return $this->flexPayService->initiate([
@@ -52,6 +52,8 @@ class CoinService
             'user_id' => $user->id,
             'amount' => $pricing->pricing_cost,
             'currency' => strtoupper((string) $pricing->currency),
+            'coins_amount' => (int) $pricing->coins_amount,
+            'coin_unit_price' => round((float) $pricing->pricing_cost / (int) $pricing->coins_amount, 6),
             'reason' => 'coin_price',
             'entity' => 'pricing',
             'entity_id' => $pricing->id,
@@ -79,11 +81,11 @@ class CoinService
         }
 
         if ($payment->user_id === null) {
-            throw new InvalidArgumentException('The payment has no associated user.');
+            throw new InvalidArgumentException(__('api.wallet.payment_user_missing'));
         }
 
         if ($payment->entity !== 'pricing' || $payment->entity_id === null) {
-            throw new InvalidArgumentException('The payment has no associated Coins package.');
+            throw new InvalidArgumentException(__('api.wallet.payment_pricing_missing'));
         }
 
         DB::transaction(function () use ($payment): void {
@@ -104,16 +106,22 @@ class CoinService
                 return;
             }
 
-            $pricing = Pricing::query()->findOrFail($payment->entity_id);
+            $coinsAmount = $payment->coins_amount;
 
-            if ($pricing->reason !== 'coin_price') {
-                throw new InvalidArgumentException('The payment pricing is not a Coins package.');
+            if ($coinsAmount === null) {
+                $pricing = Pricing::query()->findOrFail($payment->entity_id);
+
+                if ($pricing->reason !== 'coin_price') {
+                    throw new InvalidArgumentException(__('api.wallet.payment_pricing_invalid'));
+                }
+
+                $coinsAmount = $pricing->coins_amount;
             }
 
-            $coinsAmount = (int) $pricing->coins_amount;
+            $coinsAmount = (int) $coinsAmount;
 
             if ($coinsAmount <= 0) {
-                throw new InvalidArgumentException('The Coins package has an invalid Coins amount.');
+                throw new InvalidArgumentException(__('api.wallet.coin_amount_invalid'));
             }
 
             $user = User::query()->findOrFail($payment->user_id);

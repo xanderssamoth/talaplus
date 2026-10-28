@@ -68,6 +68,7 @@ class User extends Authenticatable
         'is_online',
         'christian_preference',
         'belongs_to',
+        'referral_code_used',
         'child_of',
         'child_lock_code',
         'status',
@@ -119,7 +120,9 @@ class User extends Authenticatable
 
     public function referrees(): HasMany
     {
-        return $this->hasMany(self::class, 'belongs_to');
+        return $this->hasMany(self::class, 'belongs_to')
+            ->whereNotNull('referral_code_used')
+            ->where('referral_code_used', $this->promo_code);
     }
 
     public function parent(): BelongsTo
