@@ -30,6 +30,10 @@
     $groupField = collect($config['fields'] ?? [])->firstWhere('name', $config['group_by'] ?? null);
     $groupLabels = $groupField['options'] ?? [];
     $fieldOptions = collect($config['fields'] ?? [])->mapWithKeys(fn ($field) => [$field['name'] => $field['options'] ?? []])->all();
+    $modelClass = $config['model'];
+    $translatableColumns = method_exists($modelClass, 'getTranslatableAttributes')
+        ? (new $modelClass)->getTranslatableAttributes()
+        : [];
     $hasFileUploads = ($config['has_files'] ?? false) || collect($config['fields'] ?? [])->contains(fn ($field) => ($field['type'] ?? null) === 'file-url');
 @endphp
 <div class="ajax-loader d-none" id="ajax-loader">
@@ -599,6 +603,7 @@
         const statusEditable = @json($config['status_editable'] ?? false);
         const fieldOptions = @json($fieldOptions);
         const detailLabels = @json($detailLabels);
+        const translatableColumns = @json($translatableColumns);
         const userModes = @json($config['user_modes'] ?? null);
         const partnerRoleId = @json((string) ($config['partner_role_id'] ?? ''));
         const hasAvatarCropper = @json($config['avatar_cropper'] ?? false);
@@ -1059,7 +1064,12 @@
                 .map(key => {
                     const label = detailLabels[key] || key.replaceAll('_', ' ');
                     let value = item[key + '_detail_display'] ?? item[key + '_display'] ?? item[key];
-                    if (key === 'files' && Array.isArray(value)) {
+                    if (translatableColumns.includes(key)) {
+                        const translations = parseTranslated(item[key]);
+                        value = ['fr', 'en', 'ln'].map(locale => `
+                            <div><span class="fw-semibold">${locale.toUpperCase()} :</span> ${display(translations?.[locale])}</div>
+                        `).join('');
+                    } else if (key === 'files' && Array.isArray(value)) {
                         value = value.length ? `<div class="row g-2">${value.map(file => `
                             <div class="col-md-4">
                                 <a href="${file.file_url}" target="_blank" rel="noopener">

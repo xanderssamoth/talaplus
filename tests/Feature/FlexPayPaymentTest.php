@@ -3,9 +3,11 @@
 namespace Tests\Feature;
 
 use App\Http\Resources\Api\PaymentResource;
+use App\Models\AdminNotification;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\FlexPayService;
+use App\Services\PaymentNotificationService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Http\Client\Request;
@@ -30,6 +32,7 @@ class FlexPayPaymentTest extends TestCase
 
         Schema::disableForeignKeyConstraints();
         Schema::dropIfExists('payments');
+        Schema::dropIfExists('notifications');
         Schema::dropIfExists('users');
 
         Schema::create('users', function (Blueprint $table): void {
@@ -59,6 +62,16 @@ class FlexPayPaymentTest extends TestCase
             $table->timestamp('coins_credited_at')->nullable();
             $table->foreignId('user_id')->nullable();
         });
+        Schema::create('notifications', function (Blueprint $table): void {
+            $table->id();
+            $table->string('type')->nullable();
+            $table->boolean('is_read')->default(false);
+            $table->foreignId('from_user_id')->nullable();
+            $table->foreignId('to_user_id')->nullable();
+            $table->foreignId('payment_id')->nullable()->unique();
+            $table->timestamps();
+            $table->softDeletes();
+        });
 
         Schema::enableForeignKeyConstraints();
 
@@ -67,6 +80,7 @@ class FlexPayPaymentTest extends TestCase
             'services.flexpay.merchant' => 'merchant-code',
             'services.flexpay.gateway_mobile' => 'https://flexpay.test/mobile',
             'services.flexpay.gateway_card' => 'https://flexpay.test/card',
+            'services.flexpay.gateway_check' => 'https://flexpay.test/check',
         ]);
     }
 
@@ -94,7 +108,7 @@ class FlexPayPaymentTest extends TestCase
         ]);
 
         $this->assertSame('FLEX-1001', $result['payment']->order_number);
-        $this->assertSame(1, $result['payment']->status);
+        $this->assertSame(Payment::STATUS_PENDING, $result['payment']->status);
         $this->assertSame(1, Payment::query()->count());
         $this->assertMatchesRegularExpression('/^REF-\d{8}-'.$user->id.'$/', $result['payment']->reference);
 
@@ -187,8 +201,8 @@ class FlexPayPaymentTest extends TestCase
         $otherUser = User::create(['email' => 'other@example.com', 'password' => 'password']);
 
         Payment::create(['order_number' => 'MOBILE-1', 'type' => 1, 'status' => 0, 'reason' => 'coin_price', 'user_id' => $user->id]);
-        Payment::create(['order_number' => 'CARD-1', 'type' => 2, 'status' => 2, 'reason' => 'user_certfied', 'user_id' => $user->id]);
-        Payment::create(['order_number' => 'OTHER-1', 'type' => 1, 'status' => 1, 'reason' => 'gift', 'user_id' => $otherUser->id]);
+        Payment::create(['order_number' => 'CARD-1', 'type' => 2, 'status' => Payment::STATUS_FAILED, 'reason' => 'user_certfied', 'user_id' => $user->id]);
+        Payment::create(['order_number' => 'OTHER-1', 'type' => 1, 'status' => Payment::STATUS_PENDING, 'reason' => 'gift', 'user_id' => $otherUser->id]);
 
         $this->actingAs($user, 'sanctum')
             ->getJson("/api/v1/user/{$user->id}/payments?lang=fr")
@@ -232,10 +246,16 @@ class FlexPayPaymentTest extends TestCase
         $payment = Payment::create([
             'order_number' => 'CALLBACK-1',
             'type' => 1,
-            'status' => 1,
+            'status' => Payment::STATUS_PENDING,
             'reason' => 'media_create',
             'user_id' => $user->id,
         ]);
+
+        Http::preventStrayRequests();
+        Http::fake(['https://flexpay.test/check/CALLBACK-1' => Http::response([
+            'code' => '0',
+            'transaction' => ['orderNumber' => 'CALLBACK-1', 'status' => 0],
+        ])]);
 
         $this->postJson('/api/payment/store?lang=fr', [
             'orderNumber' => $payment->order_number,
@@ -247,13 +267,105 @@ class FlexPayPaymentTest extends TestCase
             ->assertJsonPath('data.reason_text', 'Création de média');
     }
 
+    public function test_a_confirmed_payment_creates_only_one_success_notification(): void
+    {
+        $user = User::create(['email' => 'success@example.com', 'password' => 'password']);
+        $payment = Payment::create([
+            'order_number' => 'SUCCESS-1', 'type' => 1, 'status' => Payment::STATUS_PENDING,
+            'reason' => 'product_sale', 'user_id' => $user->id,
+        ]);
+        Http::preventStrayRequests();
+        Http::fake(['https://flexpay.test/check/SUCCESS-1' => Http::response([
+            'code' => '0', 'transaction' => ['orderNumber' => 'SUCCESS-1', 'status' => 0],
+        ])]);
+
+        $this->postJson('/api/payment/store', ['orderNumber' => 'SUCCESS-1', 'status' => 0])->assertOk();
+        $this->postJson('/api/payment/store', ['orderNumber' => 'SUCCESS-1', 'status' => 0])->assertOk();
+
+        $this->assertSame(1, AdminNotification::query()->count());
+        $this->assertSame('payment_successful', AdminNotification::query()->firstOrFail()->type);
+        $this->assertSame($payment->id, AdminNotification::query()->firstOrFail()->payment_id);
+        $this->assertSame($user->id, AdminNotification::query()->firstOrFail()->to_user_id);
+    }
+
+    public function test_a_failed_payment_notifies_its_user_only_after_flexpay_confirms_failure(): void
+    {
+        $user = User::create(['email' => 'failed@example.com', 'password' => 'password']);
+        $payment = Payment::create([
+            'order_number' => 'FAILED-1', 'type' => 1, 'status' => Payment::STATUS_PENDING,
+            'reason' => 'product_sale', 'user_id' => $user->id,
+        ]);
+        Http::preventStrayRequests();
+        Http::fake(['https://flexpay.test/check/FAILED-1' => Http::sequence()
+            ->push(['code' => '0', 'transaction' => ['orderNumber' => 'FAILED-1', 'status' => Payment::STATUS_PENDING]])
+            ->push(['code' => '0', 'transaction' => ['orderNumber' => 'FAILED-1', 'status' => Payment::STATUS_FAILED]])]);
+
+        $this->postJson('/api/payment/store', ['orderNumber' => 'FAILED-1', 'status' => Payment::STATUS_PENDING])->assertOk();
+        $this->assertSame(0, AdminNotification::query()->count());
+
+        $this->postJson('/api/payment/store', ['orderNumber' => 'FAILED-1', 'status' => Payment::STATUS_FAILED])->assertUnprocessable();
+        $this->assertSame(Payment::STATUS_PENDING, $payment->fresh()->status);
+        $this->assertSame(0, AdminNotification::query()->count());
+
+        $this->postJson('/api/payment/store', ['orderNumber' => 'FAILED-1', 'status' => Payment::STATUS_FAILED])->assertOk();
+        $this->assertSame('payment_failed', AdminNotification::query()->firstOrFail()->type);
+        $this->assertSame($user->id, AdminNotification::query()->firstOrFail()->to_user_id);
+
+        $this->postJson('/api/payment/store', ['orderNumber' => 'FAILED-1', 'status' => Payment::STATUS_PENDING])->assertOk();
+        $this->assertSame(Payment::STATUS_FAILED, $payment->fresh()->status);
+        $this->assertSame(1, AdminNotification::query()->count());
+    }
+
+    public function test_null_status_does_not_create_a_success_notification(): void
+    {
+        $user = User::create(['email' => 'legacy@example.com', 'password' => 'password']);
+        $payment = Payment::create(['order_number' => 'LEGACY-NULL', 'type' => 1, 'status' => null, 'user_id' => $user->id]);
+
+        app(PaymentNotificationService::class)->record($payment);
+
+        $this->assertSame(0, AdminNotification::query()->count());
+    }
+
+    public function test_check_transaction_reconciles_a_legacy_one_to_pending_two(): void
+    {
+        $user = User::create(['email' => 'legacy-pending@example.com', 'password' => 'password']);
+        $payment = Payment::create(['order_number' => 'LEGACY-1', 'type' => 1, 'status' => 1, 'user_id' => $user->id]);
+        Http::preventStrayRequests();
+        Http::fake(['https://flexpay.test/check/LEGACY-1' => Http::response([
+            'code' => '0', 'transaction' => ['orderNumber' => 'LEGACY-1', 'status' => Payment::STATUS_PENDING],
+        ])]);
+
+        $this->actingAs($user, 'sanctum')->getJson("/api/v1/payment/{$payment->id}/check?lang=en")
+            ->assertOk()
+            ->assertJsonPath('data.status', Payment::STATUS_PENDING)
+            ->assertJsonPath('data.status_text', 'In progress');
+        $this->assertSame(0, AdminNotification::query()->count());
+    }
+
+    public function test_notification_migration_adds_a_unique_payment_link(): void
+    {
+        Schema::dropIfExists('notifications');
+        Schema::create('notifications', function (Blueprint $table): void {
+            $table->id();
+        });
+
+        $migration = require database_path('migrations/2026_10_31_051030_add_payment_id_to_notifications_table.php');
+        $migration->up();
+
+        $this->assertTrue(Schema::hasColumn('notifications', 'payment_id'));
+        $this->assertTrue(Schema::hasIndex('notifications', 'notifications_payment_id_unique'));
+
+        $migration->down();
+        $this->assertFalse(Schema::hasColumn('notifications', 'payment_id'));
+    }
+
     public function test_payment_check_and_details_include_translated_labels(): void
     {
         $user = User::create(['email' => 'check@example.com', 'password' => 'password']);
         $payment = Payment::create([
             'order_number' => 'CHECK-1',
             'type' => 2,
-            'status' => 1,
+            'status' => Payment::STATUS_PENDING,
             'reason' => 'ad',
             'user_id' => $user->id,
         ]);
@@ -262,7 +374,7 @@ class FlexPayPaymentTest extends TestCase
         Http::preventStrayRequests();
         Http::fake(['https://flexpay.test/check/CHECK-1' => Http::response([
             'code' => '0',
-            'transaction' => ['status' => 2],
+            'transaction' => ['orderNumber' => 'CHECK-1', 'status' => Payment::STATUS_FAILED],
         ])]);
 
         $this->actingAs($user, 'sanctum')
@@ -302,7 +414,8 @@ class FlexPayPaymentTest extends TestCase
         }
 
         app()->setLocale('fr');
-        $this->assertSame('En cours', PaymentResource::labels(new Payment(['type' => 1, 'status' => 1]))['status_text']);
+        $this->assertSame('En cours', PaymentResource::labels(new Payment(['type' => 1, 'status' => Payment::STATUS_PENDING]))['status_text']);
+        $this->assertSame('Échoué', PaymentResource::labels(new Payment(['type' => 1, 'status' => Payment::STATUS_FAILED]))['status_text']);
         $this->assertNull(PaymentResource::labels(new Payment(['type' => 3, 'status' => 3, 'reason' => 'other']))['reason_text']);
     }
 }

@@ -48,7 +48,10 @@ CREATE TABLE IF NOT EXISTS `users` (
   `child_of` BIGINT NULL,
   `child_lock_code` VARCHAR(45) NULL,
   `status` ENUM('created', 'activated', 'disabled', 'blocked', 'deleted') NOT NULL DEFAULT 'created',
-  `type` ENUM('uncertified', 'certified') NOT NULL DEFAULT 'uncertified',
+  `type` ENUM('uncertified', 'certifying', 'certified') NOT NULL DEFAULT 'uncertified',
+  `premium_started_at` TIMESTAMP NULL,
+  `premium_expires_at` TIMESTAMP NULL,
+  `premium_duration_months` TINYINT UNSIGNED NULL,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `deleted_at` TIMESTAMP NULL,
@@ -57,7 +60,8 @@ CREATE TABLE IF NOT EXISTS `users` (
   UNIQUE INDEX `email_UNIQUE` (`email` ASC),
   UNIQUE INDEX `phone_UNIQUE` (`phone` ASC),
   UNIQUE INDEX `username_UNIQUE` (`username` ASC),
-  UNIQUE INDEX `promo_code_UNIQUE` (`promo_code` ASC))
+  UNIQUE INDEX `promo_code_UNIQUE` (`promo_code` ASC),
+  INDEX `users_premium_expires_at_index` (`premium_expires_at` ASC))
 ENGINE = InnoDB;
 
 
@@ -150,6 +154,9 @@ CREATE TABLE IF NOT EXISTS `payments` (
   `amount_customer` DECIMAL(12,2) NULL,
   `coins_amount` BIGINT NULL,
   `coin_unit_price` DECIMAL(12,6) NULL,
+  `premium_duration_months` TINYINT UNSIGNED NULL,
+  `premium_plan_amount` DECIMAL(12,2) NULL,
+  `premium_plan_currency` VARCHAR(45) NULL,
   `phone` VARCHAR(45) NULL,
   `currency` VARCHAR(45) NULL,
   `channel` VARCHAR(45) NULL,
@@ -161,6 +168,7 @@ CREATE TABLE IF NOT EXISTS `payments` (
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `coins_credited_at` TIMESTAMP NULL,
+  `premium_activated_at` TIMESTAMP NULL,
   `user_id` BIGINT NULL,
   PRIMARY KEY (`id`),
   UNIQUE INDEX `id_payments_UNIQUE` (`id` ASC),
@@ -457,6 +465,7 @@ CREATE TABLE IF NOT EXISTS `notifications` (
   `media_id` BIGINT NULL,
   `product_id` BIGINT NULL,
   `comment_id` BIGINT NULL,
+  `payment_id` BIGINT NULL,
   PRIMARY KEY (`id`),
   UNIQUE INDEX `id_notifications_UNIQUE` (`id` ASC),
   INDEX `fk_notifications_users1_idx` (`from_user_id` ASC),
@@ -464,6 +473,7 @@ CREATE TABLE IF NOT EXISTS `notifications` (
   INDEX `fk_notifications_medias_idx` (`media_id` ASC),
   INDEX `fk_notifications_products_idx` (`product_id` ASC),
   INDEX `fk_notifications_comments_idx` (`comment_id` ASC),
+  INDEX `fk_notifications_payments_idx` (`payment_id` ASC),
   CONSTRAINT `fk_notifications_users1`
     FOREIGN KEY (`from_user_id`)
     REFERENCES `users` (`id`)
@@ -487,6 +497,11 @@ CREATE TABLE IF NOT EXISTS `notifications` (
   CONSTRAINT `fk_notifications_comments`
     FOREIGN KEY (`comment_id`)
     REFERENCES `comments` (`id`)
+    ON DELETE SET NULL
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_notifications_payments`
+    FOREIGN KEY (`payment_id`)
+    REFERENCES `payments` (`id`)
     ON DELETE SET NULL
     ON UPDATE CASCADE)
 ENGINE = InnoDB;
@@ -634,6 +649,7 @@ CREATE TABLE IF NOT EXISTS `pricings` (
   `pricing_name` JSON NOT NULL,
   `pricing_type` ENUM('money', 'percentage') NOT NULL DEFAULT 'money' COMMENT 'The user must pay directly or pay a commission (percentage) on the payment they receive',
   `coins_amount` BIGINT NULL,
+  `premium_duration_months` TINYINT UNSIGNED NULL,
   `reason` ENUM('media_boost', 'ad', 'gift_sent', 'user_certfied', 'coin_price') NULL,
   `pricing_cost` DECIMAL(12,2) NULL,
   `currency` VARCHAR(45) NULL,

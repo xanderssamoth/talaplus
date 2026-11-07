@@ -91,12 +91,13 @@ class AdminResourceController extends Controller
                 ['name' => 'reason', 'label' => 'Motif', 'type' => 'select', 'options' => ['' => '-', 'media_boost' => 'Boost de vidéo', 'ad' => 'Publicité', 'gift_sent' => 'Cadeau envoyé', 'user_certfied' => 'Certification utilisateur', 'coin_price' => 'Prix des coins']],
                 ['name' => 'pricing_cost', 'label' => 'Coût (en USD)', 'type' => 'number', 'step' => '0.01'],
                 ['name' => 'coins_amount', 'label' => 'Nombre de coins', 'type' => 'number', 'step' => '1'],
+                ['name' => 'premium_duration_months', 'label' => 'Durée Premium (mois)', 'type' => 'number', 'step' => '1'],
                 ['name' => 'currency', 'label' => 'Devise', 'type' => 'hidden', 'value' => 'USD'],
                 ['name' => 'image_base64', 'label' => 'Uploader image', 'type' => 'image-base64', 'accept' => 'image/png,image/jpeg,image/webp'],
                 ['name' => 'icon', 'label' => 'Icône', 'type' => 'text'],
                 ['name' => 'color', 'label' => 'Couleur', 'type' => 'text'],
             ],
-            'columns' => ['pricing_name', 'pricing_type', 'reason', 'pricing_cost', 'currency'],
+            'columns' => ['pricing_name', 'pricing_type', 'reason', 'premium_duration_months', 'pricing_cost', 'currency'],
             'wide_form' => true,
         ],
         'abouts' => [
@@ -216,7 +217,7 @@ class AdminResourceController extends Controller
                 ['name' => 'is_online', 'label' => 'En ligne', 'type' => 'checkbox'],
                 ['name' => 'christian_preference', 'label' => 'Préférence chrétienne', 'type' => 'checkbox'],
                 ['name' => 'status', 'label' => 'Statut', 'type' => 'select', 'options' => ['created' => 'Créé', 'activated' => 'Activé', 'disabled' => 'Désactivé', 'blocked' => 'Bloqué', 'deleted' => 'Supprimé']],
-                ['name' => 'type', 'label' => 'Type', 'type' => 'select', 'options' => ['uncertified' => 'Non certifié', 'certified' => 'Certifié']],
+                ['name' => 'type', 'label' => 'Type', 'type' => 'select', 'options' => ['uncertified' => 'Non certifié', 'certifying' => 'Certification en attente', 'certified' => 'Certifié']],
                 ['name' => 'role_id', 'label' => 'Rôle', 'type' => 'select', 'options' => []],
             ],
             'columns' => ['firstname', 'lastname', 'email', 'phone', 'child_of', 'promo_code', 'referral_code_used', 'promo_code_at', 'status'],
@@ -339,6 +340,7 @@ class AdminResourceController extends Controller
         $this->validateFileUrlUploads($request, $config);
         $this->validateUserPayload($request, $config);
         $this->validatePricingImage($request, $config);
+        $this->validatePremiumPricing($request, $config);
 
         $item = DB::transaction(function () use ($request, $config): Model {
             $item = new $config['model'];
@@ -364,6 +366,7 @@ class AdminResourceController extends Controller
         $this->validateFileUrlUploads($request, $config);
         $this->validateUserPayload($request, $config);
         $this->validatePricingImage($request, $config);
+        $this->validatePremiumPricing($request, $config);
 
         $item = DB::transaction(function () use ($request, $config, $id): Model {
             $item = $config['model']::findOrFail($id);
@@ -532,9 +535,9 @@ class AdminResourceController extends Controller
         }
 
         return [
-            'pending' => Payment::query()->where('status', 1)->count(),
-            'successful' => Payment::query()->where('status', 0)->count(),
-            'failed' => Payment::query()->where('status', 2)->count(),
+            'pending' => Payment::query()->where('status', Payment::STATUS_PENDING)->count(),
+            'successful' => Payment::query()->where('status', Payment::STATUS_SUCCESSFUL)->count(),
+            'failed' => Payment::query()->where('status', Payment::STATUS_FAILED)->count(),
         ];
     }
 
@@ -566,9 +569,9 @@ class AdminResourceController extends Controller
 
         return [
             'labels' => $dates->map(fn (string $date): string => Carbon::parse($date)->format('d/m'))->all(),
-            'pending' => $dates->map(fn (string $date): int => (int) ($rows->get($date.'-1')?->first()?->total ?? 0))->all(),
+            'pending' => $dates->map(fn (string $date): int => (int) ($rows->get($date.'-'.Payment::STATUS_PENDING)?->first()?->total ?? 0))->all(),
             'successful' => $dates->map(fn (string $date): int => (int) ($rows->get($date.'-0')?->first()?->total ?? 0))->all(),
-            'failed' => $dates->map(fn (string $date): int => (int) ($rows->get($date.'-2')?->first()?->total ?? 0))->all(),
+            'failed' => $dates->map(fn (string $date): int => (int) ($rows->get($date.'-'.Payment::STATUS_FAILED)?->first()?->total ?? 0))->all(),
         ];
     }
 
@@ -967,7 +970,35 @@ class AdminResourceController extends Controller
             $payload['promo_code_at'] = filled($payload['promo_code'] ?? null) ? now() : null;
         }
 
+        if ($item instanceof Pricing && ($payload['reason'] ?? null) !== 'user_certfied') {
+            $payload['premium_duration_months'] = null;
+        }
+
         return $payload;
+    }
+
+    private function validatePremiumPricing(Request $request, array $config): void
+    {
+        if (($config['model'] ?? null) !== Pricing::class) {
+            return;
+        }
+
+        $isPremium = $request->input('reason') === 'user_certfied';
+
+        $request->validate([
+            'premium_duration_months' => [
+                Rule::requiredIf($isPremium),
+                'nullable',
+                'integer',
+                'between:1,255',
+                Rule::unique('pricings', 'premium_duration_months')
+                    ->where('reason', 'user_certfied')
+                    ->whereNull('deleted_at')
+                    ->ignore($request->route('id')),
+            ],
+            'pricing_type' => $isPremium ? ['required', Rule::in(['money'])] : ['nullable'],
+            'pricing_cost' => $isPremium ? ['required', 'numeric', 'gt:0'] : ['nullable', 'numeric'],
+        ]);
     }
 
     private function validateUserPayload(Request $request, array $config): void

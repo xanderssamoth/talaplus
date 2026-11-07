@@ -110,10 +110,42 @@ class AdminResourceControllerTest extends TestCase
         $this->assertSame('USD', $fields['currency']['value']);
         $this->assertSame('Prix des coins', $fields['reason']['options']['coin_price']);
         $this->assertSame('number', $fields['coins_amount']['type']);
+        $this->assertSame('number', $fields['premium_duration_months']['type']);
         $this->assertSame('image-base64', $fields['image_base64']['type']);
         $this->assertArrayNotHasKey('image_url', $fields->all());
         $this->assertStringContainsString('data-image-base64-input="image_base64"', $html);
         $this->assertStringContainsString('data-image-base64-preview="image_base64"', $html);
+        $this->assertStringContainsString('translatableColumns.includes(key)', $html);
+        $this->assertStringContainsString("['fr', 'en', 'ln'].map", $html);
+    }
+
+    public function test_admin_saves_a_premium_pricing_with_its_duration_and_three_translations(): void
+    {
+        $this->createPricingTables();
+        $admin = User::factory()->create();
+        $payload = [
+            'pricing_name' => ['fr' => '3 mois', 'en' => '3 months', 'ln' => 'basanza 3'],
+            'pricing_type' => 'money',
+            'premium_duration_months' => 3,
+            'reason' => 'user_certfied',
+            'pricing_cost' => 20,
+        ];
+
+        $this->actingAs($admin)->postJson('/pricings', $payload)
+            ->assertOk()
+            ->assertJsonPath('item.premium_duration_months', 3)
+            ->assertJsonPath('item.pricing_name.en', '3 months')
+            ->assertJsonPath('item.pricing_name.ln', 'basanza 3');
+
+        $this->assertDatabaseHas('pricings', [
+            'reason' => 'user_certfied',
+            'premium_duration_months' => 3,
+            'pricing_cost' => 20,
+            'currency' => 'USD',
+        ]);
+
+        $this->actingAs($admin)->postJson('/pricings', $payload)->assertUnprocessable();
+        $this->actingAs($admin)->postJson('/pricings', [...$payload, 'premium_duration_months' => null])->assertUnprocessable();
     }
 
     public function test_pricing_base64_image_and_coin_price_are_saved(): void
@@ -368,6 +400,7 @@ class AdminResourceControllerTest extends TestCase
             ['status' => 0, 'created_at' => now(), 'updated_at' => now()],
             ['status' => 0, 'created_at' => now(), 'updated_at' => now()],
             ['status' => 2, 'created_at' => now(), 'updated_at' => now()],
+            ['status' => 2, 'created_at' => now(), 'updated_at' => now()],
         ]);
 
         $response = $this->actingAs($admin)->get('/dashboard');
@@ -386,7 +419,7 @@ class AdminResourceControllerTest extends TestCase
             ->assertSee('dashboard-toggle-shared', false)
             ->assertSee('dashboard-change-status', false);
 
-        $this->assertSame([1, 2, 1], array_values($response->viewData('paymentStats')));
+        $this->assertSame([2, 2, 1], array_values($response->viewData('paymentStats')));
         $this->assertSame(5, $response->viewData('recentUsers')->count());
     }
 
@@ -871,6 +904,7 @@ class AdminResourceControllerTest extends TestCase
             $table->string('pricing_type')->default('money');
             $table->string('reason')->nullable();
             $table->unsignedBigInteger('coins_amount')->nullable();
+            $table->unsignedTinyInteger('premium_duration_months')->nullable();
             $table->decimal('pricing_cost', 12, 2)->nullable();
             $table->string('currency', 45)->nullable();
             $table->text('image_url')->nullable();

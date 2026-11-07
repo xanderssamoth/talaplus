@@ -18,9 +18,12 @@ use App\Models\Role;
 use App\Models\User;
 use App\Services\EarningStatsService;
 use App\Services\ExchangeRateService;
+use App\Services\PremiumService;
 use App\Services\ReferralService;
 use DomainException;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -31,6 +34,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use InvalidArgumentException;
 use RuntimeException;
 
 final class UserController extends ApiResourceController
@@ -43,12 +47,17 @@ final class UserController extends ApiResourceController
         private ExchangeRateService $exchangeRateService,
         private ReferralService $referralService,
         private EarningStatsService $earningStatsService,
+        private PremiumService $premiumService,
     ) {}
 
     public function store(Request $request): JsonResponse
     {
         if ($request->hasAny(['child_of', 'child_lock_code'])) {
             return $this->handleError(null, __('api.user.parental_fields_readonly'), 422);
+        }
+
+        if ($request->hasAny(['premium_started_at', 'premium_expires_at', 'premium_duration_months'])) {
+            return $this->handleError(null, __('api.premium.managed_fields'), 422);
         }
 
         $validated = $request->validate([
@@ -151,6 +160,10 @@ final class UserController extends ApiResourceController
             return $this->handleError(null, __('api.user.parental_fields_readonly'), 422);
         }
 
+        if ($request->hasAny(['type', 'premium_started_at', 'premium_expires_at', 'premium_duration_months'])) {
+            return $this->handleError(null, __('api.premium.managed_fields'), 422);
+        }
+
         $payload = $request->validate([
             'firstname' => ['sometimes', 'nullable', 'string', 'max:255'],
             'lastname' => ['sometimes', 'nullable', 'string', 'max:255'],
@@ -183,7 +196,6 @@ final class UserController extends ApiResourceController
             'tips_at_every_login' => ['sometimes', 'boolean'],
             'is_online' => ['sometimes', 'boolean'],
             'status' => ['sometimes', Rule::in(['created', 'activated', 'disabled', 'blocked', 'deleted'])],
-            'type' => ['sometimes', Rule::in(['uncertified', 'certified'])],
         ]);
 
         $profileImageUrls = $this->profileImageUrls($payload);
@@ -381,6 +393,80 @@ final class UserController extends ApiResourceController
         return $this->handleResponse(PaymentResource::collection($payments), $this->apiMessage('find_all_success', 'payment'), $payments->lastPage(), $payments->total());
     }
 
+    public function hasIdCard(Request $request): JsonResponse
+    {
+        return $this->handleResponse(
+            ['has_id_card' => $request->user()->files()->where('file_type', 'id_card')->exists()],
+            __('api.premium.id_card_checked')
+        );
+    }
+
+    public function isPremium(int $userId): JsonResponse
+    {
+        $user = User::query()->findOrFail($userId);
+
+        return $this->handleResponse([
+            'user_id' => $user->id,
+            'is_premium' => $this->premiumService->isPremium($user),
+        ], __('api.premium.status_checked'));
+    }
+
+    public function premiumDaysRemaining(Request $request, int $userId): JsonResponse
+    {
+        $user = User::query()->findOrFail($userId);
+
+        if ($request->user()?->id !== $user->id) {
+            return $this->handleError(null, __('api.premium.not_authorized'), 403);
+        }
+
+        return $this->handleResponse([
+            'user_id' => $user->id,
+            'days_remaining' => $this->premiumService->daysRemaining($user),
+            'premium_expires_at' => $user->premium_expires_at?->toIso8601String(),
+        ], __('api.premium.days_checked'));
+    }
+
+    public function premiumPricing(): JsonResponse
+    {
+        return $this->handleResponse($this->premiumService->plans(), __('api.premium.pricing_retrieved'));
+    }
+
+    public function activatePremium(Request $request, int $userId): JsonResponse
+    {
+        $user = User::query()->findOrFail($userId);
+
+        if ($request->user()?->id !== $user->id) {
+            return $this->handleError(null, __('api.premium.not_authorized'), 403);
+        }
+
+        $validated = $request->validate([
+            'months' => ['required', 'integer', 'between:1,255'],
+            'type' => ['required', 'integer', Rule::in([1, 2])],
+            'phone' => ['required_if:type,1', 'nullable', 'string', 'max:45'],
+            'channel' => ['nullable', 'string', 'max:45'],
+        ]);
+
+        try {
+            $result = $this->premiumService->purchase($user, (int) $validated['months'], [
+                'type' => (int) $validated['type'],
+                'phone' => $validated['phone'] ?? null,
+                'channel' => $validated['channel'] ?? null,
+            ]);
+        } catch (ConnectionException|RequestException $exception) {
+            report($exception);
+
+            return $this->handleError(null, __('api.payment.service_unavailable'), 503);
+        } catch (InvalidArgumentException|RuntimeException $exception) {
+            return $this->handleError(null, $exception->getMessage(), 422);
+        }
+
+        return $this->handleResponse([
+            'payment' => PaymentResource::make($result['payment']),
+            'order_number' => $result['payment']->order_number,
+            'url' => $result['response']['url'] ?? null,
+        ], __('api.premium.payment_initiated'));
+    }
+
     public function earningStats(Request $request, int $userId): JsonResponse
     {
         $user = User::query()->findOrFail($userId);
@@ -571,16 +657,11 @@ final class UserController extends ApiResourceController
         return $this->handleResponse(UserResource::make($user->refresh()), $this->apiMessage('updated'));
     }
 
-    public function updateType(Request $request, int $id): JsonResponse
+    public function updateType(int $id): JsonResponse
     {
-        $validated = $request->validate([
-            'type' => ['required', Rule::in(['uncertified', 'certified'])],
-        ]);
+        User::query()->findOrFail($id);
 
-        $user = User::query()->findOrFail($id);
-        $user->update($validated);
-
-        return $this->handleResponse(UserResource::make($user->refresh()), $this->apiMessage('updated'));
+        return $this->handleError(null, __('api.premium.managed_fields'), 422);
     }
 
     public function updateAvatar(Request $request, int $id): JsonResponse

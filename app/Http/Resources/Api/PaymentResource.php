@@ -27,9 +27,9 @@ class PaymentResource extends ApiResource
         };
 
         $statusKey = match ($payment->status) {
-            0 => 'completed',
-            1 => 'pending',
-            2 => 'failed',
+            Payment::STATUS_SUCCESSFUL => 'completed',
+            Payment::STATUS_FAILED => 'failed',
+            Payment::STATUS_PENDING => 'pending',
             default => null,
         };
 

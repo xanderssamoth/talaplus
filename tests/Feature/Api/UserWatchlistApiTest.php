@@ -747,7 +747,6 @@ class UserWatchlistApiTest extends TestCase
             'cover_base64' => $imageBase64,
             'api_token' => 'must-not-be-stored',
             'status' => 'activated',
-            'type' => 'uncertified',
             'partner_name' => 'Partenaire',
             'currency' => 'CDF',
             'api_key' => 'api-key',
@@ -762,7 +761,7 @@ class UserWatchlistApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.status', 'activated')
-            ->assertJsonPath('data.type', 'uncertified');
+            ->assertJsonPath('data.type', 'certified');
 
         $user->refresh();
 

@@ -22,6 +22,7 @@ class Pricing extends SqlModel
     {
         return [
             'coins_amount' => 'integer',
+            'premium_duration_months' => 'integer',
             'pricing_cost' => 'decimal:2',
         ];
     }

@@ -54,6 +54,11 @@ Route::prefix('v1')->group(function (): void {
     Route::get('comment/news-feed', [CommentController::class, 'newsFeed']);
 
     Route::middleware('auth:sanctum')->group(function (): void {
+        Route::get('user/me/id-card', [UserController::class, 'hasIdCard']);
+        Route::get('user/premium/pricing', [UserController::class, 'premiumPricing']);
+        Route::get('user/{userId}/premium', [UserController::class, 'isPremium'])->whereNumber('userId');
+        Route::get('user/{userId}/premium/days-remaining', [UserController::class, 'premiumDaysRemaining'])->whereNumber('userId');
+        Route::post('user/{userId}/premium/activate', [UserController::class, 'activatePremium'])->whereNumber('userId');
         Route::post('user/children/invitations', [ChildInvitationController::class, 'store']);
         Route::get('user/children/invitations', [ChildInvitationController::class, 'index']);
         Route::post('user/children/invitations/{invitation}/accept', [ChildInvitationController::class, 'accept'])->whereNumber('invitation');
@@ -144,7 +149,8 @@ Route::prefix('v1')->group(function (): void {
         Route::apiResource('role', RoleController::class);
         Route::apiResource('category', CategoryController::class);
         Route::apiResource('reason', ReasonController::class);
-        Route::apiResource('pricing', PricingController::class);
+        Route::get('pricing/reason/{reason}', [PricingController::class, 'findByReason']);
+        Route::apiResource('pricing', PricingController::class)->only(['index', 'show']);
         Route::apiResource('pricing-description', PricingDescriptionController::class);
         Route::apiResource('media', MediaController::class);
         Route::apiResource('media-progress', MediaProgressController::class);
@@ -172,6 +178,6 @@ Route::prefix('v1')->group(function (): void {
         Route::apiResource('cart', CartController::class);
         Route::apiResource('customer-order', CustomerOrderController::class);
         Route::apiResource('comment', CommentController::class);
-        Route::apiResource('payment', PaymentController::class)->except('store');
+        Route::apiResource('payment', PaymentController::class)->only(['index', 'show']);
     });
 });

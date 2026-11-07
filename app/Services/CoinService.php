@@ -74,9 +74,10 @@ class CoinService
          * FlexPaie:
          *
          * status = 0 -> paiement abouti
-         * status = 1 -> paiement non abouti
+         * status = 1 -> paiement echoue
+         * status = 2 -> paiement en attente
          */
-        if ((int) $payment->status !== 0) {
+        if ($payment->status !== Payment::STATUS_SUCCESSFUL) {
             return;
         }
 
@@ -95,7 +96,7 @@ class CoinService
              * The payment could have changed between the
              * initial query and this locked query.
              */
-            if ((int) $payment->status !== 0) {
+            if ($payment->status !== Payment::STATUS_SUCCESSFUL) {
                 return;
             }
 

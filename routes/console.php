@@ -14,3 +14,7 @@ Schedule::command('payments:process-completed')
 Schedule::command('referrals:expire')
     ->hourly()
     ->withoutOverlapping();
+
+Schedule::command('premium:expire')
+    ->hourly()
+    ->withoutOverlapping();

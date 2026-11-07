@@ -16,7 +16,7 @@ class AdminNotification extends SqlModel
 
     protected function fillableAttributes(): array
     {
-        return ['type', 'is_read', 'from_user_id', 'to_user_id', 'media_id', 'product_id', 'comment_id'];
+        return ['type', 'is_read', 'from_user_id', 'to_user_id', 'media_id', 'product_id', 'comment_id', 'payment_id'];
     }
 
     protected function castsAttributes(): array
@@ -49,5 +49,10 @@ class AdminNotification extends SqlModel
     public function comment(): BelongsTo
     {
         return $this->belongsTo(Comment::class);
+    }
+
+    public function payment(): BelongsTo
+    {
+        return $this->belongsTo(Payment::class);
     }
 }

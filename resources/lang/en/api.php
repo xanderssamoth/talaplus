@@ -10,6 +10,21 @@ $entityMessages = fn (string $entity): array => [
 ];
 
 return [
+    'premium' => [
+        'id_card_checked' => 'Identity card status retrieved successfully.',
+        'status_checked' => 'Premium status retrieved successfully.',
+        'days_checked' => 'Remaining Premium days retrieved successfully.',
+        'pricing_retrieved' => 'Premium plans retrieved successfully.',
+        'activated' => 'Premium membership activated successfully.',
+        'payment_initiated' => 'Premium payment initiated successfully.',
+        'payment_description' => 'Premium membership for :months month(s).',
+        'payment_invalid' => 'This payment does not belong to the Premium membership.',
+        'payment_unverified' => 'The Premium payment has not been confirmed by the payment provider.',
+        'invalid_plan' => 'The selected Premium plan is invalid.',
+        'not_authorized' => 'You can only view your own Premium subscription details.',
+        'managed_fields' => 'Premium status and dates are managed by the subscription system.',
+        'expired_count' => ':count Premium membership(s) expired.',
+    ],
     'earnings' => [
         'retrieved' => 'Earning statistics retrieved successfully.',
         'not_authorized' => 'You can only view your own earnings.',
@@ -98,6 +113,7 @@ return [
         'user_not_found' => 'User not found.',
     ],
     'payment' => [
+        'transaction_unverified' => 'FlexPay has not confirmed this payment result.',
         'view_not_authorized' => 'You can only view your own payments.',
         'types' => [
             'mobile_money' => 'Mobile Money',

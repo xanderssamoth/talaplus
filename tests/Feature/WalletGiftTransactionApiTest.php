@@ -238,6 +238,21 @@ class WalletGiftTransactionApiTest extends TestCase
         $this->assertSame(100, $user->fresh()->wallet->coins_balance);
     }
 
+    public function test_coin_credit_ignores_a_payment_without_a_confirmed_status(): void
+    {
+        $user = User::create(['email' => 'unconfirmed-coins@example.com']);
+        $pricing = Pricing::create(['pricing_name' => ['fr' => 'Coins'], 'reason' => 'coin_price', 'coins_amount' => 100, 'pricing_cost' => 10, 'currency' => 'USD']);
+        $payment = Payment::create([
+            'user_id' => $user->id, 'type' => 1, 'status' => null, 'reason' => 'coin_price',
+            'entity' => 'pricing', 'entity_id' => $pricing->id, 'coins_amount' => 100,
+        ]);
+
+        app(CoinService::class)->completePayment($payment);
+
+        $this->assertNull($payment->fresh()->coins_credited_at);
+        $this->assertNull($user->fresh()->wallet);
+    }
+
     public function test_gift_uses_last_confirmed_coin_unit_price_and_records_thirty_percent_fee(): void
     {
         $sender = User::create(['email' => 'gift-sender@example.com']);

@@ -95,6 +95,9 @@ class User extends Authenticatable
             'belongs_to' => 'integer',
             'child_of' => 'integer',
             'password' => 'hashed',
+            'premium_started_at' => 'datetime',
+            'premium_expires_at' => 'datetime',
+            'premium_duration_months' => 'integer',
         ];
     }
 

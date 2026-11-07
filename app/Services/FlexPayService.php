@@ -86,6 +86,9 @@ class FlexPayService
                 'amount_customer' => $attributes['amount_customer'] ?? null,
                 'coins_amount' => $attributes['coins_amount'] ?? null,
                 'coin_unit_price' => $attributes['coin_unit_price'] ?? null,
+                'premium_duration_months' => $attributes['premium_duration_months'] ?? null,
+                'premium_plan_amount' => $attributes['premium_plan_amount'] ?? null,
+                'premium_plan_currency' => $attributes['premium_plan_currency'] ?? null,
                 'phone' => $attributes['phone'] ?? null,
                 'currency' => $currency,
                 'channel' => $attributes['channel'] ?? null,
@@ -96,7 +99,7 @@ class FlexPayService
                  *
                  * The definitive value comes from the callback.
                  */
-                'status' => 1,
+                'status' => Payment::STATUS_PENDING,
 
                 'reason' => $attributes['reason'] ?? null,
                 'entity' => $attributes['entity'] ?? null,
@@ -168,8 +171,17 @@ class FlexPayService
             throw new RuntimeException(__('api.payment.transaction_details_missing'));
         }
 
+        if ((string) ($transaction['orderNumber'] ?? '') !== (string) $payment->order_number
+            || (isset($transaction['status']) && ! in_array((int) $transaction['status'], [Payment::STATUS_SUCCESSFUL, Payment::STATUS_FAILED, Payment::STATUS_PENDING], true))
+            || ($payment->amount !== null && (! is_numeric($transaction['amount'] ?? null)
+                || number_format((float) $transaction['amount'], 2, '.', '') !== $payment->amount))
+            || ($payment->currency !== null && strtoupper((string) ($transaction['currency'] ?? '')) !== strtoupper((string) $payment->currency))
+            || ($payment->status === Payment::STATUS_SUCCESSFUL && (int) ($transaction['status'] ?? -1) !== Payment::STATUS_SUCCESSFUL)) {
+            throw new RuntimeException(__('api.payment.transaction_unverified'));
+        }
+
         $payment->forceFill([
-            'order_number' => $transaction['orderNumber'] ?? $payment->order_number,
+            'order_number' => $payment->order_number,
             'reference' => $transaction['reference'] ?? $payment->reference,
             'amount' => $transaction['amount'] ?? $payment->amount,
             'amount_customer' => $transaction['amountCustomer'] ?? $payment->amount_customer,
@@ -178,9 +190,12 @@ class FlexPayService
              * Check Transaction:
              *
              * status = 0 -> paiement abouti
-             * status = 1 -> paiement non abouti
+             * status = 1 -> paiement echoue
+             * status = 2 -> paiement en attente
              */
-            'status' => isset($transaction['status']) ? (int) $transaction['status'] : $payment->status,
+            'status' => $payment->status === Payment::STATUS_SUCCESSFUL
+                ? Payment::STATUS_SUCCESSFUL
+                : (isset($transaction['status']) ? (int) $transaction['status'] : $payment->status),
         ])->save();
 
         return $payment->refresh();
@@ -203,13 +218,40 @@ class FlexPayService
             throw new RuntimeException(__('api.payment.callback_payment_not_found'));
         }
 
+        $status = isset($data['status']) ? (int) $data['status'] : $payment->status;
+
+        if ($status !== null && ! in_array($status, [Payment::STATUS_SUCCESSFUL, Payment::STATUS_FAILED, Payment::STATUS_PENDING], true)) {
+            throw new RuntimeException(__('api.payment.transaction_unverified'));
+        }
+
+        $alreadyCompleted = $payment->status === Payment::STATUS_SUCCESSFUL && $status !== Payment::STATUS_SUCCESSFUL;
+        $alreadyFailed = $payment->status === Payment::STATUS_FAILED && $status === Payment::STATUS_PENDING;
+        $alreadyActivated = $payment->reason === 'user_certfied' && $payment->premium_activated_at !== null;
+        $transaction = null;
+
+        if (! $alreadyCompleted && ! $alreadyFailed && ! $alreadyActivated && in_array($status, [Payment::STATUS_SUCCESSFUL, Payment::STATUS_FAILED], true)) {
+            $response = $this->checkTransaction((string) $payment->order_number);
+            $transaction = $response['transaction'] ?? null;
+
+            if ((string) ($response['code'] ?? '') !== '0' || ! is_array($transaction)
+                || (string) ($transaction['orderNumber'] ?? '') !== (string) $payment->order_number
+                || (int) ($transaction['status'] ?? -1) !== $status
+                || ($payment->amount !== null && (! is_numeric($transaction['amount'] ?? null)
+                    || number_format((float) $transaction['amount'], 2, '.', '') !== $payment->amount))
+                || ($payment->currency !== null && strtoupper((string) ($transaction['currency'] ?? '')) !== strtoupper((string) $payment->currency))) {
+                throw new RuntimeException(__('api.payment.transaction_unverified'));
+            }
+        }
+
         $payment->forceFill([
-            'reference' => $data['reference'] ?? $payment->reference,
-            'provider_reference' => $data['provider_reference'] ?? $data['providerReference'] ?? $payment->provider_reference,
-            'amount' => $data['amount'] ?? $payment->amount,
-            'amount_customer' => $data['amountCustomer'] ?? $data['amount_customer'] ?? $payment->amount_customer,
-            'currency' => $data['currency'] ?? $payment->currency,
-            'status' => isset($data['status']) ? (int) $data['status'] : $payment->status,
+            'reference' => $transaction['reference'] ?? $payment->reference,
+            'provider_reference' => $transaction['providerReference'] ?? $payment->provider_reference,
+            'amount' => $transaction['amount'] ?? $payment->amount,
+            'amount_customer' => $transaction['amountCustomer'] ?? $payment->amount_customer,
+            'currency' => $transaction['currency'] ?? $payment->currency,
+            'status' => $alreadyCompleted || $alreadyActivated
+                ? Payment::STATUS_SUCCESSFUL
+                : ($alreadyFailed ? Payment::STATUS_FAILED : $status),
         ])->save();
 
         return $payment->refresh();
