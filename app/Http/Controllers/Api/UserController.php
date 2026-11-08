@@ -89,12 +89,10 @@ final class UserController extends ApiResourceController
         if (filled($validated['referral_code'] ?? null)) {
             $referrer = User::query()->where('promo_code', $validated['referral_code'])->first();
 
-            if ($referrer === null) {
-                return $this->handleError(null, __('api.referral.referrer_not_found'), 404);
+            if ($referrer !== null) {
+                $validated['belongs_to'] = $referrer->id;
+                $validated['referral_code_used'] = $validated['referral_code'];
             }
-
-            $validated['belongs_to'] = $referrer->id;
-            $validated['referral_code_used'] = $validated['referral_code'];
         }
 
         $profileImageUrls = $this->profileImageUrls($validated);
