@@ -16,6 +16,8 @@ class UserResource extends ApiResource
         $data = parent::toArray($request);
 
         if ($request->user()?->id === $this->resource->id) {
+            $data['api_key'] = $this->resource->api_key;
+            $data['api_token'] = $this->resource->api_token;
             $data['child_lock_code'] = $this->resource->child_lock_code;
         }
 

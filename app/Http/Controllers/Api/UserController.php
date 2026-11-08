@@ -265,7 +265,10 @@ final class UserController extends ApiResourceController
         $user->api_token = $this->issuePlainTextToken($user);
         $user->save();
 
-        return $this->handleResponse(UserResource::make($user->refresh()), __('api.auth.login_success'));
+        return $this->handleResponse(
+            UserResource::make($user->refresh()->makeVisible(['api_key', 'api_token'])),
+            __('api.auth.login_success')
+        );
     }
 
     public function findByUsername(string $username): JsonResponse
