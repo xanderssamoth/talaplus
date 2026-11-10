@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Resources\Api\ApiResource;
+use App\Http\Resources\Api\CommentResource;
 use App\Http\Resources\Api\MediaResource;
 use App\Http\Resources\Api\PaymentResource;
 use App\Http\Resources\Api\ProductResource;
 use App\Http\Resources\Api\UserResource;
 use App\Models\AdminNotification;
 use App\Models\Cart;
+use App\Models\Comment;
 use App\Models\File;
 use App\Models\History;
 use App\Models\Media;
@@ -384,6 +386,22 @@ final class UserController extends ApiResourceController
             ->withQueryString();
 
         return $this->handleResponse(MediaResource::collection($medias), $this->apiMessage('find_all_success', 'media'), $medias->lastPage(), $medias->total());
+    }
+
+    public function myPosts(Request $request, int $id): JsonResponse
+    {
+        User::query()->findOrFail($id);
+
+        $posts = Comment::query()
+            ->where('user_id', $id)
+            ->where('type', 'post')
+            ->visibleTo($request->user()?->id)
+            ->with(['user', 'files', 'answeredFor'])
+            ->latest('id')
+            ->paginate(10)
+            ->withQueryString();
+
+        return $this->handleResponse(CommentResource::collection($posts), $this->apiMessage('find_all_success', 'comment'), $posts->lastPage(), $posts->total());
     }
 
     public function myPayments(Request $request, int $id): JsonResponse

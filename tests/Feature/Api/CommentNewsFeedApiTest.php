@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\Schema;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class CommentNewsFeedApiTest extends TestCase
@@ -173,5 +174,50 @@ class CommentNewsFeedApiTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('count', 1)
             ->assertJsonPath('data.0.id', $publicPost->id);
+    }
+
+    public function test_my_posts_returns_only_the_requested_users_posts_including_their_private_posts(): void
+    {
+        $author = User::create(['email' => 'author@example.com', 'username' => 'author', 'password' => 'password']);
+        $other = User::create(['email' => 'other@example.com', 'username' => 'other', 'password' => 'password']);
+        $publicPost = Comment::create(['comment_content' => 'Public post', 'type' => 'post', 'user_id' => $author->id]);
+        $privatePost = Comment::create(['comment_content' => 'Private post', 'type' => 'post', 'visibility' => 'private', 'user_id' => $author->id]);
+        Comment::create(['comment_content' => 'Not a post', 'type' => 'comment', 'user_id' => $author->id]);
+        Comment::create(['comment_content' => 'Other author', 'type' => 'post', 'user_id' => $other->id]);
+
+        Sanctum::actingAs($author);
+
+        $response = $this->getJson("/api/v1/user/{$author->id}/posts")->assertOk()->assertJsonPath('count', 2);
+
+        $this->assertEqualsCanonicalizing([$publicPost->id, $privatePost->id], collect($response->json('data'))->pluck('id')->all());
+    }
+
+    public function test_my_posts_hides_another_users_private_and_future_posts(): void
+    {
+        $author = User::create(['email' => 'author@example.com', 'username' => 'author', 'password' => 'password']);
+        $viewer = User::create(['email' => 'viewer@example.com', 'username' => 'viewer', 'password' => 'password']);
+        $publicPost = Comment::create(['comment_content' => 'Public post', 'type' => 'post', 'user_id' => $author->id]);
+        Comment::create(['comment_content' => 'Private post', 'type' => 'post', 'visibility' => 'private', 'user_id' => $author->id]);
+        Comment::create(['comment_content' => 'Future post', 'type' => 'post', 'publish_at' => now()->addDay(), 'user_id' => $author->id]);
+
+        Sanctum::actingAs($viewer);
+
+        $this->getJson("/api/v1/user/{$author->id}/posts")
+            ->assertOk()
+            ->assertJsonPath('count', 1)
+            ->assertJsonPath('data.0.id', $publicPost->id);
+    }
+
+    public function test_my_posts_returns_an_empty_list_for_an_existing_user_and_not_found_for_a_missing_user(): void
+    {
+        $user = User::create(['email' => 'author@example.com', 'username' => 'author', 'password' => 'password']);
+        Sanctum::actingAs($user);
+
+        $this->getJson("/api/v1/user/{$user->id}/posts")
+            ->assertOk()
+            ->assertJsonPath('count', 0)
+            ->assertJsonPath('data', []);
+
+        $this->getJson('/api/v1/user/999/posts')->assertNotFound();
     }
 }
