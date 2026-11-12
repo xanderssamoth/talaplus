@@ -122,6 +122,45 @@ class FlexPayPaymentTest extends TestCase
         });
     }
 
+    public function test_mobile_money_phone_is_sent_without_its_leading_plus(): void
+    {
+        $user = User::create(['email' => 'customer@example.com', 'password' => 'password']);
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://flexpay.test/mobile' => Http::response([
+                'code' => '0',
+                'orderNumber' => 'FLEX-PLUS-PHONE',
+            ]),
+        ]);
+
+        $result = app(FlexPayService::class)->initiate([
+            'user_id' => $user->id,
+            'type' => 1,
+            'amount' => 25.50,
+            'currency' => 'USD',
+            'phone' => '+243810000000',
+        ]);
+
+        Http::assertSent(fn (Request $request): bool => $request['phone'] === '243810000000');
+        $this->assertSame('243810000000', $result['payment']->phone);
+    }
+
+    public function test_mobile_money_phone_cannot_be_only_a_plus_sign(): void
+    {
+        $user = User::create(['email' => 'customer@example.com', 'password' => 'password']);
+        Http::preventStrayRequests();
+
+        $this->expectException(RuntimeException::class);
+
+        app(FlexPayService::class)->initiate([
+            'user_id' => $user->id,
+            'type' => 1,
+            'amount' => 25.50,
+            'currency' => 'USD',
+            'phone' => '+',
+        ]);
+    }
+
     public function test_it_initiates_a_bank_card_payment_with_its_redirect_urls(): void
     {
         $user = User::create(['email' => 'customer@example.com', 'password' => 'password']);

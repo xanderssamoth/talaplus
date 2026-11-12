@@ -14,7 +14,8 @@ class FlexPayService
      */
     public function initiate(array $attributes): array
     {
-        $this->validateAttributes($attributes);
+        $phone = isset($attributes['phone']) ? ltrim(trim((string) $attributes['phone']), '+') : null;
+        $this->validateAttributes([...$attributes, 'phone' => $phone]);
 
         $user = User::query()->findOrFail($attributes['user_id']);
         $reference = sprintf('REF-%08d-%d', random_int(0, 99999999), $user->id);
@@ -35,7 +36,7 @@ class FlexPayService
         ];
 
         if ($type === '1') {
-            $payload['phone'] = $attributes['phone'];
+            $payload['phone'] = $phone;
             $payload['callback_url'] = $callbackUrl;
         } else {
             $payload['description'] = $attributes['description'] ?? '';
@@ -89,7 +90,7 @@ class FlexPayService
                 'premium_duration_months' => $attributes['premium_duration_months'] ?? null,
                 'premium_plan_amount' => $attributes['premium_plan_amount'] ?? null,
                 'premium_plan_currency' => $attributes['premium_plan_currency'] ?? null,
-                'phone' => $attributes['phone'] ?? null,
+                'phone' => $phone,
                 'currency' => $currency,
                 'channel' => $attributes['channel'] ?? null,
 
