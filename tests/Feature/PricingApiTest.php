@@ -34,7 +34,6 @@ class PricingApiTest extends TestCase
 
     public function test_index_groups_pricings_by_reason_and_excludes_deleted_rows(): void
     {
-        Sanctum::actingAs(User::factory()->create());
         Pricing::create([
             'pricing_name' => ['fr' => '1 mois', 'en' => '1 month', 'ln' => 'Sanza 1'],
             'pricing_type' => 'money', 'reason' => 'user_certfied',
@@ -60,7 +59,6 @@ class PricingApiTest extends TestCase
 
     public function test_find_by_reason_returns_only_matching_pricings_or_an_empty_list(): void
     {
-        Sanctum::actingAs(User::factory()->create());
         Pricing::create([
             'pricing_name' => ['fr' => '3 mois', 'en' => '3 months', 'ln' => 'basanza 3'],
             'pricing_type' => 'money', 'reason' => 'user_certfied',
@@ -76,6 +74,31 @@ class PricingApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('count', 0)
             ->assertJsonPath('data', []);
+    }
+
+    public function test_guest_can_show_a_pricing_and_view_premium_plans(): void
+    {
+        $pricing = Pricing::create([
+            'pricing_name' => ['fr' => '1 mois', 'en' => '1 month', 'ln' => 'Sanza 1'],
+            'pricing_type' => 'money',
+            'reason' => 'user_certfied',
+            'premium_duration_months' => 1,
+            'pricing_cost' => 10,
+            'currency' => 'USD',
+        ]);
+
+        $this->getJson("/api/v1/pricing/{$pricing->id}")
+            ->assertOk()
+            ->assertJsonPath('data.id', $pricing->id);
+
+        $this->getJson('/api/v1/user/premium/pricing')
+            ->assertOk()
+            ->assertJsonPath('data.1.price', 10);
+    }
+
+    public function test_guest_cannot_change_pricing_descriptions(): void
+    {
+        $this->postJson('/api/v1/pricing-description', [])->assertUnauthorized();
     }
 
     public function test_duration_migration_keeps_an_imported_column(): void

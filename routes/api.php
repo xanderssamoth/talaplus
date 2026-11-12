@@ -52,10 +52,13 @@ Route::prefix('v1')->group(function (): void {
 
     Route::get('product/popular/list', [ProductController::class, 'popularProducts']);
     Route::get('comment/news-feed', [CommentController::class, 'newsFeed']);
+    Route::get('user/premium/pricing', [UserController::class, 'premiumPricing']);
+    Route::get('pricing/reason/{reason}', [PricingController::class, 'findByReason']);
+    Route::apiResource('pricing', PricingController::class)->only(['index', 'show']);
+    Route::apiResource('pricing-description', PricingDescriptionController::class)->only(['index', 'show']);
 
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('user/me/id-card', [UserController::class, 'hasIdCard']);
-        Route::get('user/premium/pricing', [UserController::class, 'premiumPricing']);
         Route::get('user/{userId}/premium', [UserController::class, 'isPremium'])->whereNumber('userId');
         Route::get('user/{userId}/premium/days-remaining', [UserController::class, 'premiumDaysRemaining'])->whereNumber('userId');
         Route::post('user/{userId}/premium/activate', [UserController::class, 'activatePremium'])->whereNumber('userId');
@@ -150,9 +153,7 @@ Route::prefix('v1')->group(function (): void {
         Route::apiResource('role', RoleController::class);
         Route::apiResource('category', CategoryController::class);
         Route::apiResource('reason', ReasonController::class);
-        Route::get('pricing/reason/{reason}', [PricingController::class, 'findByReason']);
-        Route::apiResource('pricing', PricingController::class)->only(['index', 'show']);
-        Route::apiResource('pricing-description', PricingDescriptionController::class);
+        Route::apiResource('pricing-description', PricingDescriptionController::class)->only(['store', 'update', 'destroy']);
         Route::apiResource('media', MediaController::class);
         Route::apiResource('media-progress', MediaProgressController::class);
         Route::apiResource('product', ProductController::class);

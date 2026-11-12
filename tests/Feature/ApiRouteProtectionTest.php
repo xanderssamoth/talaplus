@@ -8,6 +8,19 @@ use Tests\TestCase;
 
 class ApiRouteProtectionTest extends TestCase
 {
+    public function test_pricing_read_routes_are_public_while_description_writes_require_authentication(): void
+    {
+        $routes = app('router')->getRoutes();
+
+        foreach (['pricing.index', 'pricing.show', 'pricing-description.index', 'pricing-description.show'] as $name) {
+            $this->assertNotContains('auth:sanctum', $routes->getByName($name)->middleware(), $name);
+        }
+
+        foreach (['pricing-description.store', 'pricing-description.update', 'pricing-description.destroy'] as $name) {
+            $this->assertContains('auth:sanctum', $routes->getByName($name)->middleware(), $name);
+        }
+    }
+
     public function test_unauthenticated_api_status_update_returns_json_instead_of_a_login_redirect(): void
     {
         $this->patch('/api/v1/user/1/status', ['status' => 'activated'], ['Accept' => 'text/html'])
@@ -34,6 +47,12 @@ class ApiRouteProtectionTest extends TestCase
             'GET api/v1/media/popular/list',
             'GET api/v1/product/popular/list',
             'GET api/v1/comment/news-feed',
+            'GET api/v1/user/premium/pricing',
+            'GET api/v1/pricing',
+            'GET api/v1/pricing/reason/{reason}',
+            'GET api/v1/pricing/{pricing}',
+            'GET api/v1/pricing-description',
+            'GET api/v1/pricing-description/{pricing_description}',
             'POST api/payment/store',
         ];
 
