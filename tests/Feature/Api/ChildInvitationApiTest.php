@@ -169,6 +169,61 @@ class ChildInvitationApiTest extends TestCase
     public function test_invitation_routes_require_authentication(): void
     {
         $this->postJson('/api/v1/user/children/invitations', ['child_ids' => [1]])->assertUnauthorized();
+        $this->getJson('/api/v1/user/1/children/invitations')->assertUnauthorized();
+    }
+
+    public function test_child_can_check_their_pending_unexpired_invitations_with_their_user_id(): void
+    {
+        $parent = User::create(['username' => 'parent']);
+        $declinedParent = User::create(['username' => 'declined-parent']);
+        $expiredParent = User::create(['username' => 'expired-parent']);
+        $child = User::create(['username' => 'child']);
+        $otherChild = User::create(['username' => 'other-child']);
+        $pendingInvitation = ChildInvitation::factory()->create([
+            'parent_user_id' => $parent->id,
+            'child_user_id' => $child->id,
+            'status' => 'pending',
+            'expires_at' => now()->addDay(),
+        ]);
+        ChildInvitation::factory()->create([
+            'parent_user_id' => $declinedParent->id,
+            'child_user_id' => $child->id,
+            'status' => 'declined',
+            'expires_at' => now()->addDay(),
+        ]);
+        ChildInvitation::factory()->create([
+            'parent_user_id' => $expiredParent->id,
+            'child_user_id' => $child->id,
+            'status' => 'pending',
+            'expires_at' => now()->subMinute(),
+        ]);
+
+        Sanctum::actingAs($child);
+
+        $this->getJson("/api/v1/user/{$child->id}/children/invitations")
+            ->assertOk()
+            ->assertJsonPath('data.has_pending_invitations', true)
+            ->assertJsonPath('data.pending_invitations_count', 1)
+            ->assertJsonPath('data.invitations.0.id', $pendingInvitation->id)
+            ->assertJsonPath('data.invitations.0.parent_user.id', $parent->id)
+            ->assertJsonPath('data.invitations.0.parent_user.username', 'parent');
+
+        $this->getJson("/api/v1/user/{$otherChild->id}/children/invitations")
+            ->assertForbidden()
+            ->assertJsonPath('success', false)
+            ->assertJsonMissingPath('data');
+    }
+
+    public function test_child_invitation_check_returns_false_when_no_pending_invitation_exists(): void
+    {
+        $child = User::create(['username' => 'child']);
+        Sanctum::actingAs($child);
+
+        $this->getJson("/api/v1/user/{$child->id}/children/invitations")
+            ->assertOk()
+            ->assertJsonPath('data.has_pending_invitations', false)
+            ->assertJsonPath('data.pending_invitations_count', 0)
+            ->assertJsonPath('data.invitations', []);
     }
 
     public function test_invitation_migration_uses_named_indexes_from_sql_schema(): void

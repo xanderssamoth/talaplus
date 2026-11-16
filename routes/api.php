@@ -64,6 +64,7 @@ Route::prefix('v1')->group(function (): void {
         Route::post('user/{userId}/premium/activate', [UserController::class, 'activatePremium'])->whereNumber('userId');
         Route::post('user/children/invitations', [ChildInvitationController::class, 'store']);
         Route::get('user/children/invitations', [ChildInvitationController::class, 'index']);
+        Route::get('user/{userId}/children/invitations', [ChildInvitationController::class, 'check'])->whereNumber('userId');
         Route::post('user/children/invitations/{invitation}/accept', [ChildInvitationController::class, 'accept'])->whereNumber('invitation');
         Route::post('user/children/invitations/{invitation}/decline', [ChildInvitationController::class, 'decline'])->whereNumber('invitation');
         Route::post('ai/chat', [AIController::class, 'chat']);

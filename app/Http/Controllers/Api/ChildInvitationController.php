@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\BaseController;
+use App\Http\Resources\Api\ChildInvitationResource;
 use App\Models\ChildInvitation;
+use App\Models\User;
 use App\Services\ChildInvitationService;
 use DomainException;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -26,20 +29,34 @@ class ChildInvitationController extends BaseController
             return $this->handleError(null, __($exception->getMessage()), 409);
         }
 
-        return $this->handleResponse($invitations, __('api.child_invitation.sent'));
+        return $this->handleResponse(
+            ChildInvitationResource::collection($invitations->load($this->parentUserColumns())),
+            __('api.child_invitation.sent')
+        );
     }
 
     public function index(Request $request): JsonResponse
     {
-        $invitations = ChildInvitation::query()
-            ->where('child_user_id', $request->user()->id)
-            ->where('status', 'pending')
-            ->where('expires_at', '>', now())
-            ->with('parent:id,username,firstname,lastname')
-            ->latest()
-            ->get();
+        $invitations = $this->pendingInvitationsFor($request->user()->id);
 
-        return $this->handleResponse($invitations, __('api.child_invitation.listed'));
+        return $this->handleResponse(ChildInvitationResource::collection($invitations), __('api.child_invitation.listed'));
+    }
+
+    public function check(Request $request, int $userId): JsonResponse
+    {
+        $user = User::query()->findOrFail($userId);
+
+        if ($request->user()?->id !== $user->id) {
+            return $this->handleError(null, __('api.child_invitation.not_authorized'), 403);
+        }
+
+        $invitations = $this->pendingInvitationsFor($user->id);
+
+        return $this->handleResponse([
+            'has_pending_invitations' => $invitations->isNotEmpty(),
+            'pending_invitations_count' => $invitations->count(),
+            'invitations' => ChildInvitationResource::collection($invitations),
+        ], __('api.child_invitation.listed'));
     }
 
     public function accept(Request $request, int $invitation): JsonResponse
@@ -60,6 +77,31 @@ class ChildInvitationController extends BaseController
             return $this->handleError(null, __($exception->getMessage()), $exception->getMessage() === 'api.child_invitation.not_authorized' ? 403 : 409);
         }
 
-        return $this->handleResponse($result, __('api.child_invitation.'.($accept ? 'accepted' : 'declined')));
+        return $this->handleResponse(
+            ChildInvitationResource::make($result->load($this->parentUserColumns())),
+            __('api.child_invitation.'.($accept ? 'accepted' : 'declined'))
+        );
+    }
+
+    /**
+     * @return Collection<int, ChildInvitation>
+     */
+    private function pendingInvitationsFor(int $userId): Collection
+    {
+        return ChildInvitation::query()
+            ->where('child_user_id', $userId)
+            ->where('status', 'pending')
+            ->where('expires_at', '>', now())
+            ->with($this->parentUserColumns())
+            ->latest()
+            ->get();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function parentUserColumns(): array
+    {
+        return ['parent:id,firstname,lastname,surname,partner_name,username,avatar_url,cover_url'];
     }
 }
