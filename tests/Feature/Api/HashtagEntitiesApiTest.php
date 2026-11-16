@@ -48,6 +48,7 @@ class HashtagEntitiesApiTest extends TestCase
             $table->string('email')->nullable();
             $table->string('username')->nullable();
             $table->text('password')->nullable();
+            $table->date('birthdate')->nullable();
             $table->foreignId('child_of')->nullable();
             $table->string('child_lock_code')->nullable();
             $table->timestamps();
@@ -217,7 +218,7 @@ class HashtagEntitiesApiTest extends TestCase
     public function test_locked_child_cannot_find_adult_media_by_hashtag(): void
     {
         $parent = User::create(['username' => 'parent', 'child_lock_code' => '1234']);
-        $child = User::create(['username' => 'child', 'child_of' => $parent->id]);
+        $child = User::create(['username' => 'child', 'birthdate' => now()->subYears(17)->toDateString(), 'child_of' => $parent->id]);
         $hashtag = Hashtag::create(['keyword' => 'cinema']);
         $youth = Media::create(['media_title' => ['fr' => 'Jeunesse'], 'for_youth' => true]);
         $adult = Media::create(['media_title' => ['fr' => 'Adultes'], 'for_youth' => false]);

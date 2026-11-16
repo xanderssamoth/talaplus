@@ -140,7 +140,15 @@ class User extends Authenticatable
 
     public function hasParentalMediaLock(): bool
     {
-        return $this->child_of !== null && $this->parent()->whereNotNull('child_lock_code')->exists();
+        return $this->child_of !== null
+            && $this->isMinor()
+            && $this->parent()->whereNotNull('child_lock_code')->exists();
+    }
+
+    public function isMinor(): bool
+    {
+        return $this->birthdate !== null
+            && $this->birthdate->copy()->addYearsNoOverflow(18)->isFuture();
     }
 
     public function watchlist(): BelongsToMany

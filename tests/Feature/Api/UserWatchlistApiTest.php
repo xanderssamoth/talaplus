@@ -383,7 +383,7 @@ class UserWatchlistApiTest extends TestCase
     public function test_locked_child_cannot_use_another_users_media_lists_or_watchlist_actions(): void
     {
         $parent = User::create(['username' => 'viewer-parent', 'child_lock_code' => '1234']);
-        $child = User::create(['username' => 'viewer-child', 'child_of' => $parent->id]);
+        $child = User::create(['username' => 'viewer-child', 'birthdate' => now()->subYears(17)->toDateString(), 'child_of' => $parent->id]);
         $owner = User::create(['username' => 'media-owner']);
         $adult = Media::create(['media_title' => ['fr' => 'Adultes'], 'user_id' => $owner->id]);
         $owner->watchlist()->attach($adult->id);

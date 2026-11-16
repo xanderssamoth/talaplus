@@ -44,6 +44,7 @@ class MediaBelongsToApiTest extends TestCase
             $table->string('email')->nullable();
             $table->string('username')->nullable();
             $table->text('password')->nullable();
+            $table->date('birthdate')->nullable();
             $table->foreignId('child_of')->nullable();
             $table->string('child_lock_code')->nullable();
             $table->timestamps();
@@ -198,17 +199,20 @@ class MediaBelongsToApiTest extends TestCase
     public function test_locked_child_only_sees_youth_medias_in_lists_and_cannot_open_adult_media(): void
     {
         $parent = User::create(['username' => 'parent', 'child_lock_code' => '1234']);
-        $child = User::create(['username' => 'child', 'child_of' => $parent->id]);
+        $child = User::create(['username' => 'child', 'birthdate' => now()->subYears(17)->toDateString(), 'child_of' => $parent->id]);
         $owner = User::create(['username' => 'owner']);
         $youth = Media::create(['media_title' => ['fr' => 'Jeunesse'], 'for_youth' => true, 'is_shared' => true, 'user_id' => $owner->id]);
         $adult = Media::create(['media_title' => ['fr' => 'Adultes'], 'for_youth' => false, 'is_shared' => true, 'user_id' => $owner->id]);
+        $youthEpisode = Media::create(['media_title' => ['fr' => 'Episode jeunesse'], 'for_youth' => true, 'belongs_to' => 100, 'user_id' => $owner->id]);
+        Media::create(['media_title' => ['fr' => 'Episode adulte'], 'for_youth' => false, 'belongs_to' => 100, 'user_id' => $owner->id]);
 
         Sanctum::actingAs($child);
 
-        $this->getJson('/api/v1/media')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $youth->id);
-        $this->getJson('/api/v1/media/filter/list')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $youth->id);
-        $this->getJson("/api/v1/media/filter/list?user_id={$owner->id}")->assertOk()->assertJsonCount(1, 'data');
+        $this->getJson('/api/v1/media')->assertOk()->assertJsonCount(2, 'data');
+        $this->getJson('/api/v1/media/filter/list')->assertOk()->assertJsonCount(2, 'data');
+        $this->getJson("/api/v1/media/filter/list?user_id={$owner->id}")->assertOk()->assertJsonCount(2, 'data');
         $this->getJson("/api/v1/media/popular/list?user_id={$child->id}")->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $youth->id);
+        $this->getJson('/api/v1/media/belongs-to/100')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $youthEpisode->id);
         $this->getJson("/api/v1/media/{$adult->id}")->assertNotFound();
         $this->postJson("/api/v1/media/{$adult->id}/like", ['user_id' => $owner->id])->assertNotFound();
         $this->postJson('/api/v1/media/progress', [
@@ -232,10 +236,28 @@ class MediaBelongsToApiTest extends TestCase
         $this->getJson("/api/v1/media/{$adult->id}")->assertOk();
     }
 
+    public function test_adult_child_of_a_locked_parent_can_view_adult_media(): void
+    {
+        $parent = User::create(['username' => 'parent', 'child_lock_code' => '1234']);
+        $adultChild = User::create([
+            'username' => 'adult-child',
+            'birthdate' => now()->subYears(18)->toDateString(),
+            'child_of' => $parent->id,
+        ]);
+        $adultMedia = Media::create(['media_title' => ['fr' => 'Adultes'], 'for_youth' => false, 'is_shared' => true]);
+
+        Sanctum::actingAs($adultChild);
+
+        $this->getJson('/api/v1/media/filter/list')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $adultMedia->id);
+        $this->getJson("/api/v1/media/{$adultMedia->id}")->assertOk();
+    }
+
     public function test_popular_medias_requires_authentication_and_ignores_spoofed_user_id(): void
     {
         $parent = User::create(['username' => 'parent', 'child_lock_code' => '1234']);
-        $child = User::create(['username' => 'child', 'child_of' => $parent->id]);
+        $child = User::create(['username' => 'child', 'birthdate' => now()->subYears(17)->toDateString(), 'child_of' => $parent->id]);
         $youth = Media::create(['media_title' => ['fr' => 'Jeunesse'], 'for_youth' => true, 'is_shared' => true]);
         Media::create(['media_title' => ['fr' => 'Adultes'], 'for_youth' => false, 'is_shared' => true]);
 

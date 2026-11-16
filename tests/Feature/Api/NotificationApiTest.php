@@ -46,6 +46,7 @@ class NotificationApiTest extends TestCase
             $table->string('email')->nullable();
             $table->string('username')->nullable();
             $table->text('password')->nullable();
+            $table->date('birthdate')->nullable();
             $table->foreignId('child_of')->nullable();
             $table->string('child_lock_code')->nullable();
             $table->timestamps();
@@ -244,7 +245,7 @@ class NotificationApiTest extends TestCase
     public function test_locked_child_does_not_receive_adult_media_details_in_notifications(): void
     {
         $parent = User::create(['username' => 'parent', 'child_lock_code' => '1234']);
-        $child = User::create(['username' => 'child', 'child_of' => $parent->id]);
+        $child = User::create(['username' => 'child', 'birthdate' => now()->subYears(17)->toDateString(), 'child_of' => $parent->id]);
         $adult = Media::create(['media_title' => ['fr' => 'Adultes'], 'for_youth' => false]);
         AdminNotification::create(['type' => 'media_published', 'to_user_id' => $child->id, 'media_id' => $adult->id]);
         Sanctum::actingAs($child);
